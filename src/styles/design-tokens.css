@@ -1,0 +1,78 @@
+:root {
+  /* Modern Dark Theme - Default */
+  --primary: 45 95% 55%; /* Vibrant Gold */
+  --primary-foreground: 0 0% 100%; /* Pure White */
+  
+  --secondary: 45 90% 65%; /* Light Gold */
+  --accent: 45 95% 55%; /* Accent Gold */
+  
+  --background: 0 0% 12%; /* Deep Black */
+  --foreground: 0 0% 90%; /* Light text */
+  
+  --card: 0 0% 18%; /* Dark card background */
+  --card-foreground: 0 0% 90%;
+  
+  --border: 45 60% 35%; /* Gold-tinted border */
+  --input: 0 0% 22%;
+  --ring: 45 95% 55%;
+  
+  --icon-color: 45 95% 55%; /* Gold icons */
+  --icon-color-light: 0 0% 100%; /* Light icons */
+  
+  /* Glassmorphism Tokens - Dark theme version */
+  --glass-bg: hsla(0, 0%, 20%, 0.85);
+  --glass-border: hsla(45, 80%, 50%, 0.4);
+  --glass-blur: 12px;
+  
+  /* Layout Tokens */
+  --radius: 0.75rem;
+  --header-height: 4.5rem;
+  
+  /* Modern Shadow - Dark theme optimized */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.8);
+  
+  /* Language */
+  --language: 'en';
+}
+
+/* Modern Light Theme */
+[data-theme='light'] {
+  --primary: 220 90% 56%; /* Modern Blue */
+  --secondary: 220 80% 65%;
+  --accent: 220 90% 56%;
+  
+  --background: 240 15% 97%; /* Soft white/gray */
+  --foreground: 220 20% 20%; /* Dark text */
+  
+  --card: 0 0% 100%; /* Pure white */
+  --card-foreground: 220 20% 20%;
+  
+  --border: 220 30% 88%; /* Light gray border */
+  --input: 220 20% 94%;
+  --ring: 220 90% 56%;
+  
+  --icon-color: 220 90% 56%; /* Blue icons */
+  --glass-bg: hsla(240, 20%, 99%, 0.9);
+  --glass-border: hsla(220, 30%, 85%, 0.6);
+  
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { transform: translateX(-20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; box-shadow: 0 0 15px hsla(38, 75%, 55%, 0.2); }
+  50% { opacity: 0.85; box-shadow: 0 0 25px hsla(38, 75%, 55%, 0.4); }
+}
