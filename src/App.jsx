@@ -9,7 +9,6 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null); // { name, role }
   const [view, setView] = useState('waiter'); // 'waiter' or 'cashier' or 'manager'
   const [orders, setOrders] = useState([]);
-  const [theme, setTheme] = useState('light');
   const [tables, setTables] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -19,11 +18,10 @@ function App() {
   ]);
   const adminCode = '0000';
 
-  // Persistence simulation
+  // Set dark theme on mount (black & gold only)
   useEffect(() => {
-    // Apply theme to html element so body inherits it
-    document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
+    document.documentElement.setAttribute('data-theme', 'dark');
+  }, []);
 
   useEffect(() => {
     // Load persisted data from localStorage
@@ -221,12 +219,6 @@ function App() {
           </nav>
 
           <div className="header-right">
-            <button 
-              className="btn btn-secondary theme-toggle"
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            >
-              {theme === 'dark' ? '◈' : '◐'}
-            </button>
             <button className="btn btn-secondary logout-btn" onClick={handleLogout}>
               Logout →
             </button>

@@ -1,5 +1,5 @@
 :root {
-  /* Modern Dark Theme - Default */
+  /* Black & Gold Dark Theme - Default Only */
   --primary: 45 95% 55%; /* Vibrant Gold */
   --primary-foreground: 0 0% 100%; /* Pure White */
   
@@ -37,29 +37,20 @@
   --language: 'en';
 }
 
-/* Modern Light Theme */
-[data-theme='light'] {
-  --primary: 220 90% 56%; /* Modern Blue */
-  --secondary: 220 80% 65%;
-  --accent: 220 90% 56%;
-  
-  --background: 240 15% 97%; /* Soft white/gray */
-  --foreground: 220 20% 20%; /* Dark text */
-  
-  --card: 0 0% 100%; /* Pure white */
-  --card-foreground: 220 20% 20%;
-  
-  --border: 220 30% 88%; /* Light gray border */
-  --input: 220 20% 94%;
-  --ring: 220 90% 56%;
-  
-  --icon-color: 220 90% 56%; /* Blue icons */
-  --glass-bg: hsla(240, 20%, 99%, 0.9);
-  --glass-border: hsla(220, 30%, 85%, 0.6);
-  
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+/* Mobile - Tablet - Desktop Responsive */
+@media (max-width: 480px) {
+  :root {
+    --radius: 0.5rem;
+    --header-height: 3.5rem;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --radius: 0.625rem;
+    --header-height: 4rem;
+  }
 }
 
 @keyframes fadeIn {
