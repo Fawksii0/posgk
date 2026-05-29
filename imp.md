@@ -32,7 +32,7 @@ Expanding the Admin (Cashier) capabilities to configure menu items, table quanti
 ## Verification Plan
 
 ### Manual Verification
-1.  **Menu Builder**: Log in as Cashier (`0000`). Go to "Menu Builder". Change "Margherita Pizza" price to `$16.50` or add a new drink "Espresso" at `$3.00`. Switch to Waiter Mode, verify changes are instantly visible.
+1.  **Menu Builder**: Log in as Cashier (`0000`). Go to "Menu Builder". Change "Margherita Pizza" price to `16.50 MAD` or add a new drink "Espresso" at `3.00 MAD`. Switch to Waiter Mode, verify changes are instantly visible.
 2.  **Staff Management**: Rename waiter "Alex" to "Alexander" and change their PIN to `1212`. Verify `1111` no longer works and `1212` logs in as "Alexander".
 3.  **Order Counter**: Log in as Maria (`2222`). Submit 2 orders. Log in as Cashier. Verify Maria's order count is exactly `2` under "Staff Performance".
 4.  **Table Config**: Change total tables count to `15`. Go to Waiter Mode, verify tables `T1` through `T15` are visible.

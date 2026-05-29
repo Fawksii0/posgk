@@ -320,7 +320,7 @@ const CashierDashboard = ({
           <div className="stats">
             <div className="stat-card glass">
               <small>Total Revenue</small>
-              <p>${orders.filter(o => o.status === 'paid').reduce((acc, o) => acc + parseFloat(o.total), 0).toFixed(2)}</p>
+              <p>{orders.filter(o => o.status === 'paid').reduce((acc, o) => acc + parseFloat(o.total), 0).toFixed(2)} MAD</p>
             </div>
           </div>
         )}
@@ -348,7 +348,7 @@ const CashierDashboard = ({
                   {order.items.map((item, i) => (
                     <div key={i} className="order-item-row">
                       <span>{item.name}</span>
-                      <span>${item.price.toFixed(2)}</span>
+                      <span>{item.price.toFixed(2)} MAD</span>
                     </div>
                   ))}
                 </div>
