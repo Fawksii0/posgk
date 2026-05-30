@@ -1258,19 +1258,217 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
         }
 
         @media (max-width: 768px) {
+          .manager-portal {
+            gap: 1rem;
+            padding: 0;
+            padding-bottom: max(1rem, env(safe-area-inset-bottom));
+          }
+
+          .manager-header {
+            align-items: center;
+            padding: 0.85rem;
+          }
+
+          .manager-header h2 {
+            font-size: 1.05rem;
+          }
+
           .manager-tabs {
-            flex-direction: column;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.5rem;
+            position: sticky;
+            top: 0;
+            z-index: 35;
+            padding: 0.35rem;
+            border: 1px solid hsl(var(--border));
+            border-radius: 12px;
+            background: hsl(var(--card));
           }
 
           .tab-btn {
             width: 100%;
+            min-height: 48px;
+            padding: 0.55rem;
+            border-radius: 9px;
+            border-bottom: 0;
+            font-size: 0.78rem;
+            white-space: normal;
+          }
+
+          .dashboard-grid {
+            grid-template-columns: 1fr;
+            gap: 0.85rem;
+            margin-bottom: 1rem;
+          }
+
+          .stat-card {
+            padding: 1rem;
+          }
+
+          .stat-icon {
+            min-width: 2.25rem;
+            font-size: 1.5rem;
+          }
+
+          .summary-row {
+            grid-template-columns: 1fr;
+            gap: 0.35rem;
+          }
+
+          .period-selector {
+            align-items: stretch;
+            flex-direction: column;
+            gap: 0.75rem;
+            padding: 1rem;
+          }
+
+          .period-buttons {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.5rem;
+          }
+
+          .period-btn {
+            min-height: 44px;
+            width: 100%;
           }
 
           .sales-stats-grid {
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: 1fr;
+            gap: 0.85rem;
+          }
+
+          .sales-table-container {
+            padding: 1rem;
+            overflow-x: auto;
+          }
+
+          .sales-table {
+            min-width: 640px;
+          }
+
+          .staff-grid {
+            grid-template-columns: 1fr;
+            gap: 0.85rem;
+          }
+
+          .staff-card {
+            padding: 1rem;
+          }
+
+          .staff-metrics {
+            grid-template-columns: 1fr;
           }
 
           .status-grid {
+            grid-template-columns: 1fr;
+            gap: 0.85rem;
+          }
+
+          .register-status,
+          .closures-history,
+          .glass-card {
+            padding: 1rem;
+          }
+
+          .closure-record {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 0.6rem;
+          }
+
+          .closure-amounts {
+            text-align: left;
+          }
+
+          .modal-content {
+            width: calc(100% - 1rem);
+            padding: 1rem;
+          }
+
+          .modal-actions {
+            flex-direction: column;
+          }
+
+          .admin-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+          }
+
+          .form-column {
+            position: relative;
+            top: 0;
+          }
+
+          .menu-subtabs {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.5rem;
+            border-bottom: 0;
+            padding: 0.35rem;
+            border-radius: 12px;
+            background: hsl(var(--card));
+          }
+
+          .menu-subtab-btn {
+            min-height: 46px;
+            padding: 0.55rem;
+            border-radius: 9px;
+            border-bottom: 0;
+            white-space: normal;
+          }
+
+          .scrollable-list {
+            max-height: none;
+            overflow: visible;
+            padding-right: 0;
+          }
+
+          .menu-editor-item {
+            align-items: stretch;
+            flex-direction: column;
+            gap: 0.85rem;
+          }
+
+          .menu-editor-info {
+            align-items: flex-start;
+          }
+
+          .crud-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            width: 100%;
+          }
+
+          .crud-actions .btn {
+            justify-content: center;
+            min-height: 42px;
+          }
+
+          .glass-input {
+            font-size: 16px;
+            min-height: 46px;
+          }
+        }
+
+        @media (max-width: 420px) {
+          .manager-tabs {
+            grid-template-columns: 1fr;
+          }
+
+          .manager-header {
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          .manager-header .btn {
+            justify-content: center;
+          }
+
+          .crud-actions,
+          .menu-subtabs {
             grid-template-columns: 1fr;
           }
         }

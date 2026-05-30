@@ -1,21 +1,59 @@
-import { useState, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import WaiterInterface from './components/WaiterInterface';
 import CashierDashboard from './components/CashierDashboard';
 import LoginScreen from './components/LoginScreen';
 import ManagerPortal from './components/ManagerPortal';
 import { MENU_ITEMS, CATEGORIES } from './mockData';
+import { isCloudSyncEnabled, readCloudState, writeCloudState } from './services/posSync';
+
+const DEFAULT_WAITERS = [
+  { id: 1, name: 'Alex', pin: '1111', ordersCount: 0 },
+  { id: 2, name: 'Maria', pin: '2222', ordersCount: 0 }
+];
+
+const DEFAULT_TABLES = Array.from({ length: 12 }, (_, i) => ({ id: i + 1, name: `Table ${i + 1}` }));
+
+const STORAGE_KEYS = {
+  orders: 'pos_orders',
+  waiters: 'pos_waiters',
+  tables: 'pos_tables',
+  categories: 'pos_categories',
+  menuItems: 'pos_menu_items',
+  notifications: 'pos_notifications',
+};
+
+const readLocalJson = (key, fallback) => {
+  const saved = localStorage.getItem(key);
+  return saved ? JSON.parse(saved) : fallback;
+};
+
+const saveLocalJson = (key, value) => {
+  localStorage.setItem(key, JSON.stringify(value));
+};
 
 function App() {
-  const [currentUser, setCurrentUser] = useState(null); // { name, role }
-  const [view, setView] = useState('waiter'); // 'waiter' or 'cashier' or 'manager'
-  const [orders, setOrders] = useState([]);
-  const [tables, setTables] = useState([]);
-  const [menuItems, setMenuItems] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [waiters, setWaiters] = useState([
-    { id: 1, name: 'Alex', pin: '1111', ordersCount: 0 },
-    { id: 2, name: 'Maria', pin: '2222', ordersCount: 0 }
-  ]);
+  const [currentUser, setCurrentUser] = useState(() => {
+    const savedUser = localStorage.getItem('pos_current_user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  }); // { name, role }
+  const [view, setView] = useState(() => {
+    const savedUser = localStorage.getItem('pos_current_user');
+    if (!savedUser) return 'waiter';
+    const parsedUser = JSON.parse(savedUser);
+    if (parsedUser.role === 'manager') return 'manager';
+    return parsedUser.role === 'cashier' ? 'cashier' : 'waiter';
+  }); // 'waiter' or 'cashier' or 'manager'
+  const [orders, setOrders] = useState(() => readLocalJson(STORAGE_KEYS.orders, []));
+  const [tables, setTables] = useState(() => readLocalJson(STORAGE_KEYS.tables, DEFAULT_TABLES));
+  const [menuItems, setMenuItems] = useState(() => readLocalJson(STORAGE_KEYS.menuItems, MENU_ITEMS));
+  const [categories, setCategories] = useState(() => readLocalJson(STORAGE_KEYS.categories, CATEGORIES));
+  const [waiters, setWaiters] = useState(() => readLocalJson(STORAGE_KEYS.waiters, DEFAULT_WAITERS));
+  const [notifications, setNotifications] = useState(() => readLocalJson(STORAGE_KEYS.notifications, [])); // { id, targetRole, waiterName, orderId, message, timestamp, read }
+  const [syncStatus, setSyncStatus] = useState(isCloudSyncEnabled ? 'syncing' : 'local');
+  const hasHydratedRef = useRef(false);
+  const isApplyingCloudRef = useRef(false);
+  const syncSnapshotRef = useRef('');
+  const notificationIdRef = useRef(0);
   const adminCode = '0000';
 
   // Set dark theme on mount (black & gold only)
@@ -24,63 +62,138 @@ function App() {
   }, []);
 
   useEffect(() => {
-    // Load persisted data from localStorage
-    const savedOrders = localStorage.getItem('pos_orders');
-    const savedWaiters = localStorage.getItem('pos_waiters');
-    const savedTables = localStorage.getItem('pos_tables');
-    const savedCategories = localStorage.getItem('pos_categories');
-    const savedMenuItems = localStorage.getItem('pos_menu_items');
-    const savedUser = localStorage.getItem('pos_current_user');
+    const localState = {
+      orders: readLocalJson(STORAGE_KEYS.orders, []),
+      waiters: readLocalJson(STORAGE_KEYS.waiters, DEFAULT_WAITERS),
+      tables: readLocalJson(STORAGE_KEYS.tables, DEFAULT_TABLES),
+      categories: readLocalJson(STORAGE_KEYS.categories, CATEGORIES),
+      menuItems: readLocalJson(STORAGE_KEYS.menuItems, MENU_ITEMS),
+      notifications: readLocalJson(STORAGE_KEYS.notifications, []),
+    };
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (savedOrders) setOrders(JSON.parse(savedOrders));
-    if (savedWaiters) {
-      setWaiters(JSON.parse(savedWaiters));
-    } else {
-      const defaultWaiters = [
-        { id: 1, name: 'Alex', pin: '1111', ordersCount: 0 },
-        { id: 2, name: 'Maria', pin: '2222', ordersCount: 0 }
-      ];
-      setWaiters(defaultWaiters);
-      localStorage.setItem('pos_waiters', JSON.stringify(defaultWaiters));
-    }
+    Object.entries(STORAGE_KEYS).forEach(([stateKey, storageKey]) => {
+      saveLocalJson(storageKey, localState[stateKey]);
+    });
 
-    if (savedTables) {
-      setTables(JSON.parse(savedTables));
-    } else {
-      const defaultTables = Array.from({ length: 12 }, (_, i) => ({ id: i + 1, name: `Table ${i + 1}` }));
-      setTables(defaultTables);
-      localStorage.setItem('pos_tables', JSON.stringify(defaultTables));
-    }
-
-    if (savedCategories) {
-      setCategories(JSON.parse(savedCategories));
-    } else {
-      setCategories(CATEGORIES);
-      localStorage.setItem('pos_categories', JSON.stringify(CATEGORIES));
-    }
-
-    if (savedMenuItems) {
-      setMenuItems(JSON.parse(savedMenuItems));
-    } else {
-      setMenuItems(MENU_ITEMS);
-      localStorage.setItem('pos_menu_items', JSON.stringify(MENU_ITEMS));
-    }
-
-    if (savedUser) {
-      const parsedUser = JSON.parse(savedUser);
-      setCurrentUser(parsedUser);
-      if (parsedUser.role === 'manager') {
-        setView('manager');
-      } else {
-        setView(parsedUser.role === 'cashier' ? 'cashier' : 'waiter');
+    const hydrateFromCloud = async () => {
+      if (!isCloudSyncEnabled) {
+        hasHydratedRef.current = true;
+        setSyncStatus('local');
+        return;
       }
-    }
+
+      try {
+        const cloudState = await readCloudState();
+        const hasCloudData = Object.keys(cloudState).length > 0;
+        const nextState = hasCloudData ? { ...localState, ...cloudState } : localState;
+
+        isApplyingCloudRef.current = true;
+        setOrders(nextState.orders || []);
+        setWaiters(nextState.waiters || DEFAULT_WAITERS);
+        setTables(nextState.tables || DEFAULT_TABLES);
+        setCategories(nextState.categories || CATEGORIES);
+        setMenuItems(nextState.menuItems || MENU_ITEMS);
+        setNotifications(nextState.notifications || []);
+
+        Object.entries(STORAGE_KEYS).forEach(([stateKey, storageKey]) => {
+          saveLocalJson(storageKey, nextState[stateKey] || []);
+        });
+
+        if (!hasCloudData) {
+          await writeCloudState(Object.entries(nextState));
+        }
+
+        syncSnapshotRef.current = JSON.stringify(nextState);
+        setSyncStatus('online');
+      } catch (error) {
+        console.warn(error);
+        setSyncStatus('offline');
+      } finally {
+        isApplyingCloudRef.current = false;
+        hasHydratedRef.current = true;
+      }
+    };
+
+    hydrateFromCloud();
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('pos_orders', JSON.stringify(orders));
-  }, [orders]);
+    if (!hasHydratedRef.current || isApplyingCloudRef.current) return;
+
+    const nextState = {
+      orders,
+      waiters,
+      tables,
+      categories,
+      menuItems,
+      notifications,
+    };
+
+    Object.entries(STORAGE_KEYS).forEach(([stateKey, storageKey]) => {
+      saveLocalJson(storageKey, nextState[stateKey]);
+    });
+
+    syncSnapshotRef.current = JSON.stringify(nextState);
+
+    if (!isCloudSyncEnabled) return;
+
+    writeCloudState(Object.entries(nextState))
+      .then(() => setSyncStatus('online'))
+      .catch((error) => {
+        console.warn(error);
+        setSyncStatus('offline');
+      });
+  }, [orders, waiters, tables, categories, menuItems, notifications]);
+
+  useEffect(() => {
+    if (!isCloudSyncEnabled) return undefined;
+
+    const intervalId = setInterval(async () => {
+      if (!hasHydratedRef.current) return;
+
+      try {
+        const cloudState = await readCloudState();
+        if (Object.keys(cloudState).length === 0) return;
+
+        const nextState = {
+          orders: cloudState.orders || [],
+          waiters: cloudState.waiters || DEFAULT_WAITERS,
+          tables: cloudState.tables || DEFAULT_TABLES,
+          categories: cloudState.categories || CATEGORIES,
+          menuItems: cloudState.menuItems || MENU_ITEMS,
+          notifications: cloudState.notifications || [],
+        };
+        const nextSnapshot = JSON.stringify(nextState);
+
+        if (nextSnapshot === syncSnapshotRef.current) {
+          setSyncStatus('online');
+          return;
+        }
+
+        isApplyingCloudRef.current = true;
+        setOrders(nextState.orders);
+        setWaiters(nextState.waiters);
+        setTables(nextState.tables);
+        setCategories(nextState.categories);
+        setMenuItems(nextState.menuItems);
+        setNotifications(nextState.notifications);
+
+        Object.entries(STORAGE_KEYS).forEach(([stateKey, storageKey]) => {
+          saveLocalJson(storageKey, nextState[stateKey]);
+        });
+
+        syncSnapshotRef.current = nextSnapshot;
+        setSyncStatus('online');
+      } catch (error) {
+        console.warn(error);
+        setSyncStatus('offline');
+      } finally {
+        isApplyingCloudRef.current = false;
+      }
+    }, 2500);
+
+    return () => clearInterval(intervalId);
+  }, []);
 
   const saveWaiters = (newWaiters) => {
     setWaiters(newWaiters);
@@ -104,7 +217,7 @@ function App() {
 
   const handleLogin = (user) => {
     if (user.role === 'waiter') {
-      const activeWaiterObj = waiters.find(w => w.name.toLowerCase() === user.name.toLowerCase() || waiters.some(waiter => waiter.pin === user.pin));
+      const activeWaiterObj = waiters.find(w => w.name.toLowerCase() === user.name.toLowerCase());
       const officialName = activeWaiterObj ? activeWaiterObj.name : user.name;
       const updatedUser = { ...user, name: officialName };
       setCurrentUser(updatedUser);
@@ -127,12 +240,46 @@ function App() {
 
   const addOrder = (newOrder) => {
     const waiterName = currentUser ? currentUser.name : 'Unknown Waiter';
+    const createdAt = new Date();
+    const orderId = createdAt.getTime();
+    const activeOrder = orders.find(order => order.table === newOrder.table && order.status !== 'paid');
+
+    if (activeOrder) {
+      const updatedItems = [...activeOrder.items, ...newOrder.items];
+      const updatedTotal = updatedItems.reduce((acc, item) => acc + Number(item.price || 0), 0).toFixed(2);
+      const updatedOrder = {
+        ...activeOrder,
+        items: updatedItems,
+        total: updatedTotal,
+        status: 'pending',
+        lastEditedAt: createdAt.toISOString(),
+        lastEditedBy: waiterName,
+      };
+
+      setOrders(orders.map(order => order.id === activeOrder.id ? updatedOrder : order));
+
+      addNotification({
+        targetRole: 'cashier',
+        type: 'order_edit',
+        orderId: activeOrder.id,
+        table: newOrder.table,
+        waiterName,
+        items: newOrder.items,
+        total: updatedTotal,
+        title: `Order edited - ${newOrder.table}`,
+        message: `${waiterName} added ${newOrder.items.length} item(s) to ${newOrder.table}. New total: ${updatedTotal} MAD.`,
+        timestamp: createdAt.toLocaleTimeString(),
+      });
+
+      return { type: 'edit', table: newOrder.table };
+    }
+
     const orderWithMeta = {
       ...newOrder,
-      id: Date.now(),
+      id: orderId,
       status: 'pending',
-      timestamp: new Date().toLocaleTimeString(),
-      orderDate: new Date().toISOString(),
+      timestamp: createdAt.toLocaleTimeString(),
+      orderDate: createdAt.toISOString(),
       waiterName,
     };
     setOrders([orderWithMeta, ...orders]);
@@ -144,12 +291,74 @@ function App() {
         : w
     );
     saveWaiters(updatedWaiters);
+
+    // Create a notification for the cashier
+    const notificationMessage = `🆕 NEW ORDER\n📍 Table: ${newOrder.table}\n👤 Waiter: ${waiterName}\n📦 Items: ${newOrder.items.length}\n💰 Total: $${newOrder.total}`;
+    const newNotification = addNotification({
+      targetRole: 'cashier',
+      type: 'new_order',
+      orderId: orderWithMeta.id,
+      message: notificationMessage,
+      title: `New order - ${newOrder.table}`,
+      table: newOrder.table,
+      waiterName: waiterName,
+      items: newOrder.items,
+      total: newOrder.total,
+      timestamp: createdAt.toLocaleTimeString(),
+    });
+
+    // Send to WhatsApp notification
+    sendOrderNotificationToWhatsApp(newNotification);
+    return { type: 'new', table: newOrder.table };
+  };
+
+  const addNotification = (notification) => {
+    notificationIdRef.current += 1;
+    const newNotification = {
+      id: `${notification.type}-${notification.orderId}-${notificationIdRef.current}`,
+      read: false,
+      ...notification,
+    };
+    setNotifications(prev => [newNotification, ...prev]);
+    return newNotification;
+  };
+
+  const sendOrderNotificationToWhatsApp = (notification) => {
+    // Format the order items for WhatsApp
+    const itemsText = notification.items.map(item => `- ${item.name} ($${item.price.toFixed(2)})`).join('%0A');
+    const waMessage = `*🍽️ G&K FOOD - NEW ORDER 🔔*%0A%0A📍 Table: ${notification.table}%0A👤 Waiter: ${notification.waiterName}%0A⏰ Time: ${notification.timestamp}%0A%0A*Items:*%0A${itemsText}%0A%0A*Total: $${notification.total}*%0A%0A✅ Ready to confirm?`;
+    
+    // Open WhatsApp with pre-filled message
+    window.open(`https://wa.me/?text=${waMessage}`, '_blank');
+  };
+
+  const markNotificationAsRead = (notificationId) => {
+    setNotifications(notifications.map(notif => 
+      notif.id === notificationId ? { ...notif, read: true } : notif
+    ));
   };
 
   const updateOrderStatus = (orderId, newStatus) => {
-    setOrders(orders.map(order => 
+    const orderToUpdate = orders.find(order => order.id === orderId);
+    setOrders(orders.map(order =>
       order.id === orderId ? { ...order, status: newStatus } : order
     ));
+
+    if (orderToUpdate && newStatus === 'ready') {
+      const createdAt = new Date();
+      addNotification({
+        targetRole: 'waiter',
+        type: 'order_ready',
+        orderId,
+        table: orderToUpdate.table,
+        waiterName: orderToUpdate.waiterName,
+        items: orderToUpdate.items,
+        total: orderToUpdate.total,
+        title: `Ready - ${orderToUpdate.table}`,
+        message: `${orderToUpdate.table} is ready for pickup.`,
+        timestamp: createdAt.toLocaleTimeString(),
+      });
+    }
   };
 
   const deleteOrder = (orderId) => {
@@ -174,6 +383,14 @@ function App() {
     }
   };
 
+  const cashierNotifications = notifications.filter(notif => !notif.targetRole || notif.targetRole === 'cashier');
+  const cashierUnreadCount = cashierNotifications.filter(notif => !notif.read).length;
+  const activeWaiterName = getActiveUserName();
+  const waiterNotifications = notifications.filter(notif =>
+    notif.targetRole === 'waiter' && notif.waiterName?.toLowerCase() === activeWaiterName.toLowerCase()
+  );
+  const waiterUnreadCount = waiterNotifications.filter(notif => !notif.read).length;
+
   if (!currentUser) {
     return (
       <LoginScreen 
@@ -190,6 +407,9 @@ function App() {
         <div className="header-content">
           <div className="header-left">
             <h1 className="gradient-text">G&K POS</h1>
+            <span className={`sync-badge ${syncStatus}`}>
+              {syncStatus === 'online' ? 'Synced' : syncStatus === 'offline' ? 'Offline' : syncStatus === 'syncing' ? 'Syncing' : 'Local'}
+            </span>
             <span className="user-badge">
               ◎ {getActiveUserName()} ({getRoleDisplay()})
             </span>
@@ -219,6 +439,11 @@ function App() {
           </nav>
 
           <div className="header-right">
+            {currentUser.role === 'cashier' && (
+              <button className="btn btn-secondary notification-btn" title="Order Notifications">
+                🔔 {cashierUnreadCount > 0 && <span className="badge">{cashierUnreadCount}</span>}
+              </button>
+            )}
             <button className="btn btn-secondary logout-btn" onClick={handleLogout}>
               Logout →
             </button>
@@ -246,6 +471,10 @@ function App() {
             tables={tables}
             categories={categories}
             menuItems={menuItems}
+            orders={orders}
+            notifications={waiterNotifications}
+            unreadCount={waiterUnreadCount}
+            onMarkNotificationAsRead={markNotificationAsRead}
           />
         ) : (
           <CashierDashboard 
@@ -254,12 +483,16 @@ function App() {
             tables={tables}
             categories={categories}
             menuItems={menuItems}
+            notifications={cashierNotifications}
+            unreadCount={cashierUnreadCount}
             onUpdateWaiters={saveWaiters}
             onUpdateTables={saveTables}
             onUpdateCategories={saveCategories}
             onUpdateMenuItems={saveMenuItems}
             onUpdateStatus={updateOrderStatus}
             onDeleteOrder={deleteOrder}
+            onMarkNotificationAsRead={markNotificationAsRead}
+            onSendWhatsAppNotification={sendOrderNotificationToWhatsApp}
           />
         )}
       </main>
@@ -300,6 +533,23 @@ function App() {
           border-radius: 20px;
           font-weight: 500;
         }
+        .sync-badge {
+          font-size: 0.72rem;
+          border: 1px solid var(--glass-border);
+          border-radius: 20px;
+          padding: 0.25rem 0.55rem;
+          color: hsl(var(--foreground));
+          background: hsl(var(--card));
+          white-space: nowrap;
+        }
+        .sync-badge.online {
+          color: hsl(140 70% 65%);
+          border-color: hsl(140 70% 35%);
+        }
+        .sync-badge.offline {
+          color: #ffb3b3;
+          border-color: #ff6b6b;
+        }
         h1 {
           font-size: 1.5rem;
         }
@@ -333,6 +583,85 @@ function App() {
           background: rgba(255, 71, 87, 0.2) !important;
           color: #ff4757 !important;
           border-color: #ff4757 !important;
+        }
+
+        @media (max-width: 768px) {
+          header {
+            height: auto;
+            margin-bottom: 0.75rem;
+          }
+
+          .header-content {
+            min-height: var(--header-height);
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.55rem;
+            padding: 0.65rem 0.85rem;
+          }
+
+          .header-left {
+            flex: 1 1 auto;
+            min-width: 0;
+            gap: 0.5rem;
+          }
+
+          h1 {
+            font-size: 1.05rem;
+            white-space: nowrap;
+          }
+
+          .user-badge {
+            max-width: 46vw;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 0.72rem;
+          }
+
+          .sync-badge {
+            font-size: 0.68rem;
+            padding: 0.22rem 0.45rem;
+          }
+
+          nav {
+            order: 3;
+            width: 100%;
+            justify-content: center;
+          }
+
+          .nav-info {
+            font-size: 0.78rem;
+          }
+
+          .header-right {
+            gap: 0.45rem;
+          }
+
+          .logout-btn {
+            padding: 0.5rem 0.7rem;
+          }
+
+          main {
+            padding: 0 0.75rem 1rem;
+          }
+        }
+
+        @media (max-width: 420px) {
+          .header-content {
+            padding: 0.55rem 0.7rem;
+          }
+
+          .user-badge {
+            max-width: 38vw;
+          }
+
+          .logout-btn {
+            padding: 0.45rem 0.6rem;
+          }
+
+          main {
+            padding: 0 0.55rem 0.8rem;
+          }
         }
       `}</style>
     </div>

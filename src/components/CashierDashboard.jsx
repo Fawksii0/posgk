@@ -6,15 +6,20 @@ const CashierDashboard = ({
   tables, 
   categories,
   menuItems, 
+  notifications,
+  unreadCount,
   onUpdateWaiters, 
   onUpdateTables, 
   onUpdateCategories,
   onUpdateMenuItems, 
   onUpdateStatus, 
-  onDeleteOrder 
+  onDeleteOrder,
+  onMarkNotificationAsRead,
+  onSendWhatsAppNotification
 }) => {
   const [activeTab, setActiveTab] = useState('orders'); // 'orders' | 'menu' | 'staff' | 'settings'
   const [menuSubTab, setMenuSubTab] = useState('items'); // 'items' | 'categories'
+  const [showNotifications, setShowNotifications] = useState(false);
   
   // Waiter states
   const [newWaiterName, setNewWaiterName] = useState('');
@@ -322,13 +327,89 @@ const CashierDashboard = ({
               <small>Total Revenue</small>
               <p>{orders.filter(o => o.status === 'paid').reduce((acc, o) => acc + parseFloat(o.total), 0).toFixed(2)} MAD</p>
             </div>
+            <div className="stat-card glass" style={{ cursor: 'pointer' }} onClick={() => setShowNotifications(!showNotifications)}>
+              <small>🔔 Notifications</small>
+              <p>{unreadCount} New</p>
+            </div>
           </div>
         )}
       </div>
 
       {/* TABS CONTENT */}
       {activeTab === 'orders' && (
-        <div className="orders-grid">
+        <>
+          {/* Notifications Panel */}
+          {showNotifications && (
+            <div className="notifications-panel glass-card">
+              <div className="notifications-header">
+                <h3>📬 Order Notifications ({notifications.length})</h3>
+                <button 
+                  className="btn btn-secondary btn-sm" 
+                  onClick={() => setShowNotifications(false)}
+                >
+                  ✕ Close
+                </button>
+              </div>
+              <div className="notifications-list">
+                {notifications.length === 0 ? (
+                  <p className="empty-notification">No new notifications</p>
+                ) : (
+                  notifications.map(notif => (
+                    <div 
+                      key={notif.id} 
+                      className={`notification-item ${notif.read ? 'read' : 'unread'}`}
+                      onClick={() => !notif.read && onMarkNotificationAsRead(notif.id)}
+                    >
+                      <div className="notification-content">
+                        <div className="notification-title">
+                          {notif.type === 'order_edit' ? '✎ Edited Order' : '🍽️ New Order'}: <strong>{notif.table}</strong>
+                        </div>
+                        <div className="notification-meta">
+                          <span>👤 {notif.waiterName}</span>
+                          <span>⏰ {notif.timestamp}</span>
+                        </div>
+                        <div className="notification-items">
+                          {(notif.items || []).map((item, idx) => (
+                            <span key={idx} className="notification-item-tag">
+                              {item.name} ({item.price.toFixed(2)} MAD)
+                            </span>
+                          ))}
+                        </div>
+                        <div className="notification-total">
+                          💰 Total: <strong>{notif.total} MAD</strong>
+                        </div>
+                      </div>
+                      <div className="notification-actions">
+                        <button 
+                          className="btn btn-primary btn-sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSendWhatsAppNotification(notif);
+                          }}
+                        >
+                          📱 Send WhatsApp
+                        </button>
+                        {!notif.read && (
+                          <button 
+                            className="btn btn-secondary btn-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onMarkNotificationAsRead(notif.id);
+                            }}
+                          >
+                            ✓ Mark Read
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Live Orders Grid */}
+          <div className="orders-grid">
           {orders.length === 0 ? (
             <div className="empty-state glass-card">
               <p>No active orders at the moment.</p>
@@ -382,6 +463,7 @@ const CashierDashboard = ({
             ))
           )}
         </div>
+        </>
       )}
 
       {activeTab === 'menu' && (
@@ -1110,12 +1192,206 @@ const CashierDashboard = ({
         }
 
         @media (max-width: 1024px) {
-          .admin-grid {
-            grid-template-columns: 1fr;
+          .dashboard-header-tabs {
+            align-items: stretch;
+            flex-direction: column;
+            gap: 1rem;
+            margin-bottom: 1rem;
           }
+
+          .tabs {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.5rem;
+            overflow: visible;
+          }
+
+          .tab-btn {
+            min-height: 48px;
+            padding: 0.65rem 0.55rem;
+            font-size: 0.88rem;
+            white-space: normal;
+            text-align: center;
+          }
+
+          .stats {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.75rem;
+          }
+
+          .stat-card {
+            padding: 0.75rem !important;
+          }
+
+          .orders-grid {
+            grid-template-columns: minmax(0, 1fr);
+            gap: 1rem;
+          }
+
+          .admin-grid {
+            grid-template-columns: minmax(0, 1fr);
+            gap: 1rem;
+          }
+
           .form-column {
             position: relative;
             top: 0;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .cashier-container {
+            padding-bottom: max(1rem, env(safe-area-inset-bottom));
+          }
+
+          .dashboard-header-tabs {
+            border-bottom: 0;
+            padding-bottom: 0;
+          }
+
+          .tabs {
+            position: sticky;
+            top: 0;
+            z-index: 35;
+            padding: 0.35rem;
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            background: hsl(var(--card));
+          }
+
+          .tab-btn {
+            border-radius: 9px;
+            font-size: 0.78rem;
+          }
+
+          .stats {
+            grid-template-columns: 1fr;
+          }
+
+          .stat-card p {
+            font-size: 1.05rem;
+          }
+
+          .notifications-panel {
+            padding: 0.85rem !important;
+          }
+
+          .notifications-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+          }
+
+          .notification-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+          }
+
+          .notification-actions {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.5rem;
+          }
+
+          .order-card {
+            padding: 0.9rem !important;
+          }
+
+          .order-card-header,
+          .order-card-footer {
+            gap: 0.75rem;
+          }
+
+          .actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            width: 100%;
+          }
+
+          .actions .btn {
+            justify-content: center;
+            min-height: 42px;
+            white-space: normal;
+          }
+
+          .menu-subtabs {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.5rem;
+            border-bottom: 0;
+            padding: 0.35rem;
+            border-radius: 12px;
+            background: hsl(var(--card));
+          }
+
+          .menu-subtab-btn {
+            min-height: 46px;
+            padding: 0.55rem;
+            border-radius: 9px;
+            border-bottom: 0;
+            white-space: normal;
+          }
+
+          .form-column,
+          .list-column {
+            padding: 0.9rem !important;
+          }
+
+          .scrollable-list {
+            max-height: none;
+            overflow: visible;
+            padding-right: 0;
+          }
+
+          .menu-editor-item,
+          .staff-editor-card {
+            align-items: stretch;
+            flex-direction: column;
+            gap: 0.85rem;
+          }
+
+          .menu-editor-info,
+          .staff-editor-info {
+            align-items: flex-start;
+          }
+
+          .crud-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            width: 100%;
+          }
+
+          .crud-actions .btn {
+            justify-content: center;
+            min-height: 42px;
+          }
+
+          .glass-input {
+            font-size: 16px;
+            min-height: 46px;
+          }
+        }
+
+        @media (max-width: 420px) {
+          .tabs {
+            grid-template-columns: 1fr;
+          }
+
+          .actions,
+          .crud-actions {
+            grid-template-columns: 1fr;
+          }
+
+          .order-card-header {
+            flex-direction: column;
+          }
+
+          .order-item-row,
+          .order-total {
+            gap: 0.75rem;
           }
         }
       `}</style>
