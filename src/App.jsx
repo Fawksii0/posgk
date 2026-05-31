@@ -353,8 +353,8 @@ function App() {
         waiterName: orderToUpdate.waiterName,
         items: orderToUpdate.items,
         total: orderToUpdate.total,
-        title: `Ready - ${orderToUpdate.table}`,
-        message: `${orderToUpdate.table} is ready for pickup.`,
+        title: `Order Ready - ${orderToUpdate.table}`,
+        message: `Table ${orderToUpdate.table} is ready. Please pick it up and serve the customer.`,
         timestamp: createdAt.toLocaleTimeString(),
       });
     }
