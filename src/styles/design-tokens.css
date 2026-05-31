@@ -1,38 +1,38 @@
 :root {
-  /* Black & Gold Dark Theme - Default Only */
-  --primary: 45 95% 55%; /* Vibrant Gold */
-  --primary-foreground: 0 0% 100%; /* Pure White */
-  
-  --secondary: 45 90% 65%; /* Light Gold */
-  --accent: 45 95% 55%; /* Accent Gold */
-  
-  --background: 0 0% 12%; /* Deep Black */
-  --foreground: 0 0% 90%; /* Light text */
-  
-  --card: 0 0% 18%; /* Dark card background */
-  --card-foreground: 0 0% 90%;
-  
-  --border: 45 60% 35%; /* Gold-tinted border */
-  --input: 0 0% 22%;
-  --ring: 45 95% 55%;
-  
-  --icon-color: 45 95% 55%; /* Gold icons */
-  --icon-color-light: 0 0% 100%; /* Light icons */
-  
-  /* Glassmorphism Tokens - Dark theme version */
-  --glass-bg: hsla(0, 0%, 20%, 0.85);
-  --glass-border: hsla(45, 80%, 50%, 0.4);
-  --glass-blur: 12px;
-  
+  /* Light / Modern Theme - Default */
+  --primary: 174 72% 36%; /* Teal-ish accent */
+  --primary-foreground: 0 0% 100%; /* White */
+
+  --secondary: 200 14% 96%;
+  --accent: 174 72% 36%;
+
+  --background: 210 40% 98%; /* Very light gray */
+  --foreground: 0 0% 0%; /* Pure black text */
+
+  --card: 0 0% 100%; /* White card */
+  --card-foreground: 0 0% 0%;
+
+  --border: 210 14% 92%; /* light border */
+  --input: 210 16% 98%;
+  --ring: 174 72% 36%;
+
+  --icon-color: 174 72% 36%;
+  --icon-color-light: 210 12% 14%;
+
+  /* Glassmorphism Tokens - Light theme */
+  --glass-bg: hsla(0, 0%, 100%, 0.9);
+  --glass-border: hsla(210, 14%, 92%, 1);
+  --glass-blur: 8px;
+
   /* Layout Tokens */
   --radius: 0.75rem;
   --header-height: 4.5rem;
-  
-  /* Modern Shadow - Dark theme optimized */
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.8);
-  
+
+  /* Modern Shadow - Light theme */
+  --shadow-sm: 0 6px 18px rgba(16,24,40,0.06);
+  --shadow-md: 0 10px 30px rgba(16,24,40,0.08);
+  --shadow-lg: 0 16px 48px rgba(16,24,40,0.10);
+
   /* Language */
   --language: 'en';
 }

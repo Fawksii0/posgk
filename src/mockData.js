@@ -1,8 +1,8 @@
 export const CATEGORIES = [
-  { id: 'starters', name: 'Starters', icon: '▬' },
-  { id: 'mains', name: 'Main Courses', icon: '▢' },
-  { id: 'drinks', name: 'Drinks', icon: '◇' },
-  { id: 'desserts', name: 'Desserts', icon: '◆' },
+  { id: 'starters', name: 'Starters', icon: 'fi-rr-bowl-food' },
+  { id: 'mains', name: 'Main Courses', icon: 'fi-rr-restaurant' },
+  { id: 'drinks', name: 'Drinks', icon: 'fi-rr-cocktail' },
+  { id: 'desserts', name: 'Desserts', icon: 'fi-rr-ice-cream' },
 ];
 
 export const MENU_ITEMS = [

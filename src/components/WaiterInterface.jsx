@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Uicon from './Uicon';
 
 const WaiterInterface = ({
   onAddOrder,
@@ -16,6 +17,13 @@ const WaiterInterface = ({
   const [currentOrder, setCurrentOrder] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [orderMessage, setOrderMessage] = useState('');
+
+  const renderIcon = (icon) => {
+    if (!icon) return null;
+    return typeof icon === 'string' && icon.includes('fi-')
+      ? <Uicon icon={icon} className="cat-icon" />
+      : <span className="cat-icon">{icon}</span>;
+  };
 
   const addToOrder = (item) => {
     setCurrentOrder([...currentOrder, item]);
@@ -101,9 +109,10 @@ const WaiterInterface = ({
             <button
               key={table.id}
               className={`table-btn ${selectedTable === table.name ? 'active' : ''}`}
-          onClick={() => setSelectedTable(table.name)}
+              onClick={() => setSelectedTable(table.name)}
               type="button"
             >
+              <Uicon icon="fi-rr-tablet" className="uicon-sm" title="Table" />
               {table.name}
             </button>
           ))}
@@ -112,19 +121,20 @@ const WaiterInterface = ({
 
       <div className="menu-section">
         <div className="category-picker glass">
-          <label htmlFor="waiter-category">Menu Category</label>
-          <select
-            id="waiter-category"
-            value={activeCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="category-select"
-          >
+          <label>Menu Category</label>
+          <div className="category-selector">
             {(categories || []).map(cat => (
-              <option key={cat.id} value={cat.id}>
-                {cat.icon} {cat.name}
-              </option>
+              <button
+                key={cat.id}
+                type="button"
+                className={`category-choice ${activeCategory === cat.id ? 'active' : ''}`}
+                onClick={() => setSelectedCategory(cat.id)}
+              >
+                <Uicon icon={cat.icon} className="category-icon" title={cat.name} />
+                <span>{cat.name}</span>
+              </button>
             ))}
-          </select>
+          </div>
         </div>
         
         <div className="items-grid">
@@ -253,6 +263,45 @@ const WaiterInterface = ({
         
         h3 { margin-bottom: 1.5rem; color: hsl(var(--accent)); }
 
+        .category-selector {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.75rem;
+          margin-top: 0.75rem;
+        }
+
+        .category-choice {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          border: 1px solid var(--glass-border);
+          color: hsl(var(--foreground));
+          background: transparent;
+          border-radius: 999px;
+          padding: 0.75rem 1rem;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          font-weight: 600;
+          min-height: 44px;
+        }
+
+        .category-choice.active {
+          background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+          border-color: transparent;
+          color: white;
+          box-shadow: 0 12px 24px rgba(14,165,164,0.18);
+        }
+
+        .category-icon {
+          width: 1rem;
+          height: 1rem;
+          color: inherit;
+        }
+
+        .table-btn .uicon-sm {
+          margin-right: 0.35rem;
+        }
+
         /* Tables */
         .table-map {
           display: grid;
@@ -275,10 +324,37 @@ const WaiterInterface = ({
         }
         .table-btn:hover { border-color: hsl(var(--accent)); }
         .table-btn.active { 
-          background: hsl(var(--accent)); 
-          color: hsl(var(--background));
-          box-shadow: 0 0 15px hsl(var(--accent) / 0.5);
-          border-color: hsl(var(--accent));
+          background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+          color: white;
+          box-shadow: 0 14px 30px rgba(14,165,164,0.18);
+          border-color: transparent;
+        }
+
+        .btn-primary {
+          background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+          color: white;
+          border-color: transparent;
+          box-shadow: 0 14px 30px rgba(14,165,164,0.18);
+        }
+
+        .submit-btn {
+          width: 100%;
+          padding: 1rem 1.25rem;
+          font-weight: 700;
+          letter-spacing: 0.01em;
+        }
+
+        .add-btn {
+          background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+          color: white;
+          border-radius: 50%;
+          width: 36px;
+          height: 36px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 14px 30px rgba(14,165,164,0.18);
+          pointer-events: none;
         }
 
         /* Menu */
@@ -448,10 +524,9 @@ const WaiterInterface = ({
 
           .order-sidebar {
             order: 4;
-            position: sticky;
-            bottom: 0;
-            max-height: min(48vh, 360px);
-            z-index: 40;
+            position: static;
+            max-height: none;
+            z-index: auto;
           }
 
           .waiter-notifications {
@@ -488,11 +563,9 @@ const WaiterInterface = ({
           }
 
           .category-picker {
-            position: sticky;
-            top: 0;
-            z-index: 30;
-            margin: 0 -0.25rem;
-            padding: 0.45rem;
+            position: static;
+            margin: 0;
+            padding: 0.45rem 0;
             grid-template-columns: 1fr;
             gap: 0.35rem;
           }

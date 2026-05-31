@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Uicon from './Uicon';
 
 const CashierDashboard = ({ 
   orders, 
@@ -38,10 +39,17 @@ const CashierDashboard = ({
 
   // Category states
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [newCategoryIcon, setNewCategoryIcon] = useState('🍽️');
+  const [newCategoryIcon, setNewCategoryIcon] = useState('fi-rr-bowl-food');
   const [editingCategory, setEditingCategory] = useState(null); // Category being edited
   const [categoryError, setCategoryError] = useState('');
   const [categorySuccess, setCategorySuccess] = useState('');
+
+  const renderIcon = (icon) => {
+    if (!icon) return null;
+    return typeof icon === 'string' && icon.includes('fi-')
+      ? <Uicon icon={icon} className="cat-icon" />
+      : <span className="cat-icon">{icon}</span>;
+  };
 
   // Table states
   const [newTableName, setNewTableName] = useState('');
@@ -201,12 +209,12 @@ const CashierDashboard = ({
     const newCategory = {
       id: newCategoryName.trim().toLowerCase().replace(/\s+/g, '_'),
       name: newCategoryName.trim(),
-      icon: newCategoryIcon || '🍽️'
+      icon: newCategoryIcon || 'fi-rr-bowl-food'
     };
 
     onUpdateCategories([...categories, newCategory]);
     setNewCategoryName('');
-    setNewCategoryIcon('🍽️');
+    setNewCategoryIcon('fi-rr-bowl-food');
     setCategoryError('');
     setCategorySuccess('Category added successfully!');
     setTimeout(() => setCategorySuccess(''), 3000);
@@ -329,7 +337,7 @@ const CashierDashboard = ({
               <p>{orders.filter(o => o.status === 'paid').reduce((acc, o) => acc + parseFloat(o.total), 0).toFixed(2)} MAD</p>
             </div>
             <div className="stat-card glass" style={{ cursor: 'pointer' }} onClick={() => setShowNotifications(!showNotifications)}>
-              <small>🔔 Notifications</small>
+              <small><Uicon icon="fi-rr-bell" /> Notifications</small>
               <p>{unreadCount} New</p>
             </div>
           </div>
@@ -343,12 +351,12 @@ const CashierDashboard = ({
           {showNotifications && (
             <div className="notifications-panel glass-card">
               <div className="notifications-header">
-                <h3>📬 Order Notifications ({notifications.length})</h3>
+                <h3><Uicon icon="fi-rr-mailbox" /> Order Notifications ({notifications.length})</h3>
                 <button 
                   className="btn btn-secondary btn-sm" 
                   onClick={() => setShowNotifications(false)}
                 >
-                  ✕ Close
+                  <Uicon icon="fi-rr-cross" /> Close
                 </button>
               </div>
               <div className="notifications-list">
@@ -363,11 +371,11 @@ const CashierDashboard = ({
                     >
                       <div className="notification-content">
                         <div className="notification-title">
-                          {notif.type === 'order_edit' ? '✎ Edited Order' : '🍽️ New Order'}: <strong>{notif.table}</strong>
+                          {notif.type === 'order_edit' ? <><Uicon icon="fi-rr-pencil" /> Edited Order</> : <><Uicon icon="fi-rr-bowl-food" /> New Order</>}: <strong>{notif.table}</strong>
                         </div>
                         <div className="notification-meta">
-                          <span>👤 {notif.waiterName}</span>
-                          <span>⏰ {notif.timestamp}</span>
+                          <span><Uicon icon="fi-rr-user" /> {notif.waiterName}</span>
+                          <span><Uicon icon="fi-rr-clock" /> {notif.timestamp}</span>
                         </div>
                         <div className="notification-items">
                           {(notif.items || []).map((item, idx) => (
@@ -377,7 +385,7 @@ const CashierDashboard = ({
                           ))}
                         </div>
                         <div className="notification-total">
-                          💰 Total: <strong>{notif.total} MAD</strong>
+                          <Uicon icon="fi-rr-wallet" /> Total: <strong>{notif.total} MAD</strong>
                         </div>
                       </div>
                       <div className="notification-actions">
@@ -406,31 +414,31 @@ const CashierDashboard = ({
               className={`btn ${sourceFilter === 'all' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
               onClick={() => setSourceFilter('all')}
             >
-              📊 All ({orders.length})
+              <Uicon icon="fi-rr-chart-pie" /> All ({orders.length})
             </button>
             <button 
               className={`btn ${sourceFilter === 'dine_in' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
               onClick={() => setSourceFilter('dine_in')}
             >
-              🍽️ Dine-in ({countBySource('dine_in')})
+              <Uicon icon="fi-rr-restaurant" /> Dine-in ({countBySource('dine_in')})
             </button>
             <button 
               className={`btn ${sourceFilter === 'delivery_direct' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
               onClick={() => setSourceFilter('delivery_direct')}
             >
-              🚗 Direct Delivery ({countBySource('delivery_direct')})
+              <Uicon icon="fi-rr-truck" /> Direct Delivery ({countBySource('delivery_direct')})
             </button>
             <button 
               className={`btn ${sourceFilter === 'glovo' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
               onClick={() => setSourceFilter('glovo')}
             >
-              🟢 Glovo ({countBySource('glovo')})
+              <Uicon icon="fi-rr-lightning" /> Glovo ({countBySource('glovo')})
             </button>
             <button 
               className={`btn ${sourceFilter === 'phone' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
               onClick={() => setSourceFilter('phone')}
             >
-              ☎️ Phone ({countBySource('phone')})
+              <Uicon icon="fi-rr-phone-call" /> Phone ({countBySource('phone')})
             </button>
           </div>
 
@@ -449,7 +457,7 @@ const CashierDashboard = ({
                     <small className="waiter-name">Waiter: {order.waiterName}</small>
                     {order.source && (
                       <div style={{ fontSize: '0.85rem', marginTop: '0.25rem', color: 'var(--accent)' }}>
-                        📌 {order.sourceLabel || (order.source === 'dine_in' ? 'Dine-in' : order.source === 'delivery_direct' ? 'Direct Delivery' : order.source === 'glovo' ? 'Glovo' : order.source === 'phone' ? 'Phone' : order.source)}
+                        <Uicon icon="fi-rr-bookmark" /> {order.sourceLabel || (order.source === 'dine_in' ? 'Dine-in' : order.source === 'delivery_direct' ? 'Direct Delivery' : order.source === 'glovo' ? 'Glovo' : order.source === 'phone' ? 'Phone' : order.source)}
                       </div>
                     )}
                   </div>
@@ -502,13 +510,13 @@ const CashierDashboard = ({
               className={`menu-subtab-btn ${menuSubTab === 'items' ? 'active' : ''}`}
               onClick={() => setMenuSubTab('items')}
             >
-              📋 Menu Items
+              <Uicon icon="fi-rr-menu-burger" /> Menu Items
             </button>
             <button 
               className={`menu-subtab-btn ${menuSubTab === 'categories' ? 'active' : ''}`}
               onClick={() => setMenuSubTab('categories')}
             >
-              🏷️ Categories
+              <Uicon icon="fi-rr-list" /> Categories
             </button>
           </div>
 
@@ -648,7 +656,7 @@ const CashierDashboard = ({
                 <div key={item.id} className="menu-editor-item glass">
                   <div className="menu-editor-info">
                     <span className="cat-bullet">
-                      {categories.find(c => c.id === item.category)?.icon || '🍽️'}
+                      {renderIcon(categories.find(c => c.id === item.category)?.icon || 'fi-rr-bowl-food')}
                     </span>
                     <div>
                       <h4>{item.name}</h4>
@@ -690,14 +698,13 @@ const CashierDashboard = ({
                         />
                       </div>
                       <div className="form-group">
-                        <label>Icon/Emoji</label>
+                        <label>Icon Class</label>
                         <input 
                           type="text" 
                           value={editingCategory.icon} 
                           onChange={(e) => setEditingCategory({ ...editingCategory, icon: e.target.value })} 
-                          placeholder="🍽️"
+                          placeholder="fi-rr-bowl-food"
                           className="glass-input"
-                          maxLength={5}
                         />
                       </div>
                       {categoryError && <p className="error-text">{categoryError}</p>}
@@ -723,14 +730,13 @@ const CashierDashboard = ({
                         />
                       </div>
                       <div className="form-group">
-                        <label>Icon/Emoji</label>
+                        <label>Icon Class</label>
                         <input 
                           type="text" 
                           value={newCategoryIcon} 
                           onChange={(e) => setNewCategoryIcon(e.target.value)} 
-                          placeholder="🍽️"
+                          placeholder="fi-rr-bowl-food"
                           className="glass-input"
-                          maxLength={5}
                         />
                       </div>
                       {categoryError && <p className="error-text">{categoryError}</p>}
@@ -748,7 +754,7 @@ const CashierDashboard = ({
                   {categories.map(cat => (
                     <div key={cat.id} className="menu-editor-item glass">
                       <div className="menu-editor-info">
-                        <span className="cat-bullet">{cat.icon}</span>
+                        <span className="cat-bullet">{renderIcon(cat.icon)}</span>
                         <div>
                           <h4>{cat.name}</h4>
                           <small style={{ opacity: 0.5 }}>ID: {cat.id}</small>
@@ -844,12 +850,12 @@ const CashierDashboard = ({
               {waiters.map(waiter => (
                 <div key={waiter.id} className="staff-editor-card glass">
                   <div className="staff-editor-info">
-                    <span className="staff-avatar">�‍💼</span>
+                    <span className="staff-avatar"><Uicon icon="fi-rr-user" title="Staff" /></span>
                     <div>
                       <h4>{waiter.name}</h4>
                       <p>Access Code: <code>{waiter.pin}</code></p>
                       <small className="orders-taken-badge">
-                        📊 Orders Placed: {waiter.ordersCount || 0}
+                        <Uicon icon="fi-rr-chart-pie" /> Orders Placed: {waiter.ordersCount || 0}
                       </small>
                     </div>
                   </div>
@@ -929,7 +935,7 @@ const CashierDashboard = ({
               {tables.map(table => (
                 <div key={table.id} className="menu-editor-item glass">
                   <div className="menu-editor-info">
-                    <span className="cat-bullet">🍽️</span>
+                    <span className="cat-bullet">{renderIcon('fi-rr-tablet')}</span>
                     <div>
                       <h4>{table.name}</h4>
                       <small style={{ opacity: 0.5 }}>Table ID: {table.id}</small>
@@ -979,15 +985,15 @@ const CashierDashboard = ({
           padding: 0.5rem 1rem;
           border-radius: var(--radius);
           transition: all 0.2s;
-          opacity: 0.6;
+          opacity: 1;
           white-space: nowrap;
         }
 
         .tab-btn.active {
-          opacity: 1;
-          background: var(--glass-bg);
-          box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-          border: 1px solid var(--glass-border);
+          background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+          color: white;
+          box-shadow: 0 14px 30px rgba(14,165,164,0.18);
+          border: 1px solid transparent;
         }
 
         /* Menu Builder Sub-tabs */
@@ -1012,14 +1018,16 @@ const CashierDashboard = ({
           padding: 0.5rem 1rem;
           border-radius: var(--radius);
           transition: all 0.2s;
-          opacity: 0.5;
+          opacity: 1;
           border-bottom: 3px solid transparent;
         }
 
         .menu-subtab-btn.active {
           opacity: 1;
-          border-bottom-color: hsl(var(--primary));
-          background: hsl(var(--primary) / 0.1);
+          border-bottom-color: transparent;
+          background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+          color: white;
+          box-shadow: 0 10px 22px rgba(14,165,164,0.18);
         }
 
         .menu-subtab-btn:hover {

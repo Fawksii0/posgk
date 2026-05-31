@@ -1,8 +1,9 @@
 import { useRef, useState, useEffect } from 'react';
-import WaiterInterface from './components/WaiterInterface';
+import POSWaiterLayout from './components/POSWaiterLayout';
 import CashierDashboard from './components/CashierDashboard';
 import LoginScreen from './components/LoginScreen';
 import ManagerPortal from './components/ManagerPortal';
+import Uicon from './components/Uicon';
 import { MENU_ITEMS, CATEGORIES } from './mockData';
 import { isCloudSyncEnabled, readCloudState, writeCloudState } from './services/posSync';
 
@@ -59,7 +60,7 @@ function App() {
 
   // Set dark theme on mount (black & gold only)
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'dark');
+    document.documentElement.setAttribute('data-theme', 'light');
   }, []);
 
   useEffect(() => {
@@ -301,7 +302,7 @@ function App() {
     saveWaiters(updatedWaiters);
 
     // Create a notification for the cashier
-    const notificationMessage = `🆕 NEW ORDER\n📍 Table: ${newOrder.table}\n👤 Waiter: ${waiterName}\n📦 Items: ${newOrder.items.length}\n💰 Total: $${newOrder.total}`;
+    const notificationMessage = `NEW ORDER\nTable: ${newOrder.table}\nWaiter: ${waiterName}\nItems: ${newOrder.items.length}\nTotal: $${newOrder.total}`;
     addNotification({
       targetRole: 'cashier',
       type: 'new_order',
@@ -408,7 +409,7 @@ function App() {
               {syncStatus === 'online' ? 'Synced' : syncStatus === 'offline' ? 'Offline' : syncStatus === 'syncing' ? 'Syncing' : 'Local'}
             </span>
             <span className="user-badge">
-              ◎ {getActiveUserName()} ({getRoleDisplay()})
+              <Uicon icon="fi-rr-user" className="uicon-sm" /> {getActiveUserName()} ({getRoleDisplay()})
             </span>
           </div>
 
@@ -419,13 +420,13 @@ function App() {
                   className={`btn ${view === 'waiter' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => setView('waiter')}
                 >
-                  Waiter Mode
+                  <Uicon icon="fi-rr-user" className="uicon-sm" /> Waiter Mode
                 </button>
                 <button 
                   className={`btn ${view === 'cashier' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => setView('cashier')}
                 >
-                  Cashier Dashboard
+                  <Uicon icon="fi-rr-wallet" className="uicon-sm" /> Cashier Dashboard
                 </button>
               </>
             ) : currentUser.role === 'manager' ? (
@@ -443,7 +444,7 @@ function App() {
                   title="Order Notifications"
                   onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
                 >
-                  🔔 {cashierUnreadCount > 0 && <span className="badge">{cashierUnreadCount}</span>}
+                  <Uicon icon="fi-rr-bell" /> {cashierUnreadCount > 0 && <span className="badge">{cashierUnreadCount}</span>}
                 </button>
                 {showNotificationDropdown && (
                   <div className="notification-dropdown glass-card">
@@ -462,16 +463,16 @@ function App() {
                           >
                             <div className="notification-info">
                               <div className="notification-title">
-                                {notif.type === 'order_edit' ? '✎ Edited' : '🍽️ New'}: <strong>{notif.table}</strong>
+                                {notif.type === 'order_edit' ? <><Uicon icon="fi-rr-pencil" /> Edited</> : <><Uicon icon="fi-rr-bowl-food" /> New</>}: <strong>{notif.table}</strong>
                               </div>
-                              <div className="notification-time">⏰ {notif.timestamp}</div>
+                              <div className="notification-time"><Uicon icon="fi-rr-clock" /> {notif.timestamp}</div>
                               <div className="notification-items-mini">
                                 {(notif.items || []).map((item, idx) => (
                                   <span key={idx}>{item.name}</span>
                                 )).slice(0, 2)}
                                 {(notif.items || []).length > 2 && <span>...</span>}
                               </div>
-                              <div className="notification-total">Total: {notif.total} MAD</div>
+                              <div className="notification-total"><Uicon icon="fi-rr-wallet" /> Total: {notif.total} MAD</div>
                             </div>
                             {!notif.read && <div className="unread-dot"></div>}
                           </div>
@@ -483,7 +484,7 @@ function App() {
               </div>
             )}
             <button className="btn btn-secondary logout-btn" onClick={handleLogout}>
-              Logout →
+              <Uicon icon="fi-rr-sign-out" /> Logout
             </button>
           </div>
         </div>
@@ -503,7 +504,7 @@ function App() {
             onLogout={handleLogout}
           />
         ) : view === 'waiter' ? (
-          <WaiterInterface 
+          <POSWaiterLayout 
             onAddOrder={addOrder} 
             waiterName={getActiveUserName()} 
             tables={tables}
@@ -534,20 +535,19 @@ function App() {
         )}
       </main>
 
-      <style jsx>{`
+      <style>{`
         .app-container {
           min-height: 100vh;
           display: flex;
           flex-direction: column;
         }
         header {
-          position: sticky;
-          top: 0;
-          z-index: 100;
+          position: static;
           height: var(--header-height);
           margin-bottom: 2rem;
           border-radius: 0 0 var(--radius) var(--radius) !important;
           border-top: none !important;
+          background: transparent;
         }
         .header-content {
           max-width: 1200px;
@@ -660,7 +660,7 @@ function App() {
           margin-bottom: 0.5rem;
           border: 1px solid var(--glass-border);
           border-radius: 8px;
-          background: hsl(var(--card) / 0.5);
+          background: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--card)) 100%);
           cursor: pointer;
           transition: all 0.2s ease;
           display: flex;
@@ -687,7 +687,7 @@ function App() {
         .notification-title {
           font-weight: bold;
           font-size: 0.85rem;
-          color: white;
+          color: hsl(var(--foreground));
         }
 
         .notification-time {
@@ -698,7 +698,7 @@ function App() {
 
         .notification-items-mini {
           font-size: 0.75rem;
-          color: rgba(255, 255, 255, 0.7);
+          color: rgba(17,24,39,0.65);
           margin-top: 0.25rem;
           display: flex;
           gap: 0.25rem;
@@ -706,7 +706,7 @@ function App() {
         }
 
         .notification-items-mini span {
-          background: hsl(var(--accent) / 0.2);
+          background: rgba(14,165,164,0.08);
           padding: 0.15rem 0.4rem;
           border-radius: 4px;
           white-space: nowrap;
@@ -733,7 +733,7 @@ function App() {
         .empty-notification {
           padding: 1rem;
           text-align: center;
-          color: rgba(255, 255, 255, 0.5);
+          color: rgba(17,24,39,0.45);
           font-size: 0.9rem;
         }
 

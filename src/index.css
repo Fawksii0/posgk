@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import './styles/design-tokens.css';
 
 * {
@@ -6,11 +7,22 @@
   box-sizing: border-box;
 }
 
+html {
+  font-family: 'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body, button, input, select, textarea, optgroup {
+  font-family: inherit;
+}
+
 body {
-  font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
+  font-weight: 400;
+  line-height: 1.55;
+  color: hsl(var(--foreground));
   background-color: hsl(var(--background));
   background-image: none;
-  color: hsl(var(--foreground));
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
@@ -72,6 +84,52 @@ h1, h2, h3, h4 {
   color: hsl(var(--icon-color-light));
 }
 
+.uicon,
+.uicon-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  color: inherit;
+}
+
+.uicon {
+  font-size: 0.95rem;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+}
+
+.uicon-sm {
+  font-size: 0.85rem;
+  width: 0.85em;
+  height: 0.85em;
+}
+
+.cat-icon {
+  margin-right: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 0 0.75rem;
+}
+
+.brand-icon {
+  color: hsl(var(--primary));
+  font-size: 1rem;
+  width: 1.05em;
+  height: 1.05em;
+}
+
+.uicon-text {
+  color: inherit;
+}
+
 .gradient-text {
   background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
   -webkit-background-clip: text;
@@ -120,7 +178,7 @@ h1, h2, h3, h4 {
 .btn-secondary:hover {
   background: hsla(var(--foreground), 0.05);
   border-color: hsl(var(--primary));
-  color: hsl(var(--primary));
+  color: hsl(var(--foreground));
   box-shadow: var(--shadow-md);
 }
 
@@ -209,7 +267,7 @@ header.glass {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.9rem;
-  color: hsl(var(--foreground), 0.7);
+  color: hsl(var(--foreground));
   font-weight: 500;
 }
 
@@ -221,7 +279,7 @@ nav {
 
 .nav-info {
   font-size: 0.95rem;
-  color: hsl(var(--foreground), 0.7);
+  color: hsl(var(--foreground));
   font-weight: 500;
 }
 

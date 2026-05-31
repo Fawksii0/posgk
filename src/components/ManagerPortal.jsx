@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { isCloudSyncEnabled, readUsersFromCloud, updateUser } from '../services/posSync';
+import Uicon from './Uicon';
 
 const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItems, onUpdateCategories, onUpdateMenuItems }) => {
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'sales' | 'staff' | 'menu' | 'closing' | 'users'
@@ -19,10 +20,17 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
   const [editingMenuItem, setEditingMenuItem] = useState(null);
   const [menuError, setMenuError] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [newCategoryIcon, setNewCategoryIcon] = useState('📋');
+  const [newCategoryIcon, setNewCategoryIcon] = useState('fi-rr-clipboard');
   const [editingCategory, setEditingCategory] = useState(null);
   const [categoryError, setCategoryError] = useState('');
   const [categorySuccess, setCategorySuccess] = useState('');
+
+  const renderIcon = (icon) => {
+    if (!icon) return null;
+    return typeof icon === 'string' && icon.includes('fi-')
+      ? <Uicon icon={icon} className="cat-icon" />
+      : <span className="cat-icon">{icon}</span>;
+  };
   
   // Users management
   const [users, setUsers] = useState(() => {
@@ -215,12 +223,12 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
     const newCategory = {
       id: newCategoryName.trim().toLowerCase().replace(/\s+/g, '_'),
       name: newCategoryName.trim(),
-      icon: newCategoryIcon || '📋'
+      icon: newCategoryIcon || 'fi-rr-clipboard'
     };
 
     onUpdateCategories([...categories, newCategory]);
     setNewCategoryName('');
-    setNewCategoryIcon('📋');
+    setNewCategoryIcon('fi-rr-clipboard');
     setCategoryError('');
     setCategorySuccess('Category added successfully!');
     setTimeout(() => setCategorySuccess(''), 3000);
@@ -329,7 +337,7 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
       <div className="manager-header glass">
         <h2 className="gradient-text">Manager Portal</h2>
         <button className="btn btn-secondary" onClick={onLogout}>
-          Logout ⪢
+          <Uicon icon="fi-rr-sign-out" /> Logout
         </button>
       </div>
 
@@ -339,37 +347,37 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
           className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
           onClick={() => setActiveTab('dashboard')}
         >
-          ⊞ Dashboard
+          <Uicon icon="fi-rr-dashboard" /> Dashboard
         </button>
         <button 
           className={`tab-btn ${activeTab === 'sales' ? 'active' : ''}`}
           onClick={() => setActiveTab('sales')}
         >
-          ▤ Sales Analytics
+          <Uicon icon="fi-rr-chart-line" /> Sales Analytics
         </button>
         <button 
           className={`tab-btn ${activeTab === 'staff' ? 'active' : ''}`}
           onClick={() => setActiveTab('staff')}
         >
-          ◎ Staff Performance
+          <Uicon icon="fi-rr-users" /> Staff Performance
         </button>
         <button 
           className={`tab-btn ${activeTab === 'menu' ? 'active' : ''}`}
           onClick={() => setActiveTab('menu')}
         >
-          ≡ Menu Builder
+          <Uicon icon="fi-rr-clipboard" /> Menu Builder
         </button>
         <button 
           className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`}
           onClick={() => setActiveTab('users')}
         >
-          ◎ Users
+          <Uicon icon="fi-rr-user-group" /> Users
         </button>
         <button 
           className={`tab-btn ${activeTab === 'closing' ? 'active' : ''}`}
           onClick={() => setActiveTab('closing')}
         >
-          ◉ Font de Caisse
+          <Uicon icon="fi-rr-clock" /> Font de Caisse
         </button>
       </div>
 
@@ -377,7 +385,7 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
       {activeTab === 'dashboard' && (
         <div className="dashboard-grid">
           <div className="stat-card glass-card">
-            <div className="stat-icon">◆</div>
+            <div className="stat-icon"><Uicon icon="fi-rr-wallet" /></div>
             <div className="stat-content">
               <small>Today's Revenue</small>
               <h3>{cashRegisterStatus.totalRevenue.toFixed(2)} MAD</h3>
@@ -386,7 +394,7 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
           </div>
 
           <div className="stat-card glass-card">
-            <div className="stat-icon">⌛</div>
+            <div className="stat-icon"><Uicon icon="fi-rr-clock" /></div>
             <div className="stat-content">
               <small>Pending Revenue</small>
               <h3>{cashRegisterStatus.pendingRevenue.toFixed(2)} MAD</h3>
@@ -395,7 +403,7 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
           </div>
 
           <div className="stat-card glass-card">
-            <div className="stat-icon">◎</div>
+            <div className="stat-icon"><Uicon icon="fi-rr-users" /></div>
             <div className="stat-content">
               <small>Active Staff</small>
               <h3>{waiters.length}</h3>
@@ -404,7 +412,7 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
           </div>
 
           <div className="stat-card glass-card">
-            <div className="stat-icon">▢</div>
+            <div className="stat-icon"><Uicon icon="fi-rr-tablet" /></div>
             <div className="stat-content">
               <small>Dining Tables</small>
               <h3>{tables.length}</h3>
@@ -561,13 +569,13 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
               className={`menu-subtab-btn ${menuSubTab === 'items' ? 'active' : ''}`}
               onClick={() => setMenuSubTab('items')}
             >
-              ≡ Menu Items
+              <Uicon icon="fi-rr-menu-burger" /> Menu Items
             </button>
             <button 
               className={`menu-subtab-btn ${menuSubTab === 'categories' ? 'active' : ''}`}
               onClick={() => setMenuSubTab('categories')}
             >
-              ▬ Categories
+              <Uicon icon="fi-rr-list" /> Categories
             </button>
           </div>
 
@@ -751,12 +759,12 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
                         />
                       </div>
                       <div className="form-group">
-                        <label>Icon/Emoji</label>
+                        <label>Icon class</label>
                         <input 
                           type="text" 
                           value={editingCategory.icon} 
                           onChange={(e) => setEditingCategory({ ...editingCategory, icon: e.target.value })} 
-                          placeholder="📋"
+                          placeholder="fi-rr-clipboard"
                           className="glass-input"
                           maxLength={5}
                         />
@@ -784,12 +792,12 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
                         />
                       </div>
                       <div className="form-group">
-                        <label>Icon/Emoji</label>
+                        <label>Icon class</label>
                         <input 
                           type="text" 
                           value={newCategoryIcon} 
                           onChange={(e) => setNewCategoryIcon(e.target.value)} 
-                          placeholder="📋"
+                          placeholder="fi-rr-clipboard"
                           className="glass-input"
                           maxLength={5}
                         />
@@ -809,7 +817,7 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
                   {categories.map(category => (
                     <div key={category.id} className="menu-editor-item glass">
                       <div className="menu-editor-info">
-                        <span style={{ fontSize: '1.5rem', marginRight: '1rem' }}>{category.icon}</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: '1.5rem', marginRight: '1rem' }}>{renderIcon(category.icon)}</span>
                         <div>
                           <h4>{category.name}</h4>
                           <small style={{ color: 'var(--text-secondary)' }}>ID: {category.id}</small>
@@ -919,21 +927,21 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
                         onClick={() => assignRole(selectedUser, 'waiter')}
                         style={{ background: selectedUser.role === 'waiter' ? 'hsl(var(--primary) / 0.3)' : 'var(--glass-bg)' }}
                       >
-                        🍽️ Waiter
+                        <Uicon icon="fi-rr-restaurant" /> Waiter
                       </button>
                       <button 
                         className="btn btn-secondary btn-sm"
                         onClick={() => assignRole(selectedUser, 'cashier')}
                         style={{ background: selectedUser.role === 'cashier' ? 'hsl(var(--primary) / 0.3)' : 'var(--glass-bg)' }}
                       >
-                        💳 Cashier
+                        <Uicon icon="fi-rr-credit-card" /> Cashier
                       </button>
                       <button 
                         className="btn btn-secondary btn-sm"
                         onClick={() => assignRole(selectedUser, 'manager')}
                         style={{ background: selectedUser.role === 'manager' ? 'hsl(var(--primary) / 0.3)' : 'var(--glass-bg)' }}
                       >
-                        👔 Manager
+                        <Uicon icon="fi-rr-briefcase" /> Manager
                       </button>
                     </div>
                   </div>
@@ -949,7 +957,7 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
                             onClick={() => pauseUser(selectedUser)}
                             style={{ background: 'rgba(255, 165, 2, 0.2)', color: '#ffa502' }}
                           >
-                            ⏸ Pause Orders
+                            <Uicon icon="fi-rr-pause" /> Pause Orders
                           </button>
                           <button 
                             className="btn btn-secondary btn-sm delete-btn"
@@ -967,7 +975,7 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
                             onClick={() => activateUser(selectedUser)}
                             style={{ background: 'rgba(46, 204, 113, 0.2)', color: '#2ecc71' }}
                           >
-                            ✓ Resume Orders
+                            <Uicon icon="fi-rr-play" /> Resume Orders
                           </button>
                           <button 
                             className="btn btn-secondary btn-sm delete-btn"
@@ -1023,7 +1031,7 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
               <div className="status-item">
                 <label>Status</label>
                 <h2 style={{ color: cashRegisterStatus.canClose ? 'green' : 'orange' }}>
-                  {cashRegisterStatus.canClose ? '✓ Ready' : '⚠ Pending Orders'}
+                  {cashRegisterStatus.canClose ? <><Uicon icon="fi-rr-check" /> Ready</> : <><Uicon icon="fi-rr-warning" /> Pending Orders</>}
                 </h2>
               </div>
             </div>
@@ -1034,7 +1042,7 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
               onClick={() => setShowClosureModal(true)}
               disabled={!cashRegisterStatus.canClose}
             >
-              {cashRegisterStatus.canClose ? '� Close Register (Cloture)' : '⏱ Waiting for all orders to be paid'}
+              {cashRegisterStatus.canClose ? <><Uicon icon="fi-rr-lock" /> Close Register (Cloture)</> : <><Uicon icon="fi-rr-clock" /> Waiting for all orders to be paid</>}
             </button>
           </div>
 
@@ -1086,7 +1094,7 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
             </div>
             <div className="modal-actions">
               <button className="btn btn-primary" onClick={handleClosure}>
-                ✓ Confirm Closure
+                <Uicon icon="fi-rr-check" /> Confirm Closure
               </button>
               <button className="btn btn-secondary" onClick={() => setShowClosureModal(false)}>
                 Cancel
@@ -1127,6 +1135,9 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
         }
 
         .tab-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
           padding: 0.75rem 1.25rem;
           border: none;
           background: transparent;
@@ -1136,6 +1147,7 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
           transition: all 0.25s ease;
           font-weight: 600;
           font-size: 0.95rem;
+          font-family: inherit;
           border-bottom: 3px solid transparent;
           position: relative;
           margin-bottom: -2px;
@@ -1157,6 +1169,46 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
           grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
           gap: 1rem;
           margin-bottom: 2rem;
+        }
+
+        .menu-subtabs {
+          display: flex;
+          gap: 0.5rem;
+          border-bottom: 2px solid hsl(var(--border));
+          padding-bottom: 0.5rem;
+          margin-bottom: 1rem;
+        }
+
+        .menu-subtab-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.45rem;
+          background: hsl(var(--card));
+          border: 1px solid hsl(var(--border));
+          color: hsl(var(--foreground));
+          font-weight: 600;
+          font-size: 0.95rem;
+          font-family: inherit;
+          padding: 0.65rem 1rem;
+          border-radius: 9px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          min-height: 46px;
+        }
+
+        .menu-subtab-btn:hover {
+          background: hsla(var(--foreground), 0.06);
+        }
+
+        .menu-subtab-btn.active {
+          background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+          color: white;
+          border-color: transparent;
+          box-shadow: var(--shadow-md);
+        }
+
+        .menu-subtab-btn .uicon {
+          color: inherit;
         }
 
         .stat-card {
@@ -1699,6 +1751,15 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
             border-radius: 9px;
             border-bottom: 0;
             white-space: normal;
+            color: hsl(var(--foreground));
+          }
+
+          .menu-subtab-btn .uicon {
+            color: inherit;
+          }
+
+          .menu-subtab-btn.active {
+            color: white;
           }
 
           .scrollable-list {

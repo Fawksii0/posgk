@@ -411,6 +411,9 @@ const LoginScreen = ({ onLogin }) => {
           gap: 1.5rem;
           border-radius: 24px !important;
           margin: auto;
+          background: hsl(var(--card));
+          color: hsl(var(--card-foreground));
+          box-shadow: var(--shadow-md);
         }
 
         .login-header {
@@ -444,7 +447,7 @@ const LoginScreen = ({ onLogin }) => {
         .auth-tabs {
           display: flex;
           gap: 1rem;
-          background: rgba(255, 255, 255, 0.05);
+          background: transparent;
           padding: 0.5rem;
           border-radius: 12px;
           border: 1px solid var(--glass-border);
@@ -468,9 +471,9 @@ const LoginScreen = ({ onLogin }) => {
         }
 
         .tab-btn.active {
-          background: hsl(var(--primary) / 0.2);
-          color: hsl(var(--primary));
-          box-shadow: 0 0 12px hsl(var(--primary) / 0.2);
+          background: hsl(var(--accent));
+          color: hsl(var(--primary-foreground));
+          box-shadow: 0 6px 20px rgba(14,165,164,0.12);
         }
 
         .auth-form {
@@ -495,8 +498,8 @@ const LoginScreen = ({ onLogin }) => {
         .form-group select {
           padding: 0.875rem;
           border: 1px solid var(--glass-border);
-          background: rgba(255, 255, 255, 0.05);
-          color: hsl(var(--foreground));
+          background: hsl(var(--card));
+          color: hsl(var(--card-foreground));
           border-radius: 8px;
           font-size: 0.95rem;
           transition: all 0.2s ease;
