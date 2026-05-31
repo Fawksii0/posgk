@@ -14,8 +14,7 @@ const CashierDashboard = ({
   onUpdateMenuItems, 
   onUpdateStatus, 
   onDeleteOrder,
-  onMarkNotificationAsRead,
-  onSendWhatsAppNotification
+  onMarkNotificationAsRead
 }) => {
   const [activeTab, setActiveTab] = useState('orders'); // 'orders' | 'menu' | 'staff' | 'settings'
   const [menuSubTab, setMenuSubTab] = useState('items'); // 'items' | 'categories'
@@ -57,12 +56,6 @@ const CashierDashboard = ({
       case 'paid': return 'hsl(140, 70%, 50%)';
       default: return 'gray';
     }
-  };
-
-  const sendToWhatsApp = (order) => {
-    const itemsText = order.items.map(item => `- ${item.name} (${item.price.toFixed(2)} MAD)`).join('%0A');
-    const message = `*Order Confirmation - Table: ${order.table}*%0A%0AServed by Waiter: ${order.waiterName || 'Staff'}%0A%0AItems:%0A${itemsText}%0A%0A*Total: ${order.total} MAD*%0AStatus: ${order.status.toUpperCase()}`;
-    window.open(`https://wa.me/?text=${message}`, '_blank');
   };
 
   // Waiter CRUD
@@ -381,15 +374,6 @@ const CashierDashboard = ({
                         </div>
                       </div>
                       <div className="notification-actions">
-                        <button 
-                          className="btn btn-primary btn-sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSendWhatsAppNotification(notif);
-                          }}
-                        >
-                          📱 Send WhatsApp
-                        </button>
                         {!notif.read && (
                           <button 
                             className="btn btn-secondary btn-sm"
@@ -496,9 +480,6 @@ const CashierDashboard = ({
                     {order.status === 'ready' && (
                       <button className="btn btn-primary btn-sm" onClick={() => onUpdateStatus(order.id, 'paid')}>Paid</button>
                     )}
-                    <button className="btn btn-secondary btn-sm" onClick={() => sendToWhatsApp(order)}>
-                      WhatsApp 📱
-                    </button>
                     {order.status === 'paid' && (
                       <button className="btn btn-secondary btn-sm delete-btn" onClick={() => onDeleteOrder(order.id)}>Clear</button>
                     )}

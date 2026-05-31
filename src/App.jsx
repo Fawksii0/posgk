@@ -50,6 +50,7 @@ function App() {
   const [waiters, setWaiters] = useState(() => readLocalJson(STORAGE_KEYS.waiters, DEFAULT_WAITERS));
   const [notifications, setNotifications] = useState(() => readLocalJson(STORAGE_KEYS.notifications, [])); // { id, targetRole, waiterName, orderId, message, timestamp, read }
   const [syncStatus, setSyncStatus] = useState(isCloudSyncEnabled ? 'syncing' : 'local');
+  const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const hasHydratedRef = useRef(false);
   const isApplyingCloudRef = useRef(false);
   const syncSnapshotRef = useRef('');
@@ -301,7 +302,7 @@ function App() {
 
     // Create a notification for the cashier
     const notificationMessage = `🆕 NEW ORDER\n📍 Table: ${newOrder.table}\n👤 Waiter: ${waiterName}\n📦 Items: ${newOrder.items.length}\n💰 Total: $${newOrder.total}`;
-    const newNotification = addNotification({
+    addNotification({
       targetRole: 'cashier',
       type: 'new_order',
       orderId: orderWithMeta.id,
@@ -314,8 +315,6 @@ function App() {
       timestamp: createdAt.toLocaleTimeString(),
     });
 
-    // Send to WhatsApp notification
-    sendOrderNotificationToWhatsApp(newNotification);
     return { type: 'new', table: newOrder.table };
   };
 
@@ -330,14 +329,7 @@ function App() {
     return newNotification;
   };
 
-  const sendOrderNotificationToWhatsApp = (notification) => {
-    // Format the order items for WhatsApp
-    const itemsText = notification.items.map(item => `- ${item.name} ($${item.price.toFixed(2)})`).join('%0A');
-    const waMessage = `*🍽️ G&K FOOD - NEW ORDER 🔔*%0A%0A📍 Table: ${notification.table}%0A👤 Waiter: ${notification.waiterName}%0A⏰ Time: ${notification.timestamp}%0A%0A*Items:*%0A${itemsText}%0A%0A*Total: $${notification.total}*%0A%0A✅ Ready to confirm?`;
-    
-    // Open WhatsApp with pre-filled message
-    window.open(`https://wa.me/?text=${waMessage}`, '_blank');
-  };
+
 
   const markNotificationAsRead = (notificationId) => {
     setNotifications(notifications.map(notif => 
@@ -445,9 +437,50 @@ function App() {
 
           <div className="header-right">
             {currentUser.role === 'cashier' && (
-              <button className="btn btn-secondary notification-btn" title="Order Notifications">
-                🔔 {cashierUnreadCount > 0 && <span className="badge">{cashierUnreadCount}</span>}
-              </button>
+              <div className="notification-dropdown-wrapper" style={{ position: 'relative' }}>
+                <button 
+                  className="btn btn-secondary notification-btn" 
+                  title="Order Notifications"
+                  onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
+                >
+                  🔔 {cashierUnreadCount > 0 && <span className="badge">{cashierUnreadCount}</span>}
+                </button>
+                {showNotificationDropdown && (
+                  <div className="notification-dropdown glass-card">
+                    <div className="notification-dropdown-header">
+                      <h4>Notifications ({notifications.filter(n => n.targetRole === 'cashier').length})</h4>
+                    </div>
+                    <div className="notification-dropdown-content">
+                      {notifications.filter(n => n.targetRole === 'cashier').length === 0 ? (
+                        <p className="empty-notification">No notifications yet</p>
+                      ) : (
+                        notifications.filter(n => n.targetRole === 'cashier').map(notif => (
+                          <div 
+                            key={notif.id}
+                            className={`notification-item ${notif.read ? 'read' : 'unread'}`}
+                            onClick={() => !notif.read && markNotificationAsRead(notif.id)}
+                          >
+                            <div className="notification-info">
+                              <div className="notification-title">
+                                {notif.type === 'order_edit' ? '✎ Edited' : '🍽️ New'}: <strong>{notif.table}</strong>
+                              </div>
+                              <div className="notification-time">⏰ {notif.timestamp}</div>
+                              <div className="notification-items-mini">
+                                {(notif.items || []).map((item, idx) => (
+                                  <span key={idx}>{item.name}</span>
+                                )).slice(0, 2)}
+                                {(notif.items || []).length > 2 && <span>...</span>}
+                              </div>
+                              <div className="notification-total">Total: {notif.total} MAD</div>
+                            </div>
+                            {!notif.read && <div className="unread-dot"></div>}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
             <button className="btn btn-secondary logout-btn" onClick={handleLogout}>
               Logout →
@@ -497,7 +530,6 @@ function App() {
             onUpdateStatus={updateOrderStatus}
             onDeleteOrder={deleteOrder}
             onMarkNotificationAsRead={markNotificationAsRead}
-            onSendWhatsAppNotification={sendOrderNotificationToWhatsApp}
           />
         )}
       </main>
@@ -588,6 +620,121 @@ function App() {
           background: rgba(255, 71, 87, 0.2) !important;
           color: #ff4757 !important;
           border-color: #ff4757 !important;
+        }
+
+        .notification-dropdown-wrapper {
+          position: relative;
+        }
+
+        .notification-dropdown {
+          position: absolute;
+          top: 100%;
+          right: 0;
+          margin-top: 0.5rem;
+          width: 320px;
+          max-height: 400px;
+          overflow-y: auto;
+          border: 1px solid var(--glass-border);
+          border-radius: 10px;
+          z-index: 1000;
+        }
+
+        .notification-dropdown-header {
+          padding: 0.75rem;
+          border-bottom: 1px solid var(--glass-border);
+          font-weight: bold;
+          font-size: 0.9rem;
+        }
+
+        .notification-dropdown-header h4 {
+          margin: 0;
+          color: hsl(var(--accent));
+        }
+
+        .notification-dropdown-content {
+          padding: 0.5rem;
+        }
+
+        .notification-dropdown-content .notification-item {
+          padding: 0.75rem;
+          margin-bottom: 0.5rem;
+          border: 1px solid var(--glass-border);
+          border-radius: 8px;
+          background: hsl(var(--card) / 0.5);
+          cursor: pointer;
+          transition: all 0.2s ease;
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 0.5rem;
+        }
+
+        .notification-dropdown-content .notification-item:hover {
+          background: hsl(var(--card));
+          border-color: hsl(var(--accent) / 0.5);
+        }
+
+        .notification-dropdown-content .notification-item.unread {
+          border-color: hsl(var(--accent));
+          background: hsl(var(--accent) / 0.1);
+        }
+
+        .notification-info {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .notification-title {
+          font-weight: bold;
+          font-size: 0.85rem;
+          color: white;
+        }
+
+        .notification-time {
+          font-size: 0.75rem;
+          color: hsl(var(--accent));
+          margin-top: 0.25rem;
+        }
+
+        .notification-items-mini {
+          font-size: 0.75rem;
+          color: rgba(255, 255, 255, 0.7);
+          margin-top: 0.25rem;
+          display: flex;
+          gap: 0.25rem;
+          flex-wrap: wrap;
+        }
+
+        .notification-items-mini span {
+          background: hsl(var(--accent) / 0.2);
+          padding: 0.15rem 0.4rem;
+          border-radius: 4px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .notification-total {
+          font-size: 0.8rem;
+          color: hsl(var(--accent));
+          margin-top: 0.25rem;
+          font-weight: bold;
+        }
+
+        .unread-dot {
+          width: 8px;
+          height: 8px;
+          background: hsl(var(--accent));
+          border-radius: 50%;
+          flex-shrink: 0;
+          margin-top: 0.25rem;
+        }
+
+        .empty-notification {
+          padding: 1rem;
+          text-align: center;
+          color: rgba(255, 255, 255, 0.5);
+          font-size: 0.9rem;
         }
 
         @media (max-width: 768px) {
