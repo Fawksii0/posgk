@@ -58,6 +58,13 @@ const CashierDashboard = ({
     }
   };
 
+  const filteredOrders = orders.filter(order => {
+    const source = order.source || 'dine_in';
+    return sourceFilter === 'all' ? true : source === sourceFilter;
+  });
+
+  const countBySource = (sourceKey) => orders.filter(order => (order.source || 'dine_in') === sourceKey).length;
+
   // Waiter CRUD
   const handleAddWaiter = (e) => {
     e.preventDefault();
@@ -293,7 +300,7 @@ const CashierDashboard = ({
             className={`tab-btn ${activeTab === 'orders' ? 'active' : ''}`}
             onClick={() => setActiveTab('orders')}
           >
-            Live Orders ({orders.length})
+            Live Orders ({filteredOrders.length})
           </button>
           <button 
             className={`tab-btn ${activeTab === 'menu' ? 'active' : ''}`}
@@ -399,47 +406,42 @@ const CashierDashboard = ({
               className={`btn ${sourceFilter === 'all' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
               onClick={() => setSourceFilter('all')}
             >
-              📊 All
+              📊 All ({orders.length})
             </button>
             <button 
               className={`btn ${sourceFilter === 'dine_in' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
               onClick={() => setSourceFilter('dine_in')}
             >
-              🍽️ Dine-in
+              🍽️ Dine-in ({countBySource('dine_in')})
             </button>
             <button 
               className={`btn ${sourceFilter === 'delivery_direct' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
               onClick={() => setSourceFilter('delivery_direct')}
             >
-              🚗 Direct Delivery
+              🚗 Direct Delivery ({countBySource('delivery_direct')})
             </button>
             <button 
               className={`btn ${sourceFilter === 'glovo' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
               onClick={() => setSourceFilter('glovo')}
             >
-              🟢 Glovo
+              🟢 Glovo ({countBySource('glovo')})
             </button>
             <button 
               className={`btn ${sourceFilter === 'phone' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
               onClick={() => setSourceFilter('phone')}
             >
-              ☎️ Phone
+              ☎️ Phone ({countBySource('phone')})
             </button>
           </div>
 
           {/* Live Orders Grid */}
           <div className="orders-grid">
-          {orders.length === 0 ? (
+          {filteredOrders.length === 0 ? (
             <div className="empty-state glass-card">
               <p>No active orders at the moment.</p>
             </div>
           ) : (
-            orders
-              .filter(order => {
-                if (sourceFilter === 'all') return true;
-                return (order.source || 'dine_in') === sourceFilter;
-              })
-              .map(order => (
+            filteredOrders.map(order => (
               <div key={order.id} className="order-card glass-card" style={{ borderLeft: `4px solid ${getStatusColor(order.status)}` }}>
                 <div className="order-card-header">
                   <div>
