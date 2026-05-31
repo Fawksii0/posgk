@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { isCloudSyncEnabled, readUsersFromCloud, updateUser } from '../services/posSync';
 
 const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItems, onUpdateCategories, onUpdateMenuItems }) => {
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'sales' | 'staff' | 'closing' | 'menu'
+  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'sales' | 'staff' | 'menu' | 'closing' | 'users'
   const [selectedPeriod, setSelectedPeriod] = useState(7); // 7, 15, or 30 days
   const [closureRecords, setClosureRecords] = useState(() => {
     const saved = localStorage.getItem('pos_closure_records');
@@ -22,6 +23,38 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
   const [editingCategory, setEditingCategory] = useState(null);
   const [categoryError, setCategoryError] = useState('');
   const [categorySuccess, setCategorySuccess] = useState('');
+  
+  // Users management
+  const [users, setUsers] = useState(() => {
+    if (isCloudSyncEnabled) {
+      // Will load from cloud in useEffect
+      return [];
+    }
+    const stored = localStorage.getItem('pos_accounts');
+    return stored ? JSON.parse(stored) : [];
+  });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Load users from cloud on mount
+  useEffect(() => {
+    if (!isCloudSyncEnabled) return;
+
+    const loadUsers = async () => {
+      try {
+        setLoadingUsers(true);
+        const cloudUsers = await readUsersFromCloud();
+        setUsers(cloudUsers);
+      } catch (err) {
+        console.error('Failed to load users from cloud:', err);
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+
+    loadUsers();
+  }, []);
 
   const salesData = useMemo(() => {
     const calculateSalesByPeriod = (days) => {
@@ -221,6 +254,75 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
     }
   };
 
+  // User management functions
+  const updateUserLocal = (updatedUser) => {
+    const updatedUsers = users.map(u => 
+      (u.email === updatedUser.email || u.id === updatedUser.id) ? updatedUser : u
+    );
+    setUsers(updatedUsers);
+    
+    // Also update in localStorage if not cloud sync
+    if (!isCloudSyncEnabled) {
+      localStorage.setItem('pos_accounts', JSON.stringify(updatedUsers));
+    }
+    
+    setSelectedUser(updatedUser);
+  };
+
+  const assignRole = (user, role) => {
+    const updatedUser = { ...user, role, status: 'active' };
+    
+    if (isCloudSyncEnabled) {
+      // Update in Supabase
+      updateUser(user.email, { role, status: 'active' })
+        .then(() => updateUserLocal(updatedUser))
+        .catch(err => console.error('Failed to assign role:', err));
+    } else {
+      updateUserLocal(updatedUser);
+    }
+  };
+
+  const banUser = (user) => {
+    const updatedUser = { ...user, status: 'banned' };
+    
+    if (isCloudSyncEnabled) {
+      updateUser(user.email, { status: 'banned' })
+        .then(() => updateUserLocal(updatedUser))
+        .catch(err => console.error('Failed to ban user:', err));
+    } else {
+      updateUserLocal(updatedUser);
+    }
+  };
+
+  const pauseUser = (user) => {
+    const updatedUser = { ...user, status: 'paused' };
+    
+    if (isCloudSyncEnabled) {
+      updateUser(user.email, { status: 'paused' })
+        .then(() => updateUserLocal(updatedUser))
+        .catch(err => console.error('Failed to pause user:', err));
+    } else {
+      updateUserLocal(updatedUser);
+    }
+  };
+
+  const activateUser = (user) => {
+    const updatedUser = { ...user, status: 'active' };
+    
+    if (isCloudSyncEnabled) {
+      updateUser(user.email, { status: 'active' })
+        .then(() => updateUserLocal(updatedUser))
+        .catch(err => console.error('Failed to activate user:', err));
+    } else {
+      updateUserLocal(updatedUser);
+    }
+  };
+
+  const filteredUsers = users.filter(user => 
+    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div className="manager-portal">
       {/* Header */}
@@ -256,6 +358,12 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
           onClick={() => setActiveTab('menu')}
         >
           ≡ Menu Builder
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`}
+          onClick={() => setActiveTab('users')}
+        >
+          ◎ Users
         </button>
         <button 
           className={`tab-btn ${activeTab === 'closing' ? 'active' : ''}`}
@@ -721,6 +829,179 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* USERS MANAGEMENT TAB */}
+      {activeTab === 'users' && (
+        <div className="users-management">
+          <div className="users-grid" style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+            {/* Users List */}
+            <div className="glass-card users-list-container">
+              <h3>Users ({users.length})</h3>
+              <div className="search-box" style={{ marginBottom: '1rem' }}>
+                <input 
+                  type="text"
+                  placeholder="Search by name or email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255, 255, 255, 0.05)' }}
+                />
+              </div>
+              <div className="scrollable-list" style={{ maxHeight: '500px', overflowY: 'auto' }}>
+                {loadingUsers ? (
+                  <p style={{ opacity: 0.6, textAlign: 'center', padding: '1rem' }}>Loading users...</p>
+                ) : filteredUsers.length === 0 ? (
+                  <p style={{ opacity: 0.6, textAlign: 'center', padding: '1rem' }}>No users found</p>
+                ) : (
+                  filteredUsers.map(user => (
+                    <button
+                      key={user.email}
+                      onClick={() => setSelectedUser(user)}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        marginBottom: '0.5rem',
+                        border: 'none',
+                        background: selectedUser?.email === user.email ? 'rgba(200, 150, 0, 0.3)' : 'rgba(255, 255, 255, 0.05)',
+                        color: 'hsl(var(--foreground))',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'all 0.2s ease',
+                        borderLeft: selectedUser?.email === user.email ? '3px solid hsl(var(--primary))' : '3px solid transparent'
+                      }}
+                      onMouseEnter={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.1)'}
+                      onMouseLeave={(e) => e.target.style.background = selectedUser?.email === user.email ? 'rgba(200, 150, 0, 0.3)' : 'rgba(255, 255, 255, 0.05)'}
+                    >
+                      <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{user.name}</div>
+                      <div style={{ fontSize: '0.75rem', opacity: 0.6, marginTop: '0.25rem' }}>{user.email}</div>
+                      <div style={{ fontSize: '0.7rem', opacity: 0.5, marginTop: '0.25rem' }}>
+                        {user.role ? `Role: ${user.role}` : 'No role assigned'}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', opacity: 0.5, marginTop: '0.1rem' }}>
+                        Status: <strong style={{ color: user.status === 'active' ? '#2ecc71' : user.status === 'banned' ? '#ff4757' : user.status === 'paused' ? '#ffa502' : '#95a5a6' }}>{user.status}</strong>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* User Details & Controls */}
+            <div className="glass-card user-details-container">
+              {selectedUser ? (
+                <div>
+                  <h3>User Management</h3>
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <div className="user-info-box" style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+                      <div style={{ marginBottom: '0.75rem' }}>
+                        <strong>Name:</strong> {selectedUser.name}
+                      </div>
+                      <div style={{ marginBottom: '0.75rem' }}>
+                        <strong>Email:</strong> {selectedUser.email}
+                      </div>
+                      <div style={{ marginBottom: '0.75rem' }}>
+                        <strong>Role:</strong> {selectedUser.role ? <span style={{ color: 'hsl(var(--primary))' }}>{selectedUser.role.toUpperCase()}</span> : <span style={{ color: '#ff4757' }}>Not Assigned</span>}
+                      </div>
+                      <div>
+                        <strong>Status:</strong> <span style={{ color: selectedUser.status === 'active' ? '#2ecc71' : selectedUser.status === 'banned' ? '#ff4757' : selectedUser.status === 'paused' ? '#ffa502' : '#95a5a6' }}>{selectedUser.status.toUpperCase()}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Role Assignment */}
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <h4 style={{ marginBottom: '0.75rem' }}>Assign Role</h4>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button 
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => assignRole(selectedUser, 'waiter')}
+                        style={{ background: selectedUser.role === 'waiter' ? 'hsl(var(--primary) / 0.3)' : 'var(--glass-bg)' }}
+                      >
+                        🍽️ Waiter
+                      </button>
+                      <button 
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => assignRole(selectedUser, 'cashier')}
+                        style={{ background: selectedUser.role === 'cashier' ? 'hsl(var(--primary) / 0.3)' : 'var(--glass-bg)' }}
+                      >
+                        💳 Cashier
+                      </button>
+                      <button 
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => assignRole(selectedUser, 'manager')}
+                        style={{ background: selectedUser.role === 'manager' ? 'hsl(var(--primary) / 0.3)' : 'var(--glass-bg)' }}
+                      >
+                        👔 Manager
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Account Controls */}
+                  <div style={{ marginBottom: '1rem' }}>
+                    <h4 style={{ marginBottom: '0.75rem' }}>Account Controls</h4>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      {selectedUser.status === 'active' && (
+                        <>
+                          <button 
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => pauseUser(selectedUser)}
+                            style={{ background: 'rgba(255, 165, 2, 0.2)', color: '#ffa502' }}
+                          >
+                            ⏸ Pause Orders
+                          </button>
+                          <button 
+                            className="btn btn-secondary btn-sm delete-btn"
+                            onClick={() => banUser(selectedUser)}
+                            style={{ background: 'rgba(255, 71, 87, 0.2)', color: '#ff4757' }}
+                          >
+                            🚫 Ban User
+                          </button>
+                        </>
+                      )}
+                      {selectedUser.status === 'paused' && (
+                        <>
+                          <button 
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => activateUser(selectedUser)}
+                            style={{ background: 'rgba(46, 204, 113, 0.2)', color: '#2ecc71' }}
+                          >
+                            ✓ Resume Orders
+                          </button>
+                          <button 
+                            className="btn btn-secondary btn-sm delete-btn"
+                            onClick={() => banUser(selectedUser)}
+                            style={{ background: 'rgba(255, 71, 87, 0.2)', color: '#ff4757' }}
+                          >
+                            🚫 Ban User
+                          </button>
+                        </>
+                      )}
+                      {selectedUser.status === 'banned' && (
+                        <button 
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => activateUser(selectedUser)}
+                          style={{ background: 'rgba(46, 204, 113, 0.2)', color: '#2ecc71' }}
+                        >
+                          ↩ Unban User
+                        </button>
+                      )}
+                      {selectedUser.status === 'pending' && (
+                        <>
+                          <p style={{ fontSize: '0.85rem', opacity: 0.7, margin: '0.5rem 0' }}>Assign a role to activate this user.</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', opacity: 0.6, paddingTop: '2rem' }}>
+                  <p>Select a user from the list to manage their account</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

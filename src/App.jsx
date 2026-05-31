@@ -281,6 +281,13 @@ function App() {
       timestamp: createdAt.toLocaleTimeString(),
       orderDate: createdAt.toISOString(),
       waiterName,
+      source: 'dine_in',
+      sourceLabel: 'Dine-in',
+      customerName: null,
+      customerPhone: null,
+      deliveryAddress: null,
+      deliveryNotes: null,
+      externalOrderId: null,
     };
     setOrders([orderWithMeta, ...orders]);
 
@@ -394,8 +401,6 @@ function App() {
   if (!currentUser) {
     return (
       <LoginScreen 
-        waiters={waiters} 
-        adminCode={adminCode} 
         onLogin={handleLogin} 
       />
     );

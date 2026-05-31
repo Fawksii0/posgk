@@ -20,6 +20,7 @@ const CashierDashboard = ({
   const [activeTab, setActiveTab] = useState('orders'); // 'orders' | 'menu' | 'staff' | 'settings'
   const [menuSubTab, setMenuSubTab] = useState('items'); // 'items' | 'categories'
   const [showNotifications, setShowNotifications] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState('all'); // 'all' | 'dine_in' | 'delivery_direct' | 'glovo' | 'phone'
   
   // Waiter states
   const [newWaiterName, setNewWaiterName] = useState('');
@@ -408,6 +409,40 @@ const CashierDashboard = ({
             </div>
           )}
 
+          {/* Order Source Filter */}
+          <div className="order-filter-bar glass-card" style={{ marginBottom: '1.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button 
+              className={`btn ${sourceFilter === 'all' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+              onClick={() => setSourceFilter('all')}
+            >
+              📊 All
+            </button>
+            <button 
+              className={`btn ${sourceFilter === 'dine_in' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+              onClick={() => setSourceFilter('dine_in')}
+            >
+              🍽️ Dine-in
+            </button>
+            <button 
+              className={`btn ${sourceFilter === 'delivery_direct' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+              onClick={() => setSourceFilter('delivery_direct')}
+            >
+              🚗 Direct Delivery
+            </button>
+            <button 
+              className={`btn ${sourceFilter === 'glovo' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+              onClick={() => setSourceFilter('glovo')}
+            >
+              🟢 Glovo
+            </button>
+            <button 
+              className={`btn ${sourceFilter === 'phone' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+              onClick={() => setSourceFilter('phone')}
+            >
+              ☎️ Phone
+            </button>
+          </div>
+
           {/* Live Orders Grid */}
           <div className="orders-grid">
           {orders.length === 0 ? (
@@ -415,12 +450,22 @@ const CashierDashboard = ({
               <p>No active orders at the moment.</p>
             </div>
           ) : (
-            orders.map(order => (
+            orders
+              .filter(order => {
+                if (sourceFilter === 'all') return true;
+                return (order.source || 'dine_in') === sourceFilter;
+              })
+              .map(order => (
               <div key={order.id} className="order-card glass-card" style={{ borderLeft: `4px solid ${getStatusColor(order.status)}` }}>
                 <div className="order-card-header">
                   <div>
                     <h3>{order.table}</h3>
                     <small className="waiter-name">Waiter: {order.waiterName}</small>
+                    {order.source && (
+                      <div style={{ fontSize: '0.85rem', marginTop: '0.25rem', color: 'var(--accent)' }}>
+                        📌 {order.sourceLabel || (order.source === 'dine_in' ? 'Dine-in' : order.source === 'delivery_direct' ? 'Direct Delivery' : order.source === 'glovo' ? 'Glovo' : order.source === 'phone' ? 'Phone' : order.source)}
+                      </div>
+                    )}
                   </div>
                   <span className="timestamp">{order.timestamp}</span>
                 </div>
