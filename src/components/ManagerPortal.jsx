@@ -20,6 +20,7 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
   const [newItemImage, setNewItemImage] = useState('');
   const [editingMenuItem, setEditingMenuItem] = useState(null);
   const [menuError, setMenuError] = useState('');
+  const [editingMenuImageFile, setEditingMenuImageFile] = useState(null);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryIcon, setNewCategoryIcon] = useState('fi-rr-clipboard');
   const [editingCategory, setEditingCategory] = useState(null);
@@ -184,7 +185,17 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
   };
 
   // Menu Management Functions
-  const handleAddMenuItem = (e) => {
+  const readFileAsDataURL = (file) => {
+    return new Promise((resolve, reject) => {
+      if (!file) return resolve('');
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleAddMenuItem = async (e) => {
     e.preventDefault();
     if (!newItemName || !newItemPrice) {
       setMenuError('Please enter a name and price.');
@@ -211,6 +222,30 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
     setNewItemDescription('');
     setNewItemImage('');
     setMenuError('');
+  };
+
+  const handleEditingImageFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const dataUrl = await readFileAsDataURL(file);
+    setEditingMenuImageFile(file);
+    setEditingMenuItem(prev => prev ? { ...prev, image: dataUrl } : prev);
+  };
+
+  const handleNewImageFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const dataUrl = await readFileAsDataURL(file);
+    setNewItemImage(dataUrl);
+  };
+
+  const handleRemoveNewImage = () => {
+    setNewItemImage('');
+  };
+
+  const handleRemoveEditingImage = () => {
+    setEditingMenuImageFile(null);
+    setEditingMenuItem(prev => prev ? { ...prev, image: '' } : prev);
   };
 
   const handleUpdateMenuItem = (e) => {
@@ -769,14 +804,30 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
                         />
                       </div>
                       <div className="form-group">
-                        <label>Image URL</label>
-                        <input 
-                          type="text" 
-                          value={editingMenuItem.image || ''} 
-                          onChange={(e) => setEditingMenuItem({ ...editingMenuItem, image: e.target.value })} 
-                          placeholder="https://example.com/image.jpg"
+                        <label>Upload Image</label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleEditingImageFileChange}
                           className="glass-input"
                         />
+                        {editingMenuItem.image && (
+                          <div style={{ display: 'grid', gap: '0.5rem' }}>
+                            <img
+                              src={editingMenuItem.image}
+                              alt="Preview"
+                              style={{ width: '100%', maxHeight: '180px', objectFit: 'cover', marginTop: '0.75rem', borderRadius: '8px' }}
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={handleRemoveEditingImage}
+                              style={{ width: 'fit-content' }}
+                            >
+                              Remove Image
+                            </button>
+                          </div>
+                        )}
                       </div>
                       {menuError && <p className="error-text">{menuError}</p>}
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -832,14 +883,30 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
                         />
                       </div>
                       <div className="form-group">
-                        <label>Image URL</label>
-                        <input 
-                          type="text" 
-                          value={newItemImage} 
-                          onChange={(e) => setNewItemImage(e.target.value)} 
-                          placeholder="https://example.com/image.jpg"
+                        <label>Upload Image</label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleNewImageFileChange}
                           className="glass-input"
                         />
+                        {newItemImage && (
+                          <div style={{ display: 'grid', gap: '0.5rem' }}>
+                            <img
+                              src={newItemImage}
+                              alt="Preview"
+                              style={{ width: '100%', maxHeight: '180px', objectFit: 'cover', marginTop: '0.75rem', borderRadius: '8px' }}
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={handleRemoveNewImage}
+                              style={{ width: 'fit-content' }}
+                            >
+                              Remove Image
+                            </button>
+                          </div>
+                        )}
                       </div>
                       {menuError && <p className="error-text">{menuError}</p>}
                       <button type="submit" className="btn btn-primary submit-btn">Add to Menu</button>
@@ -1951,6 +2018,12 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
           }
 
           .admin-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+          }
+
+          .users-grid {
             display: grid;
             grid-template-columns: 1fr;
             gap: 1rem;

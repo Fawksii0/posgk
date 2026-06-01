@@ -7,8 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "npm run build && wrangler dev",
-    "deploy": "npm run build && wrangler deploy"
+    "preview": "npm run build && npx wrangler pages dev dist --project-name sparkpos",
+    "deploy": "npm run build && npx wrangler pages deploy dist --project-name sparkpos --commit-dirty=true"
   },
   "dependencies": {
     "react": "^19.2.6",
