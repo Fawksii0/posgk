@@ -76,6 +76,11 @@ const POSWaiterLayout = ({
     setCurrentOrder([]);
   };
 
+  const goBackToMenu = () => {
+    clearEditState();
+    setActiveSection('menu');
+  };
+
   const submitOrder = () => {
     if (!selectedTable || currentOrder.length === 0) return;
 
@@ -145,6 +150,16 @@ const POSWaiterLayout = ({
         </div>
 
         <div className="search-row">
+          {activeSection !== 'menu' && (
+            <button
+              className="btn btn-link back-btn"
+              type="button"
+              onClick={goBackToMenu}
+              aria-label="Go back to menu"
+            >
+              <Uicon icon="fi-rr-arrow-left" /> Back
+            </button>
+          )}
           <input
             className="search-input"
             value={searchTerm}
@@ -241,6 +256,7 @@ const POSWaiterLayout = ({
         )}
       </section>
 
+      {(selectedTable || activeOrders.length > 0 || currentOrder.length > 0) && (
       <aside className="order-sidebar">
         <div className="order-header">
           <div>
@@ -285,33 +301,32 @@ const POSWaiterLayout = ({
         </div>
 
         {showNotifications && (
-        <div className="notification-box">
-          <div className="notification-header">
-            <h4>Notifications</h4>
-            <button
-              className="btn btn-link"
-              type="button"
-              onClick={onClearAllNotifications}
-              disabled={!notifications.length}
-            >
-              Clear All
-            </button>
-          </div>
-          {notifications.length === 0 ? (
+          notifications.length === 0 ? (
             <p className="empty-msg">No notifications</p>
           ) : (
-            notifications.map((note) => (
-              <div key={note.id} className={`notification-item ${note.read ? 'read' : 'unread'}`} onClick={() => !note.read && onMarkNotificationAsRead(note.id)}>
-                <div>
-                  <strong>{note.title}</strong>
-                  <p className="muted">{note.message}</p>
-                </div>
-                <small>{note.timestamp}</small>
+            <div className="notification-box">
+              <div className="notification-header">
+                <h4>Notifications</h4>
+                <button
+                  className="btn btn-link"
+                  type="button"
+                  onClick={onClearAllNotifications}
+                  disabled={!notifications.length}
+                >
+                  Clear All
+                </button>
               </div>
-            ))
-          )}
-        </div>
-
+              {notifications.map((note) => (
+                <div key={note.id} className={`notification-item ${note.read ? 'read' : 'unread'}`} onClick={() => !note.read && onMarkNotificationAsRead(note.id)}>
+                  <div>
+                    <strong>{note.title}</strong>
+                    <p className="muted">{note.message}</p>
+                  </div>
+                  <small>{note.timestamp}</small>
+                </div>
+              ))}
+            </div>
+          )
         )}
 
         <div className="order-footer">
@@ -328,6 +343,7 @@ const POSWaiterLayout = ({
           </button>
         </div>
       </aside>
+      )}
 
       <style jsx>{`
         :root { --bg: #f7f9fb; --card: #ffffff; --muted: #6b7280; --text: #111827; --accent: #0ea5a4; --surface-shadow: 0 6px 18px rgba(16,24,40,0.08)}
