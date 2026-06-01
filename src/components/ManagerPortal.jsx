@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { isCloudSyncEnabled, readUsersFromCloud, updateUser } from '../services/posSync';
 import Uicon from './Uicon';
 
-const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItems, onUpdateCategories, onUpdateMenuItems }) => {
+const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItems, onUpdateCategories, onUpdateMenuItems, notifications = [], unreadCount = 0, onMarkNotificationAsRead, onClearAllNotifications }) => {
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'sales' | 'staff' | 'menu' | 'closing' | 'users'
   const [selectedPeriod, setSelectedPeriod] = useState(7); // 7, 15, or 30 days
   const [tableFilter, setTableFilter] = useState('all');
@@ -25,6 +25,7 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
   const [editingCategory, setEditingCategory] = useState(null);
   const [categoryError, setCategoryError] = useState('');
   const [categorySuccess, setCategorySuccess] = useState('');
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const renderIcon = (icon) => {
     if (!icon) return null;
@@ -339,12 +340,44 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
   return (
     <div className="manager-portal">
       {/* Header */}
-      <div className="manager-header glass">
-        <h2 className="gradient-text">Manager Portal</h2>
-        <button className="btn btn-secondary" onClick={onLogout}>
-          <Uicon icon="fi-rr-sign-out" /> Logout
-        </button>
+      <div className="manager-header glass" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <h2 className="gradient-text">Manager Portal</h2>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button className="btn btn-secondary" type="button" onClick={() => setShowNotifications(prev => !prev)} title="Notifications">
+            <Uicon icon="fi-rr-bell" /> {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
+          </button>
+          <button className="btn btn-secondary" onClick={onLogout}>
+            <Uicon icon="fi-rr-sign-out" /> Logout
+          </button>
+        </div>
       </div>
+
+      {showNotifications && (
+        <div className="notifications-panel glass-card" style={{ marginTop: 12 }}>
+          <div className="notifications-header">
+            <h3><Uicon icon="fi-rr-mailbox" /> Notifications ({(notifications || []).length})</h3>
+            <div>
+              <button className="btn btn-secondary btn-sm" onClick={() => onClearAllNotifications && onClearAllNotifications()} disabled={!((notifications || []).length)}>Clear All</button>
+              <button className="btn btn-secondary btn-sm" style={{ marginLeft: 8 }} onClick={() => setShowNotifications(false)}>Close</button>
+            </div>
+          </div>
+          <div className="notifications-list">
+            {(notifications || []).length === 0 ? <p className="empty-notification">No notifications</p> : (
+              (notifications || []).map(notif => (
+                <div key={notif.id} className={`notification-item ${notif.read ? 'read' : 'unread'}`} onClick={() => !notif.read && onMarkNotificationAsRead && onMarkNotificationAsRead(notif.id)}>
+                  <div className="notification-content">
+                    <div className="notification-title"><strong>{notif.table || notif.title}</strong></div>
+                    <p className="muted">{notif.message}</p>
+                  </div>
+                  <small>{notif.timestamp}</small>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Navigation Tabs */}
       <div className="manager-tabs">

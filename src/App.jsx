@@ -465,6 +465,8 @@ function App() {
     notif.targetRole === 'waiter' && notif.waiterName?.toLowerCase() === activeWaiterName.toLowerCase()
   );
   const waiterUnreadCount = waiterNotifications.filter(notif => !notif.read).length;
+  const managerNotifications = notifications.filter(notif => notif.targetRole === 'manager');
+  const managerUnreadCount = managerNotifications.filter(notif => !notif.read).length;
 
   if (!currentUser) {
     return (
@@ -601,6 +603,10 @@ function App() {
             onUpdateMenuItems={saveMenuItems}
             adminCode={adminCode}
             onLogout={handleLogout}
+            notifications={managerNotifications}
+            unreadCount={managerUnreadCount}
+            onMarkNotificationAsRead={markNotificationAsRead}
+            onClearAllNotifications={() => clearNotifications({ targetRole: 'manager' })}
           />
         ) : view === 'waiter' ? (
           <POSWaiterLayout 

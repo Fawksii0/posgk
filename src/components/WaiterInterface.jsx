@@ -10,7 +10,8 @@ const WaiterInterface = ({
   orders,
   notifications,
   unreadCount,
-  onMarkNotificationAsRead
+  onMarkNotificationAsRead,
+  onClearAllNotifications
 }) => {
   const [selectedTable, setSelectedTable] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(categories && categories.length > 0 ? categories[0].id : '');
@@ -72,14 +73,26 @@ const WaiterInterface = ({
   return (
     <div className="waiter-grid">
       <div className="waiter-notifications glass-card">
-        <button
-          className="notification-toggle"
-          onClick={() => setShowNotifications(!showNotifications)}
-          type="button"
-        >
-          <span>Notifications</span>
-          <strong>{unreadCount || 0} new</strong>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <button
+            className="notification-toggle"
+            onClick={() => setShowNotifications(!showNotifications)}
+            type="button"
+            aria-label="Toggle notifications"
+            title="Notifications"
+          >
+            <Uicon icon="fi-rr-bell" />
+            <strong style={{ marginLeft: 8 }}>{unreadCount || 0}</strong>
+          </button>
+          <button
+            className="btn btn-link"
+            type="button"
+            onClick={() => onClearAllNotifications && onClearAllNotifications()}
+            disabled={!((notifications || []).length)}
+          >
+            Clear All
+          </button>
+        </div>
 
         {showNotifications && (
           <div className="waiter-notification-list">
