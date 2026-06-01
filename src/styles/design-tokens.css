@@ -1,23 +1,23 @@
 :root {
-  /* Light / Modern Theme - Default */
-  --primary: 174 72% 36%; /* Teal-ish accent */
+  /* Light / Modern Theme - Spark branding */
+  --primary: 17 100% 54%; /* Spark orange accent */
   --primary-foreground: 0 0% 100%; /* White */
 
-  --secondary: 200 14% 96%;
-  --accent: 174 72% 36%;
+  --secondary: 28 100% 92%; /* Soft warm glow */
+  --accent: 17 100% 54%;
 
-  --background: 210 40% 98%; /* Very light gray */
+  --background: 50 100% 99%; /* Very soft cream */
   --foreground: 0 0% 0%; /* Pure black text */
 
   --card: 0 0% 100%; /* White card */
   --card-foreground: 0 0% 0%;
 
-  --border: 210 14% 92%; /* light border */
-  --input: 210 16% 98%;
-  --ring: 174 72% 36%;
+  --border: 28 100% 90%; /* light warm border */
+  --input: 50 100% 98%;
+  --ring: 17 100% 54%;
 
-  --icon-color: 174 72% 36%;
-  --icon-color-light: 210 12% 14%;
+  --icon-color: 17 100% 54%;
+  --icon-color-light: 0 0% 20%;
 
   /* Glassmorphism Tokens - Light theme */
   --glass-bg: hsla(0, 0%, 100%, 0.9);

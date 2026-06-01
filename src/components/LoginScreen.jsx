@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import loginLogo from '../../assests/nobg.png';
 import { isCloudSyncEnabled, getUserByEmail, createUser, verifyPassword } from '../services/posSync';
 
 const LoginScreen = ({ onLogin }) => {
@@ -237,411 +238,616 @@ const LoginScreen = ({ onLogin }) => {
 
   return (
     <div className="login-overlay">
-      <div className="login-card glass-card">
-        <div className="login-header">
-          <div className="logo-glow"></div>
-          <h1 className="gradient-text">G&K POS</h1>
-          <p className="subtitle">Restaurant Management System</p>
-        </div>
-
-        {/* Tabs */}
-        <div className="auth-tabs">
-          <button 
-            className={`tab-btn ${isLogin ? 'active' : ''}`}
-            onClick={() => { resetForm(); setIsLogin(true); }}
-          >
-            Login
-          </button>
-          <button 
-            className={`tab-btn ${!isLogin ? 'active' : ''}`}
-            onClick={() => { resetForm(); setIsLogin(false); }}
-          >
-            Sign Up
-          </button>
-        </div>
-
-        {/* Login Form */}
-        {isLogin ? (
-          <form onSubmit={handleLogin} className="auth-form">
-            <div className="form-group">
-              <label htmlFor="login-email">Email Address</label>
-              <input
-                id="login-email"
-                type="email"
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
-                placeholder="your@email.com"
-                autoComplete="email"
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="login-password">Password</label>
-              <input
-                id="login-password"
-                type="password"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                placeholder="••••••••"
-                autoComplete="current-password"
-              />
-            </div>
-
-            {error && <p className="error-message">{error}</p>}
-            {success && <p className="success-message">{success}</p>}
-
-            <button type="submit" className="btn btn-primary btn-full">
-              Sign In
-            </button>
-
-            <div className="demo-accounts">
-              <p className="demo-title">Demo Accounts:</p>
-              <div className="demo-list">
-                <div className="demo-item">
-                  <strong>Manager</strong>
-                  <code>manager@gk.com</code>
-                  <code>manager123</code>
-                </div>
-                <div className="demo-item">
-                  <strong>Cashier</strong>
-                  <code>cashier@gk.com</code>
-                  <code>cashier123</code>
-                </div>
-                <div className="demo-item">
-                  <strong>Waiter</strong>
-                  <code>waiter@gk.com</code>
-                  <code>waiter123</code>
-                </div>
+      <div className="login-shell">
+        <aside className="brand-side">
+          <div className={`brand-panel ${isLogin ? 'slide-up' : 'slide-down'}`}>
+            <div className="brand-copy">
+              <div className="brand-logo-display">
+                <span className="version-badge">BETA</span>
+                <img src={loginLogo} alt="Point of Sale logo" className="brand-copy-logo" />
               </div>
+              <h2>Point of Sale System</h2>
+              <p>Fast, modern restaurant order management for staff and managers.</p>
             </div>
-          </form>
-        ) : (
-          /* Signup Form */
-          <form onSubmit={handleSignup} className="auth-form">
-            <div className="form-group">
-              <label htmlFor="signup-name">Full Name</label>
-              <input
-                id="signup-name"
-                type="text"
-                value={signupName}
-                onChange={(e) => setSignupName(e.target.value)}
-                placeholder="John Doe"
-                autoComplete="name"
-              />
-            </div>
+          </div>
+        </aside>
 
-            <div className="form-group">
-              <label htmlFor="signup-email">Email Address</label>
-              <input
-                id="signup-email"
-                type="email"
-                value={signupEmail}
-                onChange={(e) => setSignupEmail(e.target.value)}
-                placeholder="your@email.com"
-                autoComplete="email"
-              />
+        <aside className="auth-side">
+          <div className="login-card glass-card">
+            <div className="auth-tabs">
+              <button 
+                className={`tab-btn ${isLogin ? 'active' : ''}`}
+                onClick={() => { resetForm(); setIsLogin(true); }}
+              >
+                Login
+              </button>
+              <button 
+                className={`tab-btn ${!isLogin ? 'active' : ''}`}
+                onClick={() => { resetForm(); setIsLogin(false); }}
+              >
+                Sign Up
+              </button>
             </div>
 
-            <div className="form-group">
-              <label htmlFor="signup-password">Password</label>
-              <input
-                id="signup-password"
-                type="password"
-                value={signupPassword}
-                onChange={(e) => setSignupPassword(e.target.value)}
-                placeholder="At least 6 characters"
-                autoComplete="new-password"
-              />
+            <div className="auth-panel-header">
+              <div className="brand-mini">
+                <img src={loginLogo} alt="Point of Sale logo" className="login-logo-sm" />
+              </div>
+              <h3>{isLogin ? 'Sign in' : 'Create account'}</h3>
             </div>
 
-            <div className="form-group">
-              <label htmlFor="signup-confirm">Confirm Password</label>
-              <input
-                id="signup-confirm"
-                type="password"
-                value={signupConfirmPassword}
-                onChange={(e) => setSignupConfirmPassword(e.target.value)}
-                placeholder="••••••••"
-                autoComplete="new-password"
-              />
+            {isLogin ? (
+              <form onSubmit={handleLogin} className="auth-form">
+                <div className="form-group">
+                  <label htmlFor="login-email">Email Address</label>
+                  <input
+                    id="login-email"
+                    type="email"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    placeholder="your@email.com"
+                    autoComplete="email"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="login-password">Password</label>
+                  <input
+                    id="login-password"
+                    type="password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                  />
+                </div>
+
+                {error && <p className="error-message">{error}</p>}
+                {success && <p className="success-message">{success}</p>}
+
+                <button type="submit" className="btn btn-primary btn-full">
+                  Sign In
+                </button>
+
+              </form>
+            ) : (
+              <form onSubmit={handleSignup} className="auth-form">
+                <div className="form-group">
+                  <label htmlFor="signup-name">Full Name</label>
+                  <input
+                    id="signup-name"
+                    type="text"
+                    value={signupName}
+                    onChange={(e) => setSignupName(e.target.value)}
+                    placeholder="John Doe"
+                    autoComplete="name"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="signup-email">Email Address</label>
+                  <input
+                    id="signup-email"
+                    type="email"
+                    value={signupEmail}
+                    onChange={(e) => setSignupEmail(e.target.value)}
+                    placeholder="your@email.com"
+                    autoComplete="email"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="signup-password">Password</label>
+                  <input
+                    id="signup-password"
+                    type="password"
+                    value={signupPassword}
+                    onChange={(e) => setSignupPassword(e.target.value)}
+                    placeholder="At least 6 characters"
+                    autoComplete="new-password"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="signup-confirm">Confirm Password</label>
+                  <input
+                    id="signup-confirm"
+                    type="password"
+                    value={signupConfirmPassword}
+                    onChange={(e) => setSignupConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                  />
+                </div>
+
+                {error && <p className="error-message">{error}</p>}
+                {success && <p className="success-message">{success}</p>}
+
+                <button type="submit" className="btn btn-primary btn-full">
+                  Create Account
+                </button>
+              </form>
+            )}
+
+            <div className="auth-footer">
+              <p>
+                {isLogin ? "Don't have an account? " : "Already have an account? "}
+                <button type="button" className="link-btn" onClick={toggleMode}>
+                  {isLogin ? 'Sign up' : 'Log in'}
+                </button>
+              </p>
             </div>
-
-            {error && <p className="error-message">{error}</p>}
-            {success && <p className="success-message">{success}</p>}
-
-            <button type="submit" className="btn btn-primary btn-full">
-              Create Account
-            </button>
-          </form>
-        )}
-
-        <div className="auth-footer">
-          <p>
-            {isLogin ? "Don't have an account? " : "Already have an account? "}
-            <button type="button" className="link-btn" onClick={toggleMode}>
-              {isLogin ? 'Sign up' : 'Log in'}
-            </button>
-          </p>
-        </div>
+          </div>
+        </aside>
       </div>
 
       <style jsx>{`
         .login-overlay {
           position: fixed;
-          top: 0;
-          left: 0;
-          width: 100vw;
-          height: 100vh;
-          background: radial-gradient(circle at center, hsl(var(--card)) 0%, hsl(var(--background)) 100%);
+          inset: 0;
           display: flex;
           align-items: center;
           justify-content: center;
-          z-index: 1000;
-          animation: fadeIn 0.4s ease-out;
-          padding: 1rem;
+          padding: 1.5rem;
+          background: hsl(0 0% 98%);
           overflow-y: auto;
+          z-index: 50;
+        }
+
+        .login-shell {
+          display: grid;
+          grid-template-columns: 1fr minmax(380px, 460px);
+          gap: 2.5rem;
+          width: min(100%, 1100px);
+          margin: 0 auto;
+          padding: 1rem;
+          align-items: center;
+          min-height: 100vh;
+        }
+
+        .brand-side {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .brand-panel {
+          width: 100%;
+          max-width: 380px;
+          margin: 0 auto;
+          background: rgba(255, 255, 255, 0.98);
+          border: 1px solid rgba(255, 167, 57, 0.28);
+          border-radius: 24px;
+          padding: 1.4rem 1.2rem;
+          box-shadow: 0 16px 48px rgba(37, 34, 15, 0.07);
+          display: grid;
+          gap: 0.9rem;
+          text-align: center;
+          transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s;
+          z-index: 1;
+        }
+
+        .brand-panel.slide-up {
+          transform: translateY(-40px);
+        }
+
+        .brand-panel.slide-down {
+          transform: translateY(0);
+        }
+
+        .brand-logo-wrap {
+          width: clamp(160px, 26vw, 260px);
+          height: clamp(160px, 26vw, 260px);
+          margin: 0 auto;
+          padding: 0;
+          border-radius: 0;
+          background: transparent;
+          border: none;
+          display: grid;
+          place-items: center;
+          box-shadow: none;
+        }
+
+        .brand-logo-display {
+          margin-bottom: 0.5rem;
+          animation: fadeInScale 0.6s ease-out;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          gap: 0.8rem;
+        }
+
+        .version-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          background: #ff8a00;
+          color: white;
+          font-size: 0.75rem;
+          font-weight: 800;
+          padding: 0.35rem 0.6rem;
+          border-radius: 6px;
+          letter-spacing: 0.5px;
+          box-shadow: 0 6px 14px rgba(255, 138, 0, 0.18);
+          text-transform: uppercase;
+        }
+
+        .brand-copy-logo {
+          width: clamp(140px, 22vw, 200px);
+          max-height: 25vh;
+          height: auto;
+          display: block;
+          object-fit: contain;
+          transform-origin: center center;
+          filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.06));
+        }
+
+        .brand-copy h2 {
+          margin: 0;
+          font-size: clamp(1.2rem, 1.5vw, 1.5rem);
+          line-height: 1.05;
+          letter-spacing: -0.02em;
+          color: hsl(var(--foreground));
+          font-weight: 700;
+        }
+
+        .brand-copy p {
+          margin: 0;
+          color: hsl(var(--foreground) / 0.7);
+          font-size: 0.9rem;
+          line-height: 1.5;
+          font-weight: 500;
+        }
+
+        .auth-side {
+          width: 100%;
         }
 
         .login-card {
           width: 100%;
-          max-width: 420px;
-          padding: 2.5rem !important;
-          display: flex;
-          flex-direction: column;
-          gap: 1.5rem;
-          border-radius: 24px !important;
-          margin: auto;
-          background: hsl(var(--card));
-          color: hsl(var(--card-foreground));
-          box-shadow: var(--shadow-md);
-        }
-
-        .login-header {
-          text-align: center;
+          background: rgba(255, 255, 255, 0.96);
+          backdrop-filter: blur(12px);
+          border: 1px solid rgba(255, 255, 255, 0.7);
+          border-radius: 28px;
+          box-shadow: 0 24px 72px rgba(33, 34, 34, 0.09);
+          padding: 2rem 1.8rem;
+          display: grid;
+          gap: 1.3rem;
+          color: hsl(var(--foreground));
           position: relative;
-          width: 100%;
+          z-index: 4;
         }
 
-        .logo-glow {
-          position: absolute;
-          top: -20px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 80px;
-          height: 80px;
-          background: radial-gradient(circle, hsl(var(--primary) / 0.3) 0%, transparent 70%);
-          filter: blur(10px);
-          z-index: -1;
+        .auth-panel-header {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          padding: 0.4rem 0 0.8rem 0;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.5);
         }
 
-        h1 {
-          font-size: 2.2rem;
-          margin-bottom: 0.25rem;
+        .brand-mini {
+          width: clamp(90px, 10vw, 120px);
+          height: clamp(90px, 10vw, 120px);
+          display: grid;
+          place-items: center;
+          border-radius: 16px;
+          background: rgba(255, 255, 255, 0.98);
+          border: 1.5px solid rgba(255, 167, 57, 0.2);
+          flex-shrink: 0;
+          z-index: 3;
+          box-shadow: 0 6px 18px rgba(255, 173, 61, 0.08);
         }
 
-        .subtitle {
-          font-size: 0.85rem;
-          opacity: 0.6;
+        .login-logo-sm {
+          width: clamp(60px, 8vw, 90px);
+          height: clamp(60px, 8vw, 90px);
+          object-fit: contain;
+        }
+
+        .auth-panel-header h3 {
+          margin: 0;
+          font-size: 1.35rem;
+          font-weight: 700;
+          color: hsl(var(--foreground));
         }
 
         .auth-tabs {
-          display: flex;
-          gap: 1rem;
-          background: transparent;
-          padding: 0.5rem;
-          border-radius: 12px;
-          border: 1px solid var(--glass-border);
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0.7rem;
+          border-radius: 18px;
+          background: rgba(255, 255, 255, 0.72);
+          border: 1.5px solid rgba(255, 255, 255, 0.75);
+          padding: 0.4rem;
+          margin-bottom: 0.3rem;
         }
 
         .tab-btn {
-          flex: 1;
-          padding: 0.75rem 1rem;
           border: none;
           background: transparent;
           color: hsl(var(--foreground) / 0.6);
-          font-weight: 600;
+          font-weight: 700;
+          border-radius: 14px;
+          padding: 0.8rem 0.9rem;
           cursor: pointer;
-          border-radius: 8px;
-          transition: all 0.2s ease;
-          font-size: 0.95rem;
+          transition: all 0.25s ease;
+          font-size: 0.9rem;
         }
 
         .tab-btn:hover {
           color: hsl(var(--foreground) / 0.8);
+          background: rgba(255, 173, 61, 0.08);
         }
 
         .tab-btn.active {
-          background: hsl(var(--accent));
-          color: hsl(var(--primary-foreground));
-          box-shadow: 0 6px 20px rgba(14,165,164,0.12);
+          background: hsl(var(--primary) / 0.12);
+          color: hsl(var(--foreground));
+          box-shadow: 0 4px 16px rgba(255, 146, 31, 0.15);
+          font-weight: 800;
         }
 
         .auth-form {
-          display: flex;
-          flex-direction: column;
-          gap: 1.25rem;
+          display: grid;
+          gap: 1rem;
         }
 
         .form-group {
-          display: flex;
-          flex-direction: column;
+          display: grid;
           gap: 0.5rem;
         }
 
         .form-group label {
           font-size: 0.9rem;
-          font-weight: 600;
-          color: hsl(var(--foreground) / 0.9);
+          font-weight: 700;
+          color: hsl(var(--foreground) / 0.85);
+          letter-spacing: -0.01em;
         }
 
-        .form-group input,
-        .form-group select {
-          padding: 0.875rem;
-          border: 1px solid var(--glass-border);
-          background: hsl(var(--card));
-          color: hsl(var(--card-foreground));
-          border-radius: 8px;
-          font-size: 0.95rem;
-          transition: all 0.2s ease;
-          font-family: inherit;
-        }
-
-        .form-group input:focus,
-        .form-group select:focus {
-          outline: none;
-          border-color: hsl(var(--primary) / 0.5);
-          background: rgba(255, 255, 255, 0.08);
-          box-shadow: 0 0 12px hsl(var(--primary) / 0.15);
+        .form-group input {
+          width: 100%;
+          padding: 0.9rem 1rem;
+          border-radius: 14px;
+          border: 1.5px solid rgba(23, 23, 23, 0.1);
+          background: rgba(255, 255, 255, 0.95);
+          color: hsl(var(--foreground));
+          transition: all 0.25s ease;
+          font-size: 0.92rem;
+          font-weight: 500;
         }
 
         .form-group input::placeholder {
-          color: hsl(var(--foreground) / 0.4);
+          color: hsl(var(--foreground) / 0.5);
+          font-weight: 400;
         }
 
-        .form-group select option {
-          background: hsl(var(--background));
-          color: hsl(var(--foreground));
+        .form-group input:hover {
+          border-color: rgba(255, 173, 61, 0.3);
+          background: rgba(255, 255, 255, 0.98);
         }
 
-        .error-message {
-          color: #ff4757;
-          font-size: 0.85rem;
-          padding: 0.75rem;
-          background: rgba(255, 71, 87, 0.1);
-          border-radius: 8px;
-          border-left: 3px solid #ff4757;
-          margin-top: -0.5rem;
-        }
-
-        .success-message {
-          color: #2ecc71;
-          font-size: 0.85rem;
-          padding: 0.75rem;
-          background: rgba(46, 204, 113, 0.1);
-          border-radius: 8px;
-          border-left: 3px solid #2ecc71;
-          margin-top: -0.5rem;
+        .form-group input:focus {
+          outline: none;
+          border-color: rgba(255, 173, 61, 0.9);
+          box-shadow: 0 0 0 8px rgba(255, 173, 61, 0.12);
+          background: rgba(255, 255, 255, 1);
         }
 
         .btn-full {
           width: 100%;
-          padding: 0.95rem;
-          font-size: 1rem;
-          font-weight: 600;
+          border-radius: 16px;
+          padding: 1rem 1.1rem;
+          font-weight: 700;
+          font-size: 0.95rem;
+          box-shadow: 0 10px 28px rgba(255, 146, 31, 0.2);
+          transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+          border: none;
+          cursor: pointer;
+          text-transform: uppercase;
+          letter-spacing: 0.4px;
+        }
+
+        .btn-primary {
+          background: #ff8a00;
+          color: white;
+        }
+
+        .btn-primary:hover {
+          box-shadow: 0 14px 36px rgba(255, 146, 31, 0.3);
+          transform: translateY(-2px);
+        }
+
+        .btn-primary:active {
+          transform: translateY(0);
         }
 
         .demo-accounts {
+          display: grid;
+          gap: 0.75rem;
           padding: 1rem;
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid var(--glass-border);
-          border-radius: 8px;
-          margin-top: 0.5rem;
+          border-radius: 22px;
+          background: rgba(255, 255, 255, 0.68);
+          border: 1px solid rgba(255, 255, 255, 0.72);
         }
 
         .demo-title {
-          font-size: 0.8rem;
-          font-weight: 600;
-          opacity: 0.6;
-          margin-bottom: 0.75rem;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
+          margin: 0;
+          color: hsl(var(--foreground) / 0.75);
+          font-size: 0.88rem;
+          font-weight: 700;
         }
 
         .demo-list {
-          display: flex;
-          flex-direction: column;
-          gap: 0.75rem;
+          display: grid;
+          gap: 0.6rem;
         }
 
         .demo-item {
-          display: flex;
-          flex-direction: column;
-          gap: 0.25rem;
-          font-size: 0.75rem;
+          padding: 0.9rem 1rem;
+          border-radius: 18px;
+          background: rgba(255, 255, 255, 0.88);
+          border: 1px solid rgba(255, 255, 255, 0.85);
+          color: hsl(var(--foreground) / 0.82);
         }
 
         .demo-item strong {
-          opacity: 0.7;
+          display: block;
+          margin-bottom: 0.35rem;
+          font-size: 0.96rem;
         }
 
         .demo-item code {
-          background: rgba(255, 255, 255, 0.08);
-          padding: 0.25rem 0.4rem;
-          border-radius: 4px;
-          font-family: 'Courier New', monospace;
-          opacity: 0.6;
+          display: block;
+          font-size: 0.82rem;
+          padding: 0.4rem 0.65rem;
+          border-radius: 10px;
+          background: rgba(255, 255, 255, 0.9);
+          color: hsl(var(--foreground) / 0.7);
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
         }
 
         .auth-footer {
           text-align: center;
-          font-size: 0.9rem;
+          padding-top: 0.5rem;
+          border-top: 1px solid rgba(255, 255, 255, 0.5);
         }
 
         .auth-footer p {
           margin: 0;
-          opacity: 0.7;
+          color: hsl(var(--foreground) / 0.75);
+          font-size: 0.95rem;
+          font-weight: 500;
         }
 
         .link-btn {
-          background: none;
           border: none;
+          background: none;
           color: hsl(var(--primary));
           cursor: pointer;
-          font-weight: 600;
-          text-decoration: underline;
+          font-weight: 800;
+          text-decoration: none;
+          transition: all 0.2s ease;
           padding: 0;
-          transition: opacity 0.2s ease;
+          margin: 0;
         }
 
         .link-btn:hover {
           opacity: 0.8;
+          text-decoration: underline;
         }
 
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
+        .error-message,
+        .success-message {
+          margin: 0;
+          padding: 1rem 1.2rem;
+          border-radius: 14px;
+          font-size: 0.93rem;
+          line-height: 1.5;
+          font-weight: 500;
+          animation: slideDown 0.3s ease;
         }
 
-        @media (max-width: 480px) {
+        .error-message {
+          background: rgba(255, 81, 102, 0.12);
+          border: 1.5px solid rgba(255, 81, 102, 0.25);
+          color: #d63d52;
+        }
+
+        .success-message {
+          background: rgba(63, 181, 201, 0.12);
+          border: 1.5px solid rgba(63, 181, 201, 0.3);
+          color: #1d7e97;
+        }
+
+        @media (max-width: 1024px) {
+          .login-shell {
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+            padding: 1rem;
+            min-height: auto;
+          }
+
+          .brand-side {
+            justify-content: center;
+          }
+
+          .brand-panel {
+            padding: 1.5rem;
+            border-radius: 24px;
+            transform: translateY(0) !important;
+          }
+
+          .brand-copy-logo {
+            width: clamp(100px, 28vw, 220px);
+            max-height: 28vh;
+          }
+
+          .brand-mini {
+            display: none;
+          }
+
           .login-card {
-            padding: 1.5rem !important;
-            max-width: 100%;
+            padding: 2rem 1.5rem;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .login-shell {
+            gap: 1rem;
           }
 
-          h1 {
-            font-size: 1.8rem;
+          .login-card {
+            padding: 1.6rem 1.2rem;
+            border-radius: 24px;
           }
 
-          .subtitle {
-            font-size: 0.75rem;
+          .auth-panel-header {
+            gap: 0.8rem;
+          }
+
+          .auth-panel-header h3 {
+            font-size: 1.25rem;
+          }
+
+          .auth-tabs {
+            grid-template-columns: 1fr;
+            gap: 0.6rem;
           }
 
           .demo-accounts {
-            display: none;
+            padding: 0.9rem;
+          }
+
+          .btn-full {
+            padding: 0.95rem 1rem;
+            font-size: 0.9rem;
+          }
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes fadeInScale {
+          from {
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
           }
         }
       `}</style>

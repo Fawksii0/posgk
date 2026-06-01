@@ -3,6 +3,7 @@ import POSWaiterLayout from './components/POSWaiterLayout';
 import CashierDashboard from './components/CashierDashboard';
 import LoginScreen from './components/LoginScreen';
 import ManagerPortal from './components/ManagerPortal';
+import appLogo from '../assests/icon.png';
 import Uicon from './components/Uicon';
 import { MENU_ITEMS, CATEGORIES } from './mockData';
 import { isCloudSyncEnabled, readCloudState, writeCloudState } from './services/posSync';
@@ -240,15 +241,46 @@ function App() {
     localStorage.removeItem('pos_current_user');
   };
 
+  const normalizeItems = (items) => {
+    const grouped = new Map();
+
+    items.forEach(item => {
+      const quantity = Number(item.quantity || 1);
+      const existing = grouped.get(item.id);
+      if (existing) {
+        grouped.set(item.id, {
+          ...existing,
+          quantity: existing.quantity + quantity,
+        });
+      } else {
+        grouped.set(item.id, {
+          ...item,
+          quantity,
+        });
+      }
+    });
+
+    return Array.from(grouped.values());
+  };
+
+  const calculateItemsTotal = (items) => {
+    return items.reduce((acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1), 0).toFixed(2);
+  };
+
+  const mergeOrderItems = (existingItems, newItems) => {
+    return normalizeItems([...(existingItems || []), ...newItems]);
+  };
+
   const addOrder = (newOrder) => {
     const waiterName = currentUser ? currentUser.name : 'Unknown Waiter';
     const createdAt = new Date();
     const orderId = createdAt.getTime();
     const activeOrder = orders.find(order => order.table === newOrder.table && order.status !== 'paid');
+    const normalizedItems = normalizeItems(newOrder.items);
 
     if (activeOrder) {
-      const updatedItems = [...activeOrder.items, ...newOrder.items];
-      const updatedTotal = updatedItems.reduce((acc, item) => acc + Number(item.price || 0), 0).toFixed(2);
+      const updatedItems = mergeOrderItems(activeOrder.items, normalizedItems);
+      const updatedTotal = calculateItemsTotal(updatedItems);
       const updatedOrder = {
         ...activeOrder,
         items: updatedItems,
@@ -266,10 +298,10 @@ function App() {
         orderId: activeOrder.id,
         table: newOrder.table,
         waiterName,
-        items: newOrder.items,
+        items: normalizedItems,
         total: updatedTotal,
         title: `Order edited - ${newOrder.table}`,
-        message: `${waiterName} added ${newOrder.items.length} item(s) to ${newOrder.table}. New total: ${updatedTotal} MAD.`,
+        message: `${waiterName} updated ${newOrder.table}. New total: ${updatedTotal} MAD.`,
         timestamp: createdAt.toLocaleTimeString(),
       });
 
@@ -279,6 +311,8 @@ function App() {
     const orderWithMeta = {
       ...newOrder,
       id: orderId,
+      items: normalizedItems,
+      total: calculateItemsTotal(normalizedItems),
       status: 'pending',
       timestamp: createdAt.toLocaleTimeString(),
       orderDate: createdAt.toISOString(),
@@ -293,7 +327,6 @@ function App() {
     };
     setOrders([orderWithMeta, ...orders]);
 
-    // Increment lifetime ordersCount
     const updatedWaiters = waiters.map(w => 
       w.name.toLowerCase() === waiterName.toLowerCase()
         ? { ...w, ordersCount: (w.ordersCount || 0) + 1 }
@@ -301,8 +334,7 @@ function App() {
     );
     saveWaiters(updatedWaiters);
 
-    // Create a notification for the cashier
-    const notificationMessage = `NEW ORDER\nTable: ${newOrder.table}\nWaiter: ${waiterName}\nItems: ${newOrder.items.length}\nTotal: $${newOrder.total}`;
+    const notificationMessage = `NEW ORDER\nTable: ${newOrder.table}\nWaiter: ${waiterName}\nItems: ${normalizedItems.length}\nTotal: ${orderWithMeta.total}`;
     addNotification({
       targetRole: 'cashier',
       type: 'new_order',
@@ -311,12 +343,47 @@ function App() {
       title: `New order - ${newOrder.table}`,
       table: newOrder.table,
       waiterName: waiterName,
-      items: newOrder.items,
-      total: newOrder.total,
+      items: normalizedItems,
+      total: orderWithMeta.total,
       timestamp: createdAt.toLocaleTimeString(),
     });
 
     return { type: 'new', table: newOrder.table };
+  };
+
+  const modifyOrder = ({ orderId, items }) => {
+    const waiterName = currentUser ? currentUser.name : 'Unknown Waiter';
+    const normalizedItems = normalizeItems(items);
+    const total = calculateItemsTotal(normalizedItems);
+    const editedAt = new Date();
+    const orderToUpdate = orders.find(order => order.id === orderId);
+    if (!orderToUpdate) return;
+
+    const updatedOrder = {
+      ...orderToUpdate,
+      items: normalizedItems,
+      total,
+      status: 'pending',
+      lastEditedAt: editedAt.toISOString(),
+      lastEditedBy: waiterName,
+    };
+
+    setOrders(orders.map(order => order.id === orderId ? updatedOrder : order));
+
+    addNotification({
+      targetRole: 'cashier',
+      type: 'order_edit',
+      orderId,
+      table: orderToUpdate.table,
+      waiterName,
+      items: normalizedItems,
+      total,
+      title: `Order modified - ${orderToUpdate.table}`,
+      message: `${waiterName} modified order for ${orderToUpdate.table}. Total: ${total} MAD.`,
+      timestamp: editedAt.toLocaleTimeString(),
+    });
+
+    return { type: 'modify', table: orderToUpdate.table };
   };
 
   const addNotification = (notification) => {
@@ -333,9 +400,17 @@ function App() {
 
 
   const markNotificationAsRead = (notificationId) => {
-    setNotifications(notifications.map(notif => 
+    setNotifications(prev => prev.map(notif => 
       notif.id === notificationId ? { ...notif, read: true } : notif
     ));
+  };
+
+  const clearNotifications = ({ targetRole, waiterName }) => {
+    setNotifications(prev => prev.filter(notif => {
+      if (targetRole && notif.targetRole !== targetRole) return true;
+      if (waiterName && notif.waiterName?.toLowerCase() !== waiterName.toLowerCase()) return true;
+      return false;
+    }));
   };
 
   const updateOrderStatus = (orderId, newStatus) => {
@@ -404,7 +479,10 @@ function App() {
       <header className="glass">
         <div className="header-content">
           <div className="header-left">
-            <h1 className="gradient-text">G&K POS</h1>
+            <div className="brand-header">
+              <img src={appLogo} alt="Spark logo" className="app-logo" />
+              <span className="header-version-badge">BETA</span>
+            </div>
             <span className={`sync-badge ${syncStatus}`}>
               {syncStatus === 'online' ? 'Synced' : syncStatus === 'offline' ? 'Offline' : syncStatus === 'syncing' ? 'Syncing' : 'Local'}
             </span>
@@ -437,6 +515,19 @@ function App() {
           </nav>
 
           <div className="header-right">
+            {(currentUser.role === 'cashier' || currentUser.role === 'waiter') && (
+              <button
+                className="btn btn-secondary"
+                onClick={() => clearNotifications(currentUser.role === 'cashier'
+                  ? { targetRole: 'cashier' }
+                  : { targetRole: 'waiter', waiterName: activeWaiterName }
+                )}
+                disabled={((currentUser.role === 'cashier' ? cashierNotifications : waiterNotifications).length === 0)}
+                title="Clear all notifications"
+              >
+                <Uicon icon="fi-rr-trash" /> Clear All
+              </button>
+            )}
             {currentUser.role === 'cashier' && (
               <div className="notification-dropdown-wrapper" style={{ position: 'relative' }}>
                 <button 
@@ -450,6 +541,14 @@ function App() {
                   <div className="notification-dropdown glass-card">
                     <div className="notification-dropdown-header">
                       <h4>Notifications ({notifications.filter(n => n.targetRole === 'cashier').length})</h4>
+                      <button
+                        className="btn btn-link"
+                        type="button"
+                        onClick={() => clearNotifications({ targetRole: 'cashier' })}
+                        disabled={notifications.filter(n => n.targetRole === 'cashier').length === 0}
+                      >
+                        Clear All
+                      </button>
                     </div>
                     <div className="notification-dropdown-content">
                       {notifications.filter(n => n.targetRole === 'cashier').length === 0 ? (
@@ -506,6 +605,8 @@ function App() {
         ) : view === 'waiter' ? (
           <POSWaiterLayout 
             onAddOrder={addOrder} 
+            onModifyOrder={modifyOrder}
+            onClearAllNotifications={() => clearNotifications({ targetRole: 'waiter', waiterName: activeWaiterName })}
             waiterName={getActiveUserName()} 
             tables={tables}
             categories={categories}
@@ -587,12 +688,31 @@ function App() {
           color: #ffb3b3;
           border-color: #ff6b6b;
         }
-        h1 {
-          font-size: 1.5rem;
-        }
         nav {
           display: flex;
           gap: 1rem;
+        }
+        .brand-header {
+          display: flex;
+          align-items: center;
+          gap: 0.85rem;
+        }
+        .app-logo {
+          width: 38px;
+          height: 38px;
+          object-fit: contain;
+          border-radius: 12px;
+          box-shadow: 0 0 0 1px rgba(255,255,255,0.05), 0 10px 25px rgba(255, 170, 50, 0.12);
+        }
+        .header-version-badge {
+          font-size: 0.7rem;
+          font-weight: 800;
+          text-transform: uppercase;
+          color: white;
+          background: linear-gradient(135deg, #ff9c1f 0%, #ff8a00 100%);
+          padding: 0.3rem 0.65rem;
+          border-radius: 999px;
+          box-shadow: 0 6px 16px rgba(255, 146, 31, 0.25);
         }
         .nav-info {
           font-size: 0.9rem;
@@ -660,7 +780,7 @@ function App() {
           margin-bottom: 0.5rem;
           border: 1px solid var(--glass-border);
           border-radius: 8px;
-          background: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--card)) 100%);
+          background: hsl(var(--card));
           cursor: pointer;
           transition: all 0.2s ease;
           display: flex;

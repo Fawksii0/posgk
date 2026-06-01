@@ -201,6 +201,7 @@ const WaiterInterface = ({
       </div>
 
       <style jsx>{`
+
         .waiter-grid {
           display: grid;
           grid-template-columns: 250px 1fr 300px;
@@ -286,10 +287,10 @@ const WaiterInterface = ({
         }
 
         .category-choice.active {
-          background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+          background: #ff8a00;
           border-color: transparent;
           color: white;
-          box-shadow: 0 12px 24px rgba(14,165,164,0.18);
+          box-shadow: 0 10px 20px rgba(255, 138, 0, 0.16);
         }
 
         .category-icon {
@@ -324,17 +325,17 @@ const WaiterInterface = ({
         }
         .table-btn:hover { border-color: hsl(var(--accent)); }
         .table-btn.active { 
-          background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+          background: #ff8a00;
           color: white;
-          box-shadow: 0 14px 30px rgba(14,165,164,0.18);
+          box-shadow: 0 12px 26px rgba(255, 138, 0, 0.16);
           border-color: transparent;
         }
 
         .btn-primary {
-          background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+          background: #ff8a00;
           color: white;
           border-color: transparent;
-          box-shadow: 0 14px 30px rgba(14,165,164,0.18);
+          box-shadow: 0 12px 28px rgba(255, 138, 0, 0.14);
         }
 
         .submit-btn {
@@ -345,7 +346,7 @@ const WaiterInterface = ({
         }
 
         .add-btn {
-          background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+          background: #ff8a00;
           color: white;
           border-radius: 50%;
           width: 36px;
@@ -353,7 +354,7 @@ const WaiterInterface = ({
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          box-shadow: 0 14px 30px rgba(14,165,164,0.18);
+          box-shadow: 0 10px 24px rgba(255,138,0,0.12);
           pointer-events: none;
         }
 

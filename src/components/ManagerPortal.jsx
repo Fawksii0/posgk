@@ -1201,7 +1201,7 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
         }
 
         .menu-subtab-btn.active {
-          background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+          background: #ff8a00;
           color: white;
           border-color: transparent;
           box-shadow: var(--shadow-md);
