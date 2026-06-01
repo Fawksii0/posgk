@@ -307,6 +307,8 @@ const POSWaiterLayout = ({
           )}
         </div>
 
+        )}
+
         <div className="order-footer">
           <div className="total">
             <span>Total</span>
