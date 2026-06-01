@@ -18,6 +18,7 @@ const POSWaiterLayout = ({
   const [selectedTable, setSelectedTable] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(categories.length > 0 ? categories[0].id : '');
   const [currentOrder, setCurrentOrder] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState(null);
 
@@ -113,6 +114,7 @@ const POSWaiterLayout = ({
         <div className="nav-footer">
           <div className="user-pill">{waiterName} {unreadCount ? `• ${unreadCount} new` : ''}</div>
         </div>
+        )}
       </aside>
 
       <section className="center-panel">
@@ -147,7 +149,20 @@ const POSWaiterLayout = ({
             placeholder="Search product here..."
           />
           <div className="search-actions">
-            <button className="btn btn-secondary" type="button" onClick={() => setActiveSection('orders')}><Uicon icon="fi-rr-menu-burger" /></button>
+            <button className="btn btn-secondary" type="button" onClick={() => setActiveSection('orders')} aria-label="Open orders">
+              <Uicon icon="fi-rr-menu-burger" />
+            </button>
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={() => setShowNotifications(prev => !prev)}
+              aria-label="Toggle notifications"
+              title="Notifications"
+              style={{ marginLeft: 8, position: 'relative' }}
+            >
+              <Uicon icon="fi-rr-bell" />
+              {unreadCount ? <span className="notif-badge">{unreadCount}</span> : null}
+            </button>
           </div>
         </div>
 
@@ -266,6 +281,7 @@ const POSWaiterLayout = ({
           )}
         </div>
 
+        {showNotifications && (
         <div className="notification-box">
           <div className="notification-header">
             <h4>Notifications</h4>
@@ -361,6 +377,7 @@ const POSWaiterLayout = ({
         .total { display: flex; flex-direction: column; gap: 4px; color: var(--text); }
         .btn-link { background: transparent; color: var(--accent); border: 0; padding: 0; cursor: pointer; font-weight: 700; }
         .empty-msg { color: var(--muted); padding: 20px 0; text-align: center; }
+        .notif-badge { position: absolute; top: -6px; right: -6px; background: #ef4444; color: white; font-size: 11px; padding: 2px 6px; border-radius: 999px; }
         .muted { color: var(--muted); }
         @media (max-width: 900px) {
           .pos-style { grid-template-columns: 1fr; padding: 12px; }
