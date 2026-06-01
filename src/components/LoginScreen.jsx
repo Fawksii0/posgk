@@ -49,7 +49,7 @@ const LoginScreen = ({ onLogin }) => {
     }
 
     if (loginEmail === 'cashier@gk.com' && loginPassword === 'cashier123') {
-      onLogin({ role: 'cashier', name: 'Cashier (Admin)' });
+      onLogin({ role: 'cashier', name: 'Cashier' });
       return;
     }
 

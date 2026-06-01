@@ -487,7 +487,7 @@ function App() {
   // Find updated name for active user if they were edited while logged in
   const getActiveUserName = () => {
     if (!currentUser) return '';
-    if (currentUser.role === 'cashier') return 'Cashier (Admin)';
+    if (currentUser.role === 'cashier') return 'Cashier';
     if (currentUser.role === 'manager') return 'Manager';
     const waiterObj = waiters.find(w => w.name.toLowerCase() === currentUser.name.toLowerCase());
     return waiterObj ? waiterObj.name : currentUser.name;

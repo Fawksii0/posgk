@@ -34,6 +34,22 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
       : <span className="cat-icon">{icon}</span>;
   };
   
+  const demoAccounts = [
+    { id: 'demo-manager', name: 'Manager', email: 'manager@gk.com', role: 'manager', status: 'active' },
+    { id: 'demo-cashier', name: 'Cashier', email: 'cashier@gk.com', role: 'cashier', status: 'active' },
+    { id: 'demo-waiter', name: 'Alex', email: 'waiter@gk.com', role: 'waiter', status: 'active' },
+  ];
+
+  const mergeWithDemoAccounts = (baseUsers) => {
+    const merged = [...baseUsers];
+    demoAccounts.forEach(demoUser => {
+      if (!merged.some(u => u.email === demoUser.email)) {
+        merged.push(demoUser);
+      }
+    });
+    return merged;
+  };
+
   // Users management
   const [users, setUsers] = useState(() => {
     if (isCloudSyncEnabled) {
@@ -41,10 +57,14 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
       return [];
     }
     const stored = localStorage.getItem('pos_accounts');
-    return stored ? JSON.parse(stored) : [];
+    const loaded = stored ? JSON.parse(stored) : [];
+    return mergeWithDemoAccounts(loaded);
   });
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [selectedUser, setSelectedUser] = useState(null);
+  const [userEmailEdit, setUserEmailEdit] = useState('');
+  const [userPasswordEdit, setUserPasswordEdit] = useState('');
   const [loadingUsers, setLoadingUsers] = useState(false);
 
   // Load users from cloud on mount
@@ -55,7 +75,7 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
       try {
         setLoadingUsers(true);
         const cloudUsers = await readUsersFromCloud();
-        setUsers(cloudUsers);
+        setUsers(mergeWithDemoAccounts(cloudUsers));
       } catch (err) {
         console.error('Failed to load users from cloud:', err);
       } finally {
@@ -65,6 +85,17 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
 
     loadUsers();
   }, []);
+
+  useEffect(() => {
+    if (!selectedUser) {
+      setUserEmailEdit('');
+      setUserPasswordEdit('');
+      return;
+    }
+
+    setUserEmailEdit(selectedUser.email || '');
+    setUserPasswordEdit('');
+  }, [selectedUser]);
 
   const salesData = useMemo(() => {
     const calculateSalesByPeriod = (days) => {
@@ -270,9 +301,10 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
 
   // User management functions
   const updateUserLocal = (updatedUser) => {
-    const updatedUsers = users.map(u => 
-      (u.email === updatedUser.email || u.id === updatedUser.id) ? updatedUser : u
-    );
+    const existingIndex = users.findIndex(u => u.email === updatedUser.email || u.id === updatedUser.id);
+    const updatedUsers = existingIndex >= 0
+      ? users.map(u => (u.email === updatedUser.email || u.id === updatedUser.id) ? updatedUser : u)
+      : [...users, updatedUser];
     setUsers(updatedUsers);
     
     // Also update in localStorage if not cloud sync
@@ -332,10 +364,68 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
     }
   };
 
-  const filteredUsers = users.filter(user => 
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const approveUser = (user) => {
+    if (!user.role) {
+      window.alert('Assign a role before approving this pending account.');
+      return;
+    }
+
+    const updatedUser = { ...user, status: 'active' };
+    if (isCloudSyncEnabled) {
+      updateUser(user.email, { status: 'active' })
+        .then(() => updateUserLocal(updatedUser))
+        .catch(err => console.error('Failed to approve user:', err));
+    } else {
+      updateUserLocal(updatedUser);
+    }
+  };
+
+  const updateSelectedUserDetails = () => {
+    if (!selectedUser) return;
+
+    const updatedUser = {
+      ...selectedUser,
+      email: userEmailEdit.trim() || selectedUser.email,
+    };
+
+    const updates = {};
+    if (userEmailEdit.trim() && userEmailEdit.trim() !== selectedUser.email) {
+      updates.email = userEmailEdit.trim();
+    }
+
+    if (userPasswordEdit.trim()) {
+      updatedUser.password = userPasswordEdit;
+      updates.password_hash = userPasswordEdit;
+      updates.password = userPasswordEdit;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      if (isCloudSyncEnabled) {
+        updateUser(selectedUser.email, updates)
+          .then(() => {
+            updateUserLocal(updatedUser);
+            setSelectedUser(updatedUser);
+            setUserPasswordEdit('');
+          })
+          .catch(err => console.error('Failed to update user details:', err));
+      } else {
+        updateUserLocal(updatedUser);
+        setSelectedUser(updatedUser);
+        setUserPasswordEdit('');
+      }
+    }
+  };
+
+  const displayedUsers = useMemo(() => mergeWithDemoAccounts(users), [users]);
+
+  const filteredUsers = displayedUsers.filter(user => {
+    const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
+    const matchesSearch = user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesStatus && matchesSearch;
+  });
+
+  const pendingUsersCount = displayedUsers.filter(user => user.status === 'pending').length;
 
   return (
     <div className="manager-portal">
@@ -897,7 +987,7 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
           <div className="users-grid" style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
             {/* Users List */}
             <div className="glass-card users-list-container">
-              <h3>Users ({users.length})</h3>
+              <h3>Users ({displayedUsers.length}){pendingUsersCount > 0 ? ` · ${pendingUsersCount} pending activation` : ''}</h3>
               <div className="search-box" style={{ marginBottom: '1rem' }}>
                 <input 
                   type="text"
@@ -906,6 +996,21 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
                   onChange={(e) => setSearchQuery(e.target.value)}
                   style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255, 255, 255, 0.05)' }}
                 />
+              </div>
+              <div className="status-filter" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <label style={{ whiteSpace: 'nowrap' }}>Filter status:</label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="glass-input"
+                  style={{ flex: 1, minWidth: '160px' }}
+                >
+                  <option value="all">All Users</option>
+                  <option value="active">Active</option>
+                  <option value="pending">Pending</option>
+                  <option value="paused">Paused</option>
+                  <option value="banned">Banned</option>
+                </select>
               </div>
               <div className="scrollable-list" style={{ maxHeight: '500px', overflowY: 'auto' }}>
                 {loadingUsers ? (
@@ -966,6 +1071,57 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
                       <div>
                         <strong>Status:</strong> <span style={{ color: selectedUser.status === 'active' ? '#2ecc71' : selectedUser.status === 'banned' ? '#ff4757' : selectedUser.status === 'paused' ? '#ffa502' : '#95a5a6' }}>{selectedUser.status.toUpperCase()}</span>
                       </div>
+                    </div>
+
+                    {selectedUser.status === 'pending' && (
+                      <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          type="button"
+                          onClick={() => approveUser(selectedUser)}
+                          disabled={!selectedUser.role}
+                        >
+                          <Uicon icon="fi-rr-check" /> Approve User
+                        </button>
+                        {!selectedUser.role && (
+                          <span style={{ alignSelf: 'center', color: '#ffb142', fontSize: '0.95rem' }}>
+                            Assign a role before approving this account.
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    <div style={{ padding: '1rem', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.04)' }}>
+                      <h4>Edit Account</h4>
+                      <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                        <label>Email</label>
+                        <input
+                          type="email"
+                          value={userEmailEdit}
+                          onChange={(e) => setUserEmailEdit(e.target.value)}
+                          className="glass-input"
+                          placeholder="user@example.com"
+                        />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                        <label>New Password</label>
+                        <input
+                          type="password"
+                          value={userPasswordEdit}
+                          onChange={(e) => setUserPasswordEdit(e.target.value)}
+                          className="glass-input"
+                          placeholder="Leave blank to keep current password"
+                        />
+                      </div>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        type="button"
+                        onClick={updateSelectedUserDetails}
+                        disabled={userEmailEdit.trim() === selectedUser.email && !userPasswordEdit.trim()}
+                        style={{ marginTop: '0.5rem' }}
+                      >
+                        Save Changes
+                      </button>
                     </div>
                   </div>
 
