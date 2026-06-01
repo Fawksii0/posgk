@@ -147,12 +147,24 @@ const POSWaiterLayout = ({
             placeholder="Search product here..."
           />
           <div className="search-actions">
-            <button className="btn btn-secondary" type="button"><Uicon icon="fi-rr-menu-burger" /></button>
+            <button className="btn btn-secondary" type="button" onClick={() => setActiveSection('orders')}><Uicon icon="fi-rr-menu-burger" /></button>
           </div>
         </div>
 
         {activeSection === 'menu' ? (
           <>
+            <select
+              className="category-select glass-input"
+              value={selectedCategory || ''}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              aria-label="Select category"
+            >
+              <option value="">All categories</option>
+              {(categories || []).map(cat => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              ))}
+            </select>
+
             <div className="category-chips">
               {(categories || []).map(cat => (
                 <button
@@ -358,6 +370,8 @@ const POSWaiterLayout = ({
           .mobile-table-picker { display: flex; overflow-x: auto; gap: 0.5rem; padding-bottom: 0.5rem; flex-direction: column; }
           .mobile-table-picker .table-dropdown { width: 100%; margin-bottom: 0.75rem; }
           .mobile-table-picker .table-btn { min-width: 90px; white-space: nowrap; }
+          .mobile-table-picker .table-btn { display: none; }
+          .category-select { display: none; }
         }
 
         @media (max-width: 640px) {
@@ -365,6 +379,8 @@ const POSWaiterLayout = ({
           .search-actions { width: 100%; display: flex; justify-content: flex-end; }
           .search-input { width: 100%; }
           .category-chips { gap: 8px; overflow-x: auto; padding-bottom: 0.5rem; -webkit-overflow-scrolling: touch; }
+          .category-select { display: block; width: 100%; margin-bottom: 0.5rem; }
+          .category-chips { display: none; }
           .chip { flex: 0 0 auto; }
           .product-grid { grid-template-columns: 1fr; }
           .product-card { padding: 14px; }

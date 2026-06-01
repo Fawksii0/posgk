@@ -133,6 +133,16 @@ const WaiterInterface = ({
       <div className="menu-section">
         <div className="category-picker glass">
           <label>Menu Category</label>
+          <select
+            className="category-dropdown glass-input"
+            value={selectedCategory || ''}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            aria-label="Select category"
+          >
+            {(categories || []).map(cat => (
+              <option key={cat.id} value={cat.id}>{cat.name}</option>
+            ))}
+          </select>
           <div className="category-selector">
             {(categories || []).map(cat => (
               <button
@@ -535,6 +545,21 @@ const WaiterInterface = ({
             display: block;
           }
 
+          /* Hide the full table button grid on smaller screens to save space */
+          .table-map {
+            display: none;
+          }
+
+          /* Show category select and hide chips overflow on small screens */
+          .category-dropdown {
+            display: block;
+            width: 100%;
+            margin-bottom: 0.5rem;
+          }
+          .category-selector {
+            display: none;
+          }
+
           .tables-section {
             order: 2;
           }
@@ -586,12 +611,7 @@ const WaiterInterface = ({
           }
 
           .table-map {
-            display: grid;
-            grid-auto-flow: column;
-            grid-auto-columns: minmax(110px, 1fr);
-            gap: 0.5rem;
-            overflow-x: auto;
-            padding-bottom: 0.5rem;
+            display: none;
           }
 
           .table-btn {
