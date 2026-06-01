@@ -28,7 +28,6 @@ const POSWaiterLayout = ({
     () => orders.filter(order => order.waiterName?.toLowerCase() === waiterName.toLowerCase()),
     [orders, waiterName]
   );
-  );
 
   const selectedOrder = selectedOrderId ? orders.find(order => order.id === selectedOrderId) : null;
 
