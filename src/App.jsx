@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import POSWaiterLayout from './components/POSWaiterLayout';
 import CashierDashboard from './components/CashierDashboard';
 import LoginScreen from './components/LoginScreen';
@@ -33,6 +33,35 @@ const saveLocalJson = (key, value) => {
   localStorage.setItem(key, JSON.stringify(value));
 };
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, info: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, info) {
+    this.setState({ error, info });
+    console.error('ErrorBoundary caught:', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 20 }}>
+          <h2>Application error</h2>
+          <pre style={{ whiteSpace: 'pre-wrap' }}>{String(this.state.error)}</pre>
+          <pre style={{ whiteSpace: 'pre-wrap' }}>{this.state.info?.componentStack}</pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function App() {
   const [currentUser, setCurrentUser] = useState(() => {
     const savedUser = localStorage.getItem('pos_current_user');
@@ -63,6 +92,21 @@ function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', 'light');
   }, []);
+
+  // Debug overlay toggle via URL: add ?dbg=1 to show currentUser/view on-screen
+  const [showDebugOverlay] = useState(() => {
+    try {
+      if (typeof window === 'undefined') return false;
+      return new URLSearchParams(window.location.search).get('dbg') === '1';
+    } catch { return false; }
+  });
+
+  useEffect(() => {
+    if (!showDebugOverlay) return;
+    console.log('DEBUG currentUser:', currentUser);
+    console.log('DEBUG view:', view);
+    try { console.log('DEBUG UA:', navigator.userAgent); } catch {}
+  }, [currentUser, view, showDebugOverlay]);
 
   useEffect(() => {
     const localState = {
@@ -477,6 +521,7 @@ function App() {
   }
 
   return (
+    <ErrorBoundary>
     <div className="app-container">
       <header className="glass">
         <div className="header-content">
@@ -641,6 +686,15 @@ function App() {
           />
         )}
       </main>
+
+      {showDebugOverlay && (
+        <div className="debug-overlay" aria-hidden>
+          <strong>DEBUG</strong>
+          <div>view: {String(view)}</div>
+          <div>currentUser: {currentUser ? `${currentUser.role} / ${currentUser.name}` : 'null'}</div>
+          <div>UA: {typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'}</div>
+        </div>
+      )}
 
       <style>{`
         .app-container {
@@ -943,6 +997,7 @@ function App() {
         }
       `}</style>
     </div>
+    </ErrorBoundary>
   );
 }
 

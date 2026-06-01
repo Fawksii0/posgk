@@ -29,6 +29,11 @@ const POSWaiterLayout = ({
     [orders, waiterName]
   );
 
+  // Active orders for this waiter (exclude paid/completed)
+  const activeOrders = useMemo(() => (
+    (waiterOrders || []).filter(o => o.status !== 'paid' && o.status !== 'completed')
+  ), [waiterOrders]);
+
   const selectedOrder = selectedOrderId ? orders.find(order => order.id === selectedOrderId) : null;
 
   const normalizeOrderLine = (item) => ({
