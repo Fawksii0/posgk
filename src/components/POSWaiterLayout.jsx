@@ -114,7 +114,6 @@ const POSWaiterLayout = ({
         <div className="nav-footer">
           <div className="user-pill">{waiterName} {unreadCount ? `• ${unreadCount} new` : ''}</div>
         </div>
-        )}
       </aside>
 
       <section className="center-panel">
