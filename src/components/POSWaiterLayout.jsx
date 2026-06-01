@@ -397,6 +397,8 @@ const POSWaiterLayout = ({
         .order-footer { margin-top: 8px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
         .total { display: flex; flex-direction: column; gap: 4px; color: var(--text); }
         .btn-link { background: transparent; color: var(--accent); border: 0; padding: 0; cursor: pointer; font-weight: 700; }
+        .back-btn { display: inline-flex; align-items: center; gap: 6px; padding: 0.75rem 1rem; border-radius: 12px; border: 1px solid rgba(14,165,164,0.2); background: rgba(14,165,164,0.08); color: #0e948a; font-weight: 700; }
+        .back-btn:hover { background: rgba(14,165,164,0.12); }
         .empty-msg { color: var(--muted); padding: 20px 0; text-align: center; }
         .notif-badge { position: absolute; top: -6px; right: -6px; background: #ef4444; color: white; font-size: 11px; padding: 2px 6px; border-radius: 999px; }
         .muted { color: var(--muted); }
@@ -414,6 +416,7 @@ const POSWaiterLayout = ({
 
         @media (max-width: 640px) {
           .search-row { flex-direction: column; align-items: stretch; }
+          .back-btn { width: 100%; justify-content: center; }
           .search-actions { width: 100%; display: flex; justify-content: flex-end; }
           .search-input { width: 100%; }
           .category-chips { gap: 8px; overflow-x: auto; padding-bottom: 0.5rem; -webkit-overflow-scrolling: touch; }
