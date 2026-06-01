@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import loginLogo from '../../assests/icon.png';
+import loginLogo from '../../assests/nobg.png';
 import { isCloudSyncEnabled, getUserByEmail, createUser, verifyPassword } from '../services/posSync';
 
 const LoginScreen = ({ onLogin }) => {
