@@ -104,6 +104,17 @@ const WaiterInterface = ({
 
       <div className="tables-section glass-card">
         <h3>Select Table</h3>
+        <select
+          className="table-dropdown glass-input"
+          value={selectedTable || ''}
+          onChange={(e) => setSelectedTable(e.target.value)}
+          aria-label="Select table"
+        >
+          <option value="">Select table</option>
+          {(tables || []).map(table => (
+            <option key={table.id} value={table.name}>{table.name}</option>
+          ))}
+        </select>
         <div className="table-map">
           {(tables || []).map(table => (
             <button
@@ -213,6 +224,12 @@ const WaiterInterface = ({
         .waiter-notifications {
           grid-column: 1 / -1;
           padding: 0.85rem !important;
+        }
+
+        .table-dropdown {
+          display: none;
+          width: 100%;
+          margin-bottom: 1rem;
         }
 
         .notification-toggle {
@@ -514,6 +531,10 @@ const WaiterInterface = ({
             padding-bottom: max(1rem, env(safe-area-inset-bottom));
           }
 
+          .table-dropdown {
+            display: block;
+          }
+
           .tables-section {
             order: 2;
           }
@@ -528,6 +549,7 @@ const WaiterInterface = ({
             position: static;
             max-height: none;
             z-index: auto;
+            width: 100%;
           }
 
           .waiter-notifications {
@@ -536,6 +558,17 @@ const WaiterInterface = ({
 
           .order-items {
             min-height: 70px;
+          }
+
+          .category-selector {
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            padding-bottom: 0.35rem;
+            -webkit-overflow-scrolling: touch;
+          }
+
+          .category-choice {
+            flex: 0 0 auto;
           }
         }
 
@@ -553,14 +586,20 @@ const WaiterInterface = ({
           }
 
           .table-map {
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            display: grid;
+            grid-auto-flow: column;
+            grid-auto-columns: minmax(110px, 1fr);
             gap: 0.5rem;
+            overflow-x: auto;
+            padding-bottom: 0.5rem;
           }
 
           .table-btn {
             min-height: 48px;
             border-radius: 10px;
             font-size: 0.78rem;
+            min-width: 110px;
+            white-space: nowrap;
           }
 
           .category-picker {
@@ -569,6 +608,16 @@ const WaiterInterface = ({
             padding: 0.45rem 0;
             grid-template-columns: 1fr;
             gap: 0.35rem;
+          }
+
+          .category-selector {
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            padding-bottom: 0.35rem;
+          }
+
+          .category-choice {
+            flex: 0 0 auto;
           }
 
           .category-picker label {
@@ -625,27 +674,40 @@ const WaiterInterface = ({
 
         @media (max-width: 420px) {
           .table-map {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            display: grid;
+            grid-auto-flow: column;
+            grid-auto-columns: minmax(100px, 1fr);
+            overflow-x: auto;
+            gap: 0.5rem;
+            padding-bottom: 0.5rem;
+          }
+
+          .item-card {
+            display: grid;
+            grid-template-columns: 1fr;
+          }
+
+          .item-image-wrapper {
+            height: 160px;
+            min-height: auto;
+            border-bottom: 1px solid var(--glass-border);
+            border-right: 0;
+          }
+
+          .item-content-wrapper {
+            min-height: 0;
           }
 
           .items-grid {
             grid-template-columns: 1fr;
           }
 
-          .item-card {
-            display: grid;
-            grid-template-columns: 108px minmax(0, 1fr);
+          .order-footer {
+            gap: 0.75rem;
           }
 
-          .item-image-wrapper {
-            height: 100%;
-            min-height: 112px;
-            border-bottom: 0;
-            border-right: 1px solid var(--glass-border);
-          }
-
-          .item-content-wrapper {
-            min-height: 112px;
+          .submit-btn {
+            padding: 1rem;
           }
         }
       `}</style>

@@ -21,6 +21,8 @@ const CashierDashboard = ({
   const [menuSubTab, setMenuSubTab] = useState('items'); // 'items' | 'categories'
   const [showNotifications, setShowNotifications] = useState(false);
   const [sourceFilter, setSourceFilter] = useState('all'); // 'all' | 'dine_in' | 'delivery_direct' | 'glovo' | 'phone'
+  const [tableFilter, setTableFilter] = useState('all');
+  const tableOptions = tables || [];
   
   // Waiter states
   const [newWaiterName, setNewWaiterName] = useState('');
@@ -68,7 +70,9 @@ const CashierDashboard = ({
 
   const filteredOrders = orders.filter(order => {
     const source = order.source || 'dine_in';
-    return sourceFilter === 'all' ? true : source === sourceFilter;
+    if (sourceFilter !== 'all' && source !== sourceFilter) return false;
+    if (tableFilter !== 'all' && order.table !== tableFilter) return false;
+    return true;
   });
 
   const countBySource = (sourceKey) => orders.filter(order => (order.source || 'dine_in') === sourceKey).length;
@@ -409,7 +413,18 @@ const CashierDashboard = ({
           )}
 
           {/* Order Source Filter */}
-          <div className="order-filter-bar glass-card" style={{ marginBottom: '1.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <div className="order-filter-bar glass-card" style={{ marginBottom: '1.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <select
+              className="glass-input table-select"
+              value={tableFilter}
+              onChange={(e) => setTableFilter(e.target.value)}
+              aria-label="Filter by table"
+            >
+              <option value="all">All Tables</option>
+              {tableOptions.map(table => (
+                <option key={table.id} value={table.name}>{table.name}</option>
+              ))}
+            </select>
             <button 
               className={`btn ${sourceFilter === 'all' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
               onClick={() => setSourceFilter('all')}
@@ -1125,6 +1140,11 @@ const CashierDashboard = ({
           width: 100%;
           justify-content: center;
           padding: 0.75rem;
+        }
+
+        .table-select {
+          min-width: 180px;
+          max-width: 260px;
         }
 
         .error-text {

@@ -117,6 +117,17 @@ const POSWaiterLayout = ({
 
       <section className="center-panel">
         <div className="tables-picker mobile-table-picker">
+          <select
+            className="table-dropdown glass-input"
+            value={selectedTable || ''}
+            onChange={(e) => setSelectedTable(e.target.value)}
+            aria-label="Select table"
+          >
+            <option value="">Select table</option>
+            {(tables || []).map(t => (
+              <option key={t.id} value={t.name}>{t.name}</option>
+            ))}
+          </select>
           {(tables || []).map(t => (
             <button
               key={t.id}
@@ -342,9 +353,29 @@ const POSWaiterLayout = ({
         @media (max-width: 900px) {
           .pos-style { grid-template-columns: 1fr; padding: 12px; }
           .left-nav { display: none; }
-          .order-sidebar { position: relative; }
+          .order-sidebar { position: relative; width: 100%; }
           .desktop-table-picker { display: none; }
-          .mobile-table-picker { display: flex; }
+          .mobile-table-picker { display: flex; overflow-x: auto; gap: 0.5rem; padding-bottom: 0.5rem; flex-direction: column; }
+          .mobile-table-picker .table-dropdown { width: 100%; margin-bottom: 0.75rem; }
+          .mobile-table-picker .table-btn { min-width: 90px; white-space: nowrap; }
+        }
+
+        @media (max-width: 640px) {
+          .search-row { flex-direction: column; align-items: stretch; }
+          .search-actions { width: 100%; display: flex; justify-content: flex-end; }
+          .search-input { width: 100%; }
+          .category-chips { gap: 8px; overflow-x: auto; padding-bottom: 0.5rem; -webkit-overflow-scrolling: touch; }
+          .chip { flex: 0 0 auto; }
+          .product-grid { grid-template-columns: 1fr; }
+          .product-card { padding: 14px; }
+          .product-img { height: 180px; }
+          .order-header { flex-direction: column; align-items: stretch; gap: 10px; }
+          .order-item-actions { flex-wrap: wrap; justify-content: flex-end; }
+          .order-footer { flex-direction: column; align-items: stretch; }
+          .order-footer .total { flex-direction: row; justify-content: space-between; }
+          .order-footer .btn { width: 100%; }
+          .mobile-table-picker { gap: 0.4rem; }
+          .table-btn { min-width: 85px; }
         }
       `}</style>
     </div>

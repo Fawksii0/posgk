@@ -5,6 +5,7 @@ import Uicon from './Uicon';
 const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItems, onUpdateCategories, onUpdateMenuItems }) => {
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'sales' | 'staff' | 'menu' | 'closing' | 'users'
   const [selectedPeriod, setSelectedPeriod] = useState(7); // 7, 15, or 30 days
+  const [tableFilter, setTableFilter] = useState('all');
   const [closureRecords, setClosureRecords] = useState(() => {
     const saved = localStorage.getItem('pos_closure_records');
     return saved ? JSON.parse(saved) : [];
@@ -82,14 +83,18 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
     };
 
     const paidOrders = calculateSalesByPeriod(selectedPeriod);
-    const revenue = paidOrders.reduce((acc, order) => acc + parseFloat(order.total || 0), 0);
-    const avgOrder = paidOrders.length > 0 ? revenue / paidOrders.length : 0;
+    const filteredPaidOrders = tableFilter === 'all'
+      ? paidOrders
+      : paidOrders.filter(order => order.table === tableFilter);
+
+    const revenue = filteredPaidOrders.reduce((acc, order) => acc + parseFloat(order.total || 0), 0);
+    const avgOrder = filteredPaidOrders.length > 0 ? revenue / filteredPaidOrders.length : 0;
     
     return {
-      totalOrders: paidOrders.length,
+      totalOrders: filteredPaidOrders.length,
       totalRevenue: revenue,
       avgOrderValue: avgOrder,
-      orders: paidOrders
+      orders: filteredPaidOrders
     };
   }, [selectedPeriod, orders]);
 
@@ -486,7 +491,20 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
 
           {/* Detailed Sales Table */}
           <div className="glass-card sales-table-container">
-            <h3>Detailed Sales Report - Last {selectedPeriod} Days</h3>
+            <div className="table-filter-row">
+              <h3>Detailed Sales Report - Last {selectedPeriod} Days</h3>
+              <select
+                className="glass-input table-select"
+                value={tableFilter}
+                onChange={(e) => setTableFilter(e.target.value)}
+                aria-label="Filter sales by table"
+              >
+                <option value="all">All Tables</option>
+                {(tables || []).map(table => (
+                  <option key={table.id} value={table.name}>{table.name}</option>
+                ))}
+              </select>
+            </div>
             <div className="scrollable-list">
               <table className="sales-table">
                 <thead>
@@ -1697,6 +1715,25 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
           .status-grid {
             grid-template-columns: 1fr;
             gap: 0.85rem;
+          }
+
+          .table-filter-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+          }
+
+          .table-filter-row h3 {
+            margin: 0;
+            font-size: 1rem;
+          }
+
+          .table-select {
+            min-width: 180px;
+            max-width: 250px;
           }
 
           .register-status,
