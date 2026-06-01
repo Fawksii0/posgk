@@ -65,7 +65,7 @@ const POSWaiterLayout = ({
   const calculateTotal = () => currentOrder.reduce((acc, line) => acc + (Number(line.price) || 0) * (Number(line.quantity) || 1), 0).toFixed(2);
 
   const prepareOrderForEdit = (order) => {
-    setActiveSection('myOrders');
+    setActiveSection('menu');
     setSelectedOrderId(order.id);
     setSelectedTable(order.table);
     setCurrentOrder((order.items || []).map(normalizeOrderLine));
