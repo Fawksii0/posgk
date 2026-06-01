@@ -28,10 +28,8 @@ const POSWaiterLayout = ({
     () => orders.filter(order => order.waiterName?.toLowerCase() === waiterName.toLowerCase()),
     [orders, waiterName]
   );
-  )}
+  );
 
-        
-  <div className="order-footer">
   const selectedOrder = selectedOrderId ? orders.find(order => order.id === selectedOrderId) : null;
 
   const normalizeOrderLine = (item) => ({
