@@ -657,6 +657,7 @@ function App() {
           <POSWaiterLayout 
             onAddOrder={addOrder} 
             onModifyOrder={modifyOrder}
+            onDeleteOrder={deleteOrder}
             onClearAllNotifications={() => clearNotifications({ targetRole: 'waiter', waiterName: activeWaiterName })}
             waiterName={getActiveUserName()} 
             tables={tables}

@@ -4,6 +4,7 @@ import Uicon from './Uicon';
 const POSWaiterLayout = ({
   onAddOrder,
   onModifyOrder,
+  onDeleteOrder,
   onClearAllNotifications,
   waiterName,
   tables = [],
@@ -249,6 +250,11 @@ const POSWaiterLayout = ({
                 <div className="order-card-meta">
                   <strong>{order.total} MAD</strong>
                   <button className="btn btn-secondary btn-sm" onClick={() => prepareOrderForEdit(order)}>Edit</button>
+                  {order.status === 'pending' && (
+                    <button className="btn btn-secondary btn-sm delete-btn" onClick={() => onDeleteOrder(order.id)}>
+                      Remove
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -263,9 +269,16 @@ const POSWaiterLayout = ({
             <h3>{selectedOrder ? `Editing ${selectedOrder.table}` : `Table ${selectedTable || '-'}`}</h3>
             <small>Waiter: {waiterName}</small>
           </div>
-          {selectedOrder && (
-            <button className="btn btn-secondary btn-sm" type="button" onClick={clearEditState}>Cancel</button>
-          )}
+          <div className="order-header-actions">
+            {selectedOrder && selectedOrder.status === 'pending' && (
+              <button className="btn btn-danger btn-sm" type="button" onClick={() => { onDeleteOrder(selectedOrder.id); clearEditState(); }}>
+                Remove Order
+              </button>
+            )}
+            {selectedOrder && (
+              <button className="btn btn-secondary btn-sm" type="button" onClick={clearEditState}>Cancel</button>
+            )}
+          </div>
         </div>
 
         <div className="tables-quick desktop-table-picker">
@@ -375,8 +388,13 @@ const POSWaiterLayout = ({
         .order-card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(14,165,164,0.12); }
         .order-card-title { font-weight: 700; }
         .order-card-subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; }
+        .order-card-meta { display: flex; align-items: center; gap: 8px; }
+        .delete-btn { margin-left: 8px; }
         .order-sidebar { display: flex; flex-direction: column; gap: 14px; padding: 18px; background: var(--card); border-radius: 14px; box-shadow: var(--surface-shadow); border: 1px solid #f3f6fb; }
         .order-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+        .order-header-actions { display: flex; gap: 10px; align-items: center; }
+        .btn-danger { background: #ef4444; color: white; border-color: transparent; }
+        .btn-danger:hover { background: #f87171; }
         .tables-quick { display: flex; gap: 8px; flex-wrap: wrap; }
         .mobile-table-picker { display: none; }
         .desktop-table-picker { display: flex; }
