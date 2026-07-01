@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
-import { isCloudSyncEnabled, readUsersFromCloud, updateUser } from '../services/posSync';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { isCloudSyncEnabled, readUsersFromCloud, updateUser, deleteUser } from '../services/posSync';
 import Uicon from './Uicon';
 
 const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItems, onUpdateCategories, onUpdateMenuItems, notifications = [], unreadCount = 0, onMarkNotificationAsRead, onClearAllNotifications }) => {
@@ -67,6 +67,28 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
   const [userEmailEdit, setUserEmailEdit] = useState('');
   const [userPasswordEdit, setUserPasswordEdit] = useState('');
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [actionMessage, setActionMessage] = useState('');
+  const [actionMessageType, setActionMessageType] = useState('success');
+  const actionMessageTimerRef = useRef(null);
+
+  const showActionMessage = (message, type = 'success') => {
+    setActionMessage(message);
+    setActionMessageType(type);
+    if (actionMessageTimerRef.current) {
+      clearTimeout(actionMessageTimerRef.current);
+    }
+    actionMessageTimerRef.current = setTimeout(() => {
+      setActionMessage('');
+    }, 3500);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (actionMessageTimerRef.current) {
+        clearTimeout(actionMessageTimerRef.current);
+      }
+    };
+  }, []);
 
   // Load users from cloud on mount
   useEffect(() => {
@@ -352,67 +374,112 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
 
   const assignRole = (user, role) => {
     const updatedUser = { ...user, role, status: 'active' };
-    
+    updateUserLocal(updatedUser);
+
     if (isCloudSyncEnabled) {
-      // Update in Supabase
       updateUser(user.email, { role, status: 'active' })
-        .then(() => updateUserLocal(updatedUser))
-        .catch(err => console.error('Failed to assign role:', err));
+        .then(() => showActionMessage(`Assigned ${role} role to ${user.name}.`, 'success'))
+        .catch(err => {
+          console.error('Failed to assign role:', err);
+          showActionMessage('Failed to assign role. Please try again.', 'error');
+        });
     } else {
-      updateUserLocal(updatedUser);
+      showActionMessage(`Assigned ${role} role to ${user.name}.`, 'success');
     }
   };
 
   const banUser = (user) => {
     const updatedUser = { ...user, status: 'banned' };
-    
+    updateUserLocal(updatedUser);
+
     if (isCloudSyncEnabled) {
       updateUser(user.email, { status: 'banned' })
-        .then(() => updateUserLocal(updatedUser))
-        .catch(err => console.error('Failed to ban user:', err));
+        .then(() => showActionMessage(`Banned ${user.name}.`, 'success'))
+        .catch(err => {
+          console.error('Failed to ban user:', err);
+          showActionMessage('Failed to ban user. Please try again.', 'error');
+        });
     } else {
-      updateUserLocal(updatedUser);
+      showActionMessage(`Banned ${user.name}.`, 'success');
     }
   };
 
   const pauseUser = (user) => {
     const updatedUser = { ...user, status: 'paused' };
-    
+    updateUserLocal(updatedUser);
+
     if (isCloudSyncEnabled) {
       updateUser(user.email, { status: 'paused' })
-        .then(() => updateUserLocal(updatedUser))
-        .catch(err => console.error('Failed to pause user:', err));
+        .then(() => showActionMessage(`Paused ${user.name}.`, 'success'))
+        .catch(err => {
+          console.error('Failed to pause user:', err);
+          showActionMessage('Failed to pause user. Please try again.', 'error');
+        });
     } else {
-      updateUserLocal(updatedUser);
+      showActionMessage(`Paused ${user.name}.`, 'success');
     }
   };
 
   const activateUser = (user) => {
     const updatedUser = { ...user, status: 'active' };
-    
+    updateUserLocal(updatedUser);
+
     if (isCloudSyncEnabled) {
       updateUser(user.email, { status: 'active' })
-        .then(() => updateUserLocal(updatedUser))
-        .catch(err => console.error('Failed to activate user:', err));
+        .then(() => showActionMessage(`${user.name} is now active.`, 'success'))
+        .catch(err => {
+          console.error('Failed to activate user:', err);
+          showActionMessage('Failed to activate user. Please try again.', 'error');
+        });
     } else {
-      updateUserLocal(updatedUser);
+      showActionMessage(`${user.name} is now active.`, 'success');
     }
   };
 
   const approveUser = (user) => {
     if (!user.role) {
-      window.alert('Assign a role before approving this pending account.');
+      showActionMessage('Assign a role before approving this pending account.', 'error');
       return;
     }
 
     const updatedUser = { ...user, status: 'active' };
+    updateUserLocal(updatedUser);
+
     if (isCloudSyncEnabled) {
       updateUser(user.email, { status: 'active' })
-        .then(() => updateUserLocal(updatedUser))
-        .catch(err => console.error('Failed to approve user:', err));
+        .then(() => showActionMessage(`Approved ${user.name}.`, 'success'))
+        .catch(err => {
+          console.error('Failed to approve user:', err);
+          showActionMessage('Failed to approve user. Please try again.', 'error');
+        });
     } else {
-      updateUserLocal(updatedUser);
+      showActionMessage(`Approved ${user.name}.`, 'success');
     }
+  };
+
+  const deleteSelectedUser = (user) => {
+    const confirmed = window.confirm(`Delete ${user.name} from the database and remove their account?`);
+    if (!confirmed) return;
+
+    const remainingUsers = users.filter(u => (u.email !== user.email) && (u.id !== user.id));
+    setUsers(remainingUsers);
+
+    if (!isCloudSyncEnabled) {
+      localStorage.setItem('pos_accounts', JSON.stringify(remainingUsers.filter(u => !demoAccounts.some(d => d.email === u.email))));
+      setSelectedUser(null);
+      showActionMessage(`Deleted ${user.name}.`, 'success');
+      return;
+    }
+
+    deleteUser(user.email)
+      .then(() => {
+        setSelectedUser(null);
+        showActionMessage(`Deleted ${user.name}.`, 'success');
+      })
+      .catch(err => {
+        console.error('Failed to delete user:', err);
+        showActionMessage('Failed to delete user. Please try again.', 'error');
+      });
   };
 
   const updateSelectedUserDetails = () => {
@@ -429,9 +496,13 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
     }
 
     if (userPasswordEdit.trim()) {
-      updatedUser.password = userPasswordEdit;
-      updates.password_hash = userPasswordEdit;
-      updates.password = userPasswordEdit;
+      if (isCloudSyncEnabled) {
+        updatedUser.password_hash = userPasswordEdit;
+        updates.password_hash = userPasswordEdit;
+      } else {
+        updatedUser.password = userPasswordEdit;
+        updates.password = userPasswordEdit;
+      }
     }
 
     if (Object.keys(updates).length > 0) {
@@ -441,12 +512,17 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
             updateUserLocal(updatedUser);
             setSelectedUser(updatedUser);
             setUserPasswordEdit('');
+            showActionMessage(`Updated details for ${selectedUser.name}.`, 'success');
           })
-          .catch(err => console.error('Failed to update user details:', err));
+          .catch(err => {
+            console.error('Failed to update user details:', err);
+            showActionMessage('Failed to update user details. Please try again.', 'error');
+          });
       } else {
         updateUserLocal(updatedUser);
         setSelectedUser(updatedUser);
         setUserPasswordEdit('');
+        showActionMessage(`Updated details for ${selectedUser.name}.`, 'success');
       }
     }
   };
@@ -1125,6 +1201,18 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
                 <div>
                   <h3>User Management</h3>
                   <div style={{ marginBottom: '1.5rem' }}>
+                    {actionMessage && (
+                      <div style={{
+                        marginBottom: '1rem',
+                        padding: '0.9rem 1rem',
+                        borderRadius: '10px',
+                        background: actionMessageType === 'error' ? 'rgba(255, 71, 87, 0.12)' : 'rgba(46, 204, 113, 0.12)',
+                        border: `1px solid ${actionMessageType === 'error' ? 'rgba(255, 71, 87, 0.25)' : 'rgba(46, 204, 113, 0.3)'}`,
+                        color: actionMessageType === 'error' ? '#ff4757' : '#2ecc71',
+                      }}>
+                        {actionMessage}
+                      </div>
+                    )}
                     <div className="user-info-box" style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
                       <div style={{ marginBottom: '0.75rem' }}>
                         <strong>Name:</strong> {selectedUser.name}
@@ -1188,6 +1276,14 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
                         style={{ marginTop: '0.5rem' }}
                       >
                         Save Changes
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        type="button"
+                        onClick={() => deleteSelectedUser(selectedUser)}
+                        style={{ marginTop: '0.5rem', marginLeft: '0.5rem', background: 'rgba(255, 71, 87, 0.2)', color: '#ff4757' }}
+                      >
+                        Delete Account
                       </button>
                     </div>
                   </div>

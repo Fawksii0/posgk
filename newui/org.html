@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Create your organization</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="org-shell">
+      <main class="org-panel">
+        <div class="org-card">
+          <div class="org-header">
+            <img src="assets/spark-black.png" alt="Spark logo" class="org-logo" />
+            <div>
+              <p class="org-eyebrow">Create your organization</p>
+              <h1>Set up your restaurant or organization</h1>
+              <p class="org-sub">Start with a single location. Free tier allows one organization per account.</p>
+            </div>
+          </div>
+
+          <form id="org-form" class="org-form">
+            <label>
+              Organization name
+              <input id="org-name" type="text" required placeholder="e.g. Sunrise Cafe" />
+            </label>
+
+            <label>
+              Location / Address (optional)
+              <input id="org-location" type="text" placeholder="City, State or full address" />
+            </label>
+
+            <div class="org-grid">
+              <label>
+                Primary currency
+                <select id="org-currency">
+                  <option value="USD">United States Dollar (USD)</option>
+                  <option value="EUR">Euro (EUR)</option>
+                  <option value="GBP">British Pound (GBP)</option>
+                </select>
+              </label>
+
+              <label>
+                Timezone
+                <select id="org-timezone">
+                  <option>UTC</option>
+                  <option>America/New_York</option>
+                  <option>Europe/London</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="org-actions">
+              <button id="org-submit" type="submit">Create organization</button>
+            </div>
+          </form>
+
+          <div class="org-note">You can add more locations later if you upgrade. For the free tier, you're limited to one organization per account.</div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      document.getElementById('org-form').addEventListener('submit', function(e){
+        e.preventDefault();
+        const name = document.getElementById('org-name').value.trim();
+        if(!name){
+          alert('Organization name is required');
+          return;
+        }
+        // For preview, store org in sessionStorage and redirect to a placeholder dashboard
+        sessionStorage.setItem('org', JSON.stringify({name: name, currency: document.getElementById('org-currency').value}));
+        window.location.href = 'dashboard-preview.html';
+      });
+    </script>
+  </body>
+</html>

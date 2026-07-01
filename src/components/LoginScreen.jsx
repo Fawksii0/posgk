@@ -2,7 +2,7 @@ import { useState } from 'react';
 import loginLogo from '../../assests/nobg.png';
 import { isCloudSyncEnabled, getUserByEmail, createUser, verifyPassword } from '../services/posSync';
 
-const LoginScreen = ({ onLogin }) => {
+const LoginScreen = ({ onLogin, onBackToLanding }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -376,6 +376,9 @@ const LoginScreen = ({ onLogin }) => {
                   {isLogin ? 'Sign up' : 'Log in'}
                 </button>
               </p>
+              <button type="button" className="link-btn back-btn" onClick={onBackToLanding}>
+                Back to landing page
+              </button>
             </div>
           </div>
         </aside>
@@ -734,6 +737,24 @@ const LoginScreen = ({ onLogin }) => {
         .link-btn:hover {
           opacity: 0.8;
           text-decoration: underline;
+        }
+
+        .back-btn {
+          display: inline-flex;
+          margin-top: 0.85rem;
+          background: transparent;
+          border: 1px solid rgba(255, 138, 0, 0.18);
+          border-radius: 999px;
+          padding: 0.75rem 1.1rem;
+          color: hsl(var(--foreground) / 0.88);
+          font-weight: 700;
+          transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+        }
+
+        .back-btn:hover {
+          background: rgba(255, 138, 0, 0.08);
+          border-color: rgba(255, 138, 0, 0.28);
+          transform: translateY(-1px);
         }
 
         .error-message,

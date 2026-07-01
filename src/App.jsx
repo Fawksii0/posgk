@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import POSWaiterLayout from './components/POSWaiterLayout';
 import CashierDashboard from './components/CashierDashboard';
+import LandingPage from './components/LandingPage';
 import LoginScreen from './components/LoginScreen';
 import ManagerPortal from './components/ManagerPortal';
 import appLogo from '../assests/icon.png';
@@ -94,6 +95,7 @@ function App() {
   }, []);
 
   // Debug overlay toggle via URL: add ?dbg=1 to show currentUser/view on-screen
+  const [authPage, setAuthPage] = useState('landing');
   const [showDebugOverlay] = useState(() => {
     try {
       if (typeof window === 'undefined') return false;
@@ -513,9 +515,15 @@ function App() {
   const managerUnreadCount = managerNotifications.filter(notif => !notif.read).length;
 
   if (!currentUser) {
-    return (
-      <LoginScreen 
-        onLogin={handleLogin} 
+    return authPage === 'landing' ? (
+      <LandingPage
+        onGetStarted={() => setAuthPage('login')}
+        onLogin={() => setAuthPage('login')}
+      />
+    ) : (
+      <LoginScreen
+        onLogin={handleLogin}
+        onBackToLanding={() => setAuthPage('landing')}
       />
     );
   }

@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dashboard Preview</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="preview-shell">
+    <main class="preview-card">
+      <h1>Dashboard (Preview)</h1>
+      <p id="org-name-display"></p>
+      <p>This is a placeholder dashboard to show successful organization creation.</p>
+      <a href="index.html">Back to login</a>
+    </main>
+  </div>
+
+  <script>
+    const org = sessionStorage.getItem('org');
+    if(org){
+      const obj = JSON.parse(org);
+      document.getElementById('org-name-display').textContent = 'Organization: ' + obj.name + ' (' + obj.currency + ')';
+    } else {
+      document.getElementById('org-name-display').textContent = 'No organization found in session';
+    }
+  </script>
+</body>
+</html>
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Dashboard Preview</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="preview-shell">
+      <main class="preview-card">
+        <h1>Dashboard Preview</h1>
+        <p>This is a placeholder showing the user reached the dashboard after creating an organization.</p>
+        <p id="org-name-display"></p>
+        <a href="index.html">Back to login</a>
+      </main>
+    </div>
+
+    <script>
+      const org = JSON.parse(sessionStorage.getItem('org') || 'null');
+      const el = document.getElementById('org-name-display');
+      if(org){
+        el.textContent = 'Organization: ' + org.name + ' (' + (org.currency||'') + ')';
+      } else {
+        el.textContent = 'No organization found in session.';
+      }
+    </script>
+  </body>
+</html>

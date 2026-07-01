@@ -66,7 +66,7 @@ export const readUsersFromCloud = async () => {
 export const getUserByEmail = async (email) => {
   if (!isCloudSyncEnabled) return null;
 
-  const response = await fetch(getUsersEndpoint(`?email=eq.${encodeURIComponent(email)}&select=id,name,email,role,status`), {
+  const response = await fetch(getUsersEndpoint(`?email=eq.${encodeURIComponent(email)}&select=id,name,email,role,status,password_hash`), {
     headers,
   });
 
@@ -94,8 +94,25 @@ export const createUser = async (name, email, passwordHash) => {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(`Failed to create user: ${error.message || response.status}`);
+    // Try to parse body for a helpful message
+    let errBody = null;
+    try {
+      errBody = await response.json();
+    } catch (e) {
+      // ignore parse errors
+    }
+
+    const detail = errBody && (errBody.message || errBody.error || errBody.detail || JSON.stringify(errBody));
+
+    // Supabase may return 409 or include keywords for duplicate records
+    const isDuplicate = response.status === 409 || (detail && /duplicate|already exists|unique/i.test(detail));
+
+    if (isDuplicate) {
+      throw new Error('duplicate');
+    }
+
+    const msg = detail || response.statusText || `status:${response.status}`;
+    throw new Error(msg);
   }
 
   return await response.json();
@@ -106,15 +123,54 @@ export const updateUser = async (email, updates) => {
 
   const response = await fetch(getUsersEndpoint(`?email=eq.${encodeURIComponent(email)}`), {
     method: 'PATCH',
-    headers,
+    headers: {
+      ...headers,
+      Prefer: 'return=representation',
+    },
     body: JSON.stringify(updates),
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to update user: ${response.status}`);
+    let errBody = null;
+    try {
+      errBody = await response.json();
+    } catch (e) {
+      // ignore parse errors
+    }
+
+    const detail = errBody && (errBody.message || errBody.error || errBody.detail || JSON.stringify(errBody));
+    throw new Error(detail || `Failed to update user: ${response.status}`);
   }
 
-  return await response.json();
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return await response.json();
+  }
+
+  return { success: true };
+};
+
+export const deleteUser = async (email) => {
+  if (!isCloudSyncEnabled) return null;
+
+  const response = await fetch(getUsersEndpoint(`?email=eq.${encodeURIComponent(email)}`), {
+    method: 'DELETE',
+    headers,
+  });
+
+  if (!response.ok) {
+    let errBody = null;
+    try {
+      errBody = await response.json();
+    } catch (e) {
+      // ignore parse errors
+    }
+
+    const detail = errBody && (errBody.message || errBody.error || errBody.detail || JSON.stringify(errBody));
+    throw new Error(detail || `Failed to delete user: ${response.status}`);
+  }
+
+  return { success: true };
 };
 
 export const verifyPassword = (inputPassword, storedHash) => {
