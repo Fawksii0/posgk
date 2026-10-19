@@ -5,7 +5,7 @@ type Context = { actorId: string | null; actorRole: string; branchId: string | n
 type BoundStatement = { text: string; values: unknown[] };
 
 export function createDatabase(connectionString: string) {
-  const client = postgres(connectionString, { max: 8, prepare: false });
+  const client = postgres(connectionString, { max: 3, prepare: false, idle_timeout: 20, connect_timeout: 15 });
   const execute = async (statement: BoundStatement, context: Context) =>
     await client.begin(async (tx) => {
       await tx.unsafe("SET LOCAL ROLE gk_api");
