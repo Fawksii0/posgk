@@ -27,5 +27,11 @@ Deno.serve(async (request: Request) => {
     ALLOWED_ORIGINS: Deno.env.get("ALLOWED_ORIGINS") || "",
     DB: sharedDatabase.forRequest()
   };
+  const url = new URL(request.url);
+  const stripped = url.pathname.replace(/^(?:\/functions\/v1)?\/gk-api(?=\/|$)/, "") || "/";
+  if (stripped !== url.pathname) {
+    url.pathname = stripped;
+    request = new Request(url, request);
+  }
   return await app.fetch(request, env);
 });
