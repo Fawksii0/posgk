@@ -6,7 +6,7 @@
     window.GK_SUPABASE_URL
       ? `${String(window.GK_SUPABASE_URL).replace(/\/+$/, "")}/functions/v1/gk-api`
       : ["localhost", "127.0.0.1"].includes(location.hostname)
-      ? `${location.protocol}//${location.hostname}:54321/functions/v1/gk-api`
+      ? `${SUPABASE_PROJECT_URL}/functions/v1/gk-api`
       : /(^|\.)gkfood\.store$/.test(location.hostname)
         ? `${SUPABASE_PROJECT_URL}/functions/v1/gk-api`
         : ""
