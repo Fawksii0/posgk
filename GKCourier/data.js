@@ -1,32 +1,3 @@
-const DEMO_PHONE = "0612345678";
-const DEMO_PIN = "1234";
-const DELIVERY_CODE = "4321";
-const SUPPORT = { tel: "+212539000000", telLabel: "05 39 00 00 00", wa: "212600000000" };
-const RESTAURANT = { name: "G&K Food Bouznika", address: "Av. Mohammed V, Bouznika" };
-
-const zones = {
-  centre: { name: "Centre-ville", earning: 10, km: [0.8, 2.2] },
-  corniche: { name: "Corniche & Plage", earning: 15, km: [2.5, 4.5] },
-  peripherie: { name: "Périphérie", earning: 25, km: [5, 8.5] }
-};
-
-const menu = [
-  { name: "Le Classique G&K", price: 55 },
-  { name: "Frites Maison", price: 20 },
-  { name: "Crispy Chicken", price: 48 },
-  { name: "Pizza G&K", price: 62 },
-  { name: "Gelato Pistache", price: 28 },
-  { name: "Citronnade fraîche", price: 18 }
-];
-
-const firstNames = ["Yassine", "Salma", "Omar", "Imane", "Hamza", "Nadia", "Reda", "Khadija", "Anas", "Meryem", "Ayoub", "Sara"];
-
-const streets = {
-  centre: ["Rue Al Massira", "Av. Hassan II", "Rue Ibn Sina", "Av. des FAR"],
-  corniche: ["Bd de la Corniche", "Résidence Les Dunes", "Av. de la Plage", "Résidence Océan"],
-  peripherie: ["Lotissement Al Wifaq", "Hay Salam", "Quartier Al Amal", "Route de Mansouria"]
-};
-
 const iconPaths = {
   home: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v10h13V10"/><path d="M10 20v-5.5h4V20"/>',
   list: '<path d="M8 6.5h12M8 12h12M8 17.5h12"/><path d="M4 6.5h.01M4 12h.01M4 17.5h.01"/>',

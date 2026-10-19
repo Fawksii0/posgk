@@ -1,13 +1,13 @@
-const VERSION = "gk-cuisine-v1";
+const VERSION = "gk-cuisine-v4";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./data.js", "./store.js", "./escpos.js", "./app.js", "./manifest.webmanifest",
-  "./assets/emblem-reference.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png"
+  "./assets/emblem-reference.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png", "../shared/gk-api.js"
 ];
 
 self.addEventListener("install", event => {
   event.waitUntil(
     caches.open(VERSION)
-      .then(cache => cache.addAll(SHELL).then(() => cache.add("../shared/gk-bus.js").catch(() => {})))
+      .then(cache => cache.addAll(SHELL))
       .then(() => self.skipWaiting())
   );
 });
@@ -15,7 +15,7 @@ self.addEventListener("install", event => {
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key !== VERSION).map(key => caches.delete(key))))
+      .then(keys => Promise.all(keys.filter(key => key.startsWith("gk-cuisine-") && key !== VERSION).map(key => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
@@ -31,7 +31,7 @@ self.addEventListener("fetch", event => {
         if (response.ok) cache.put(request, response.clone());
         return response;
       }).catch(() => cached || Response.error());
-      // The shared bus must stay fresh: network first, cache as offline fallback.
+      // Shared scripts stay fresh: network first, cache as offline fallback.
       return shared ? network : cached || network;
     })
   );

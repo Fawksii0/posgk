@@ -1,12 +1,3 @@
-const MENU = [
-  { id: "classic", name: "Le Classique G&K", category: "Burgers", price: 55, size: "Simple" },
-  { id: "chicken", name: "Crispy Chicken", category: "Burgers", price: 48, size: "Simple" },
-  { id: "pizza", name: "Pizza G&K", category: "Plats", price: 62, size: "Moyenne 10″" },
-  { id: "fries", name: "Frites Maison", category: "Accompagnements", price: 20, size: "Moyenne" },
-  { id: "gelato", name: "Gelato Pistache", category: "Gelato", price: 28, size: "2 boules" },
-  { id: "lemonade", name: "Citronnade fraîche", category: "Boissons", price: 18, size: "33 cl" }
-];
-
 const REFUSE_REASONS = ["Rupture de stock", "Trop de commandes", "Restaurant fermé", "Adresse hors zone", "Autre"];
 
 const STATUS_LABELS = {
@@ -14,7 +5,7 @@ const STATUS_LABELS = {
   delivered: "Terminée", refused: "Refusée", cancelled: "Annulée"
 };
 
-const ZONE_NAMES = { centre: "Centre-ville", corniche: "Corniche & Plage", peripherie: "Périphérie" };
+const ZONE_NAMES = {};
 
 const iconPaths = {
   home: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v10h13V10"/><path d="M10 20v-5.5h4V20"/>',

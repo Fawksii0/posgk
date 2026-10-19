@@ -69,9 +69,6 @@ a { color: inherit; text-decoration: none; }
 .login-card h1 { font-size: 22px; font-weight: 800; letter-spacing: -.3px; text-align: center; }
 .login-card .sub { margin: 4px 0 20px; color: var(--muted); font-size: 13px; text-align: center; }
 .login-note { display: flex; gap: 8px; margin-top: 18px; padding: 11px 12px; border-radius: 12px; color: #6e5410; background: var(--gold-soft); font-size: 12px; line-height: 1.45; }
-.demo-accounts { display: grid; gap: 8px; margin-top: 14px; }
-.demo-account { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; padding: 9px 12px; border: 1px dashed var(--line); border-radius: 12px; background: #fff; font-size: 12px; text-align: left; }
-.demo-account:hover { border-color: var(--gold); }
 .alert-inline { display: flex; gap: 8px; margin-bottom: 14px; padding: 10px 12px; border-radius: 12px; color: var(--red); background: var(--red-soft); font-size: 13px; font-weight: 600; }
 
 /* ---------- Shell ---------- */
@@ -101,6 +98,8 @@ a { color: inherit; text-decoration: none; }
 .search-box input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 13px; }
 .search-box:focus-within { border-color: var(--gold); }
 .topbar-actions { display: flex; align-items: center; gap: 10px; }
+.branch-switch-wrap { display: grid; gap: 3px; color: var(--muted); font-size: 10px; font-weight: 700; }
+.branch-switch-wrap select { max-width: 190px; height: 36px; padding: 0 28px 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 700; }
 .pop-wrap { position: relative; }
 .user-chip { display: flex; align-items: center; gap: 9px; min-height: 42px; padding: 0 12px 0 5px; border: 1px solid var(--line); border-radius: 22px; background: var(--card); text-align: left; }
 .avatar { display: grid; width: 32px; height: 32px; flex: none; place-items: center; border-radius: 50%; color: #1b1405; background: var(--gold-bright); font-size: 12px; font-weight: 800; }
@@ -153,7 +152,8 @@ a { color: inherit; text-decoration: none; }
 .pill.grey { color: #6b675d; background: #eeece5; }
 .role-badge { display: inline-block; padding: 2px 9px; border-radius: 8px; color: #1b1405; background: var(--gold-bright); font-size: 10px; font-weight: 800; letter-spacing: .3px; text-transform: uppercase; }
 .role-badge.manager { background: var(--blue-soft); color: var(--blue); }
-.role-badge.caissier, .role-badge.serveur { background: #eeece5; color: #6b675d; }
+.role-badge.cashier, .role-badge.chef, .role-badge.waiter { background: #eeece5; color: #6b675d; }
+.role-badge.owner { background: #eee8ff; color: #6b4bb5; }
 
 /* ---------- Forms ---------- */
 .field { display: grid; gap: 5px; margin-bottom: 14px; }

@@ -37,6 +37,7 @@ a { color: inherit; }
 .app-header { position: sticky; z-index: 5; top: 0; display: flex; align-items: center; gap: 10px; padding: max(12px, env(safe-area-inset-top)) 20px 10px; background: rgba(246, 245, 241, .94); backdrop-filter: blur(14px); }
 .brand-logo { display: block; width: 40px; height: 40px; flex: none; border-radius: 50%; background: #0c0b09; object-fit: cover; }
 .role-pill { padding: 5px 10px; border-radius: 20px; color: #fff; background: #0c0b09; font-size: 10px; font-weight: 800; letter-spacing: .8px; }
+.branch-name { max-width: 120px; overflow: hidden; color: var(--muted); font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .header-spacer { flex: 1; }
 .icon-button { position: relative; display: grid; width: 44px; height: 44px; flex: none; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--card); font-size: 19px; cursor: pointer; }
 .icon-button .dot { position: absolute; top: 10px; right: 11px; width: 9px; height: 9px; border: 2px solid #fff; border-radius: 50%; background: var(--gold); }
@@ -78,7 +79,6 @@ a { color: inherit; }
 .pin-input { letter-spacing: 10px; text-align: center; font-size: 20px !important; font-weight: 700; }
 .form-error { min-height: 18px; color: var(--danger); font-size: 12px; font-weight: 600; }
 .admin-note { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 12px; border-radius: 12px; color: var(--gold-deep); background: var(--gold-soft); font-size: 12px; font-weight: 600; }
-.demo-hint { color: var(--muted); font-size: 11px; }
 
 /* Online toggle */
 .online-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; padding: 16px 18px; border-radius: 22px; color: var(--ink); background: var(--card); box-shadow: var(--shadow); }
@@ -107,7 +107,6 @@ a { color: inherit; }
 .mission-foot { display: flex; align-items: center; gap: 8px; padding: 4px 16px 16px; }
 .mission-foot .gold-button { flex: 1; }
 .offer-timer { min-width: 48px; text-align: center; font-variant-numeric: tabular-nums; }
-.demo-note { margin: 0 0 12px; font-size: 12px; }
 .gold-button:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
 
 /* Stepper */

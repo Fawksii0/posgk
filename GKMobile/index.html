@@ -11,7 +11,6 @@
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <meta name="description" content="Order your G&K Food favorites for pickup or delivery." />
     <title>G&K Food â€” Good food. Great moments.</title>
-    <link rel="preconnect" href="https://images.unsplash.com" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -20,9 +19,9 @@
         <button class="brand-lockup" id="home-brand" type="button" aria-label="G&K Food home">
           <img src="./assets/emblem-reference.png" alt="" class="brand-logo" />
         </button>
-        <button class="location-button" id="location-button" type="button" aria-label="Delivery location: Boulevard Mohammed V">
+        <button class="location-button" id="location-button" type="button" aria-label="Choisir une adresse de livraison">
           <small>Livraison Ã </small>
-          <strong><span class="location-icon" aria-hidden="true" data-icon="pin"></span><span id="location-label">Boulevard Mohammed V</span><span class="location-chevron" aria-hidden="true" data-icon="chevronDown"></span></strong>
+          <strong><span class="location-icon" aria-hidden="true" data-icon="pin"></span><span id="location-label">Choisir une adresse</span><span class="location-chevron" aria-hidden="true" data-icon="chevronDown"></span></strong>
         </button>
         <button class="icon-button" id="notif-button" type="button" aria-label="Notifications">
           <span aria-hidden="true" data-icon="bell"></span><i class="dot" aria-hidden="true"></i>
@@ -55,7 +54,7 @@
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="../shared/gk-bus.js" defer></script>
+    <script src="../shared/gk-api.js" defer></script>
     <script src="./data.js" defer></script>
     <script src="./store.js" defer></script>
     <script src="./app.js" defer></script>

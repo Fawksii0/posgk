@@ -1,18 +1,18 @@
-const VERSION = "gk-courier-v2";
-const BUS = "../shared/gk-bus.js";
+const VERSION = "gk-courier-v4";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./data.js", "./store.js", "./app.js", "./manifest.webmanifest",
-  "./assets/emblem-reference.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png"
+  "./assets/emblem-reference.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png",
+  "../shared/gk-api.js"
 ];
 
 self.addEventListener("install", event => {
-  event.waitUntil(caches.open(VERSION).then(cache => cache.addAll(SHELL).then(() => cache.add(BUS).catch(() => {}))).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(VERSION).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key !== VERSION).map(key => caches.delete(key))))
+      .then(keys => Promise.all(keys.filter(key => key.startsWith("gk-courier-") && key !== VERSION).map(key => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });

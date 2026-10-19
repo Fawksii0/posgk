@@ -4,11 +4,180 @@ const sheet = document.querySelector("#sheet");
 let toastTimer;
 let installPrompt = null;
 
-const RESTAURANT = { x: 17, y: 68 };
-const DESTINATION = { x: 83, y: 30 };
 const PHONE_RE = /^(\+212|0)[5-7]\d{8}$/;
-const DEMO_OTP = "1234";
-const BARE_VIEWS = ["onboarding", "auth"];
+const BARE_VIEWS = ["auth"];
+
+function normalizeProduct(item, categoryMap) {
+  const category = categoryMap.get(item.categoryId);
+  return {
+    ...item,
+    category: category?.name || "",
+    categoryName: category?.name || "",
+    price: Number(item.price) || 0,
+    sizes: Array.isArray(item.sizes) ? item.sizes.map(size => ({ ...size, delta: Number(size.delta) || 0 })) : [],
+    extras: Array.isArray(item.extras) ? item.extras.map(extra => ({ ...extra, price: Number(extra.price) || 0 })) : [],
+    image: item.image || "",
+    discount: item.discount || "",
+    available: !!item.available
+  };
+}
+
+async function loadMenu() {
+  if (!state.selectedBranchId) {
+    products = [];
+    zones = [];
+    categories = [{ id: "All", label: "Tout", icon: "sparkles" }, { id: "Favoris", label: "Favoris", icon: "heart" }];
+    state.settings = {};
+    state.menuStatus = "loaded";
+    state.menuError = "";
+    render();
+    return;
+  }
+  state.menuStatus = "loading";
+  state.menuError = "";
+  render();
+  try {
+    const [menu, zonesResponse] = await Promise.all([
+      GKApi.get("/api/menu", "client"),
+      GKApi.get("/api/zones", "client")
+    ]);
+    const categoryMap = new Map((menu.categories || []).map(category => [category.id, category]));
+    categories = [
+      { id: "All", label: "Tout", icon: "sparkles" },
+      ...(menu.categories || []).map(category => ({ id: category.id, label: category.name, icon: "utensils" })),
+      { id: "Favoris", label: "Favoris", icon: "heart" }
+    ];
+    products = (menu.items || []).filter(item => item.visible).map(item => normalizeProduct(item, categoryMap));
+    zones = zonesResponse.zones ?? menu.zones ?? [];
+    state.settings = menu.settings || {};
+    state.cart = hydrateCart(state.cart);
+    state.menuStatus = "loaded";
+    if (!categories.some(category => category.id === state.category)) state.category = "All";
+  } catch (error) {
+    state.menuStatus = "error";
+    state.menuError = error.message || "Le menu n'a pas pu être chargé.";
+  }
+  render();
+}
+
+function normalizeOrder(row) {
+  const status = row.status === "delivered" ? "completed" : row.status;
+  const stage = { pending: 0, preparing: 1, ready: 2, enroute: 3, delivered: row.mode === "delivery" ? 4 : 3 }[row.status] ?? 0;
+  const zone = zones.find(item => item.id === row.zone_id);
+  const createdAt = Number(row.created_at) || Date.parse(row.created_at) || Date.now();
+  const promisedAt = Number(row.promised_at) || Date.parse(row.promised_at) || 0;
+  const etaStart = Number(row.eta_min) || Number(zone?.etaMin) || 0;
+  const etaEnd = Number(zone?.etaMax) || etaStart;
+  const items = (row.items || []).map(item => ({
+    id: item.id,
+    name: item.name,
+    quantity: Number(item.qty) || 1,
+    image: item.image || "",
+    detail: item.size || "",
+    extras: item.extras || []
+  }));
+  return {
+    ...row,
+    status,
+    stage,
+    createdAt,
+    promisedAt,
+    etaMin: etaStart ? [etaStart, etaEnd] : [],
+    total: Number(row.total) || 0,
+    address: [row.address, row.zone_name].filter(Boolean).join(" · ") || "Retrait au restaurant",
+    refusedReason: row.refused_reason || "",
+    items
+  };
+}
+
+async function loadBranches() {
+  state.branchLoading = true;
+  state.branchError = "";
+  render();
+  try {
+    const response = await GKApi.get("/api/branches");
+    state.branches = Array.isArray(response.branches) ? response.branches.filter(branch => branch.active !== false) : [];
+    if (state.selectedBranchId && !state.branches.some(branch => branch.id === state.selectedBranchId)) {
+      GKApi.clearBranch();
+      state.selectedBranchId = "";
+    }
+    if (state.user && !state.selectedBranchId) state.view = "branches";
+  } catch (error) {
+    state.branchError = error.message || "Impossible de charger les restaurants.";
+    if (state.user && !state.selectedBranchId) state.view = "branches";
+  } finally {
+    state.branchLoading = false;
+  }
+  render();
+}
+
+function selectedBranch() {
+  return state.branches.find(branch => branch.id === state.selectedBranchId) || null;
+}
+
+async function chooseBranch(branchId) {
+  const branch = state.branches.find(item => item.id === branchId);
+  if (!branch) return showToast("Ce restaurant n'est pas disponible.");
+  if (state.selectedBranchId && state.selectedBranchId !== branchId && state.cart.length
+    && !confirm("Changer de restaurant videra votre panier. Continuer ?")) return;
+  if (state.selectedBranchId !== branchId) {
+    state.cart = [];
+    state.promo = null;
+    state.addressId = null;
+    state.cartNote = "";
+    state.trackingId = null;
+    state.orders = [];
+    state.promoError = "";
+    state.promoMessage = "";
+  }
+  state.selectedBranchId = GKApi.setBranch(branchId);
+  saveState();
+  await loadMenu();
+  const target = state.afterBranch || "home";
+  state.afterBranch = "home";
+  goTo(target);
+  if (state.user) void refreshOrders();
+}
+
+async function refreshOrders() {
+  if (!GKApi.session("client")?.token) {
+    state.orders = [];
+    state.ordersError = "";
+    state.ordersLoading = false;
+    return;
+  }
+  state.ordersLoading = true;
+  state.ordersError = "";
+  if (state.view === "orders") render();
+  try {
+    const result = await GKApi.get("/api/orders", "client");
+    state.orders = (result.orders || []).map(normalizeOrder);
+    state.ordersError = "";
+  } catch (error) {
+    state.ordersError = error.message || "Impossible de charger vos commandes.";
+    if (error.status === 401) {
+      state.user = null;
+      state.orders = [];
+    }
+  } finally {
+    state.ordersLoading = false;
+  }
+  if (state.view === "orders") render();
+}
+
+async function refreshTrackedOrder() {
+  if (!state.trackingId || !GKApi.session("client")?.token) return;
+  try {
+    const result = await GKApi.get(`/api/orders/${encodeURIComponent(state.trackingId)}`, "client");
+    const updated = normalizeOrder(result.order);
+    state.orders = state.orders.map(order => order.id === updated.id ? updated : order);
+    state.ordersError = "";
+    if (state.view === "orders") render();
+  } catch (error) {
+    state.ordersError = error.message || "Impossible de lire le suivi de cette commande.";
+    if (state.view === "orders") render();
+  }
+}
 
 function showToast(message) {
   const toast = document.querySelector("#toast");
@@ -28,22 +197,22 @@ function renderSearch(id, placeholder) {
 }
 
 function renderCategories() {
-  return `<div class="category-strip" role="group" aria-label="Catégories du menu">${categories.map(category => `<button class="category-chip ${state.category === category.id ? "active" : ""}" type="button" data-category="${category.id}" aria-pressed="${state.category === category.id}">${icon(category.icon)}${category.label}</button>`).join("")}</div>`;
+  return `<div class="category-strip" role="group" aria-label="Catégories du menu">${categories.map(category => `<button class="category-chip ${state.category === category.id ? "active" : ""}" type="button" data-category="${escapeHtml(category.id)}" aria-pressed="${state.category === category.id}">${icon(category.icon)}${escapeHtml(category.label)}</button>`).join("")}</div>`;
 }
 
 function renderProductCard(product) {
   const favorite = state.favorites.has(product.id);
-  const soldOut = isSoldOut(product.id);
+  const soldOut = !product.available;
   return `<article class="product-card ${soldOut ? "is-soldout" : ""}">
     <div class="product-media">
-      <button class="product-image-button" type="button" data-product="${product.id}" aria-label="Voir ${escapeHtml(product.name)}${soldOut ? " (épuisé)" : ""}"><img class="product-image" src="${product.image}" alt="${escapeHtml(product.name)}" loading="lazy" /></button>
-      ${soldOut ? `<span class="soldout-badge">Épuisé</span>` : product.discount ? `<span class="discount-badge">${product.discount}</span>` : ""}
-      <button class="favorite-button ${favorite ? "is-favorite" : ""}" type="button" data-favorite="${product.id}" aria-label="${favorite ? "Retirer des" : "Ajouter aux"} favoris" aria-pressed="${favorite}">${icon("heart", { filled: favorite })}</button>
+      <button class="product-image-button" type="button" data-product="${escapeHtml(product.id)}" aria-label="Voir ${escapeHtml(product.name)}${soldOut ? " (indisponible)" : ""}">${product.image ? `<img class="product-image" src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" loading="lazy" />` : `<span class="product-image-placeholder" aria-hidden="true">${icon("utensils")}</span>`}</button>
+      ${soldOut ? `<span class="soldout-badge">Épuisé</span>` : product.discount ? `<span class="discount-badge">${escapeHtml(product.discount)}</span>` : ""}
+      <button class="favorite-button ${favorite ? "is-favorite" : ""}" type="button" data-favorite="${escapeHtml(product.id)}" aria-label="${favorite ? "Retirer des" : "Ajouter aux"} favoris" aria-pressed="${favorite}">${icon("heart", { filled: favorite })}</button>
     </div>
     <div class="product-content">
-      <div class="product-title-row"><h3 class="product-title">${escapeHtml(product.name)}</h3><span class="rating">${icon("star", { filled: true })}${product.rating}</span></div>
-      <p class="product-meta">${icon("clock")}${product.time} · ${escapeHtml(product.cuisine)}</p>
-      <div class="product-footer"><span class="product-price">${formatPrice(product.price)}</span><button class="add-product" type="button" data-product="${product.id}" ${soldOut ? "disabled" : ""} aria-label="${soldOut ? `${escapeHtml(product.name)} épuisé` : `Personnaliser et ajouter ${escapeHtml(product.name)}`}">${icon("plus")}</button></div>
+      <div class="product-title-row"><h3 class="product-title">${escapeHtml(product.name)}</h3></div>
+      <p class="product-meta">${escapeHtml(product.categoryName)}</p>
+      <div class="product-footer"><span class="product-price">${formatPrice(product.price)}</span><button class="add-product" type="button" data-product="${escapeHtml(product.id)}" ${soldOut ? "disabled" : ""} aria-label="${soldOut ? `${escapeHtml(product.name)} indisponible` : `Personnaliser et ajouter ${escapeHtml(product.name)}`}">${icon("plus")}</button></div>
     </div>
   </article>`;
 }
@@ -51,37 +220,18 @@ function renderProductCard(product) {
 function filteredProducts() {
   const query = state.query.trim().toLocaleLowerCase();
   return products.filter(product =>
-    (state.category === "All" || (state.category === "Favoris" ? state.favorites.has(product.id) : product.category === state.category)) &&
+    (state.category === "All" || (state.category === "Favoris" ? state.favorites.has(product.id) : product.categoryId === state.category)) &&
     (!query || `${product.name} ${product.description} ${product.category} ${product.cuisine}`.toLocaleLowerCase().includes(query))
   );
 }
 
 function renderProductGrid(items = filteredProducts()) {
   if (items.length) return `<div class="product-grid">${items.map(renderProductCard).join("")}</div>`;
-  const message = state.category === "Favoris" ? "Aucun favori pour l'instant. Touchez le cœur d'un plat pour l'ajouter." : "Aucun plat ne correspond à votre recherche. Essayez un autre mot-clé.";
+  const message = state.category === "Favoris" ? "Aucun favori pour l'instant. Touchez le cœur d'un plat pour l'ajouter." : products.length ? "Aucun plat ne correspond à votre recherche. Essayez un autre mot-clé." : "Le menu ne contient aucun plat pour le moment.";
   return `<div class="empty-state">${message}</div>`;
 }
 
-/* ---------- Onboarding & auth ---------- */
-
-const slides = [
-  { icon: "utensils", title: "Vos plats G&K préférés", text: "Burgers, pizzas, gelato et boissons fraîches, préparés avec soin à Bouznika." },
-  { icon: "bike", title: "Livré chez vous, vite", text: "Suivez votre commande en temps réel, de la cuisine jusqu'à votre porte." },
-  { icon: "gift", title: "Gagnez des récompenses", text: "Chaque commande vous rapporte des points échangeables contre des plats offerts." }
-];
-
-function renderOnboarding() {
-  const slide = slides[state.slide];
-  const last = state.slide === slides.length - 1;
-  return `<section class="onboarding" aria-label="Bienvenue">
-    <div class="onboarding-top"><img class="onboarding-logo" src="./assets/emblem-reference.png" alt="G&K Food" />${last ? "" : `<button class="text-button" type="button" data-action="skip-onboarding">Passer</button>`}</div>
-    <div class="onboarding-art" aria-hidden="true">${icon(slide.icon)}</div>
-    <h1>${slide.title}</h1>
-    <p>${slide.text}</p>
-    <div class="onboarding-dots" aria-hidden="true">${slides.map((_, index) => `<span class="${index === state.slide ? "active" : ""}"></span>`).join("")}</div>
-    <button class="gold-button full-width" type="button" data-action="${last ? "skip-onboarding" : "next-slide"}">${last ? "Commencer" : "Suivant"}</button>
-  </section>`;
-}
+/* ---------- Authentication ---------- */
 
 function renderAuth() {
   const login = state.authMode === "login";
@@ -90,20 +240,21 @@ function renderAuth() {
     return `<section class="auth" aria-labelledby="auth-heading">
       <button class="icon-button" type="button" data-action="auth-back" aria-label="Retour">${icon("chevronLeft")}</button>
       <h1 id="auth-heading">Code de vérification</h1>
-      <p class="auth-lead">Saisissez le code envoyé au ${escapeHtml(state.pendingUser.phone)}.<br /><small>Démo : utilisez ${DEMO_OTP}.</small></p>
+      <p class="auth-lead">Saisissez le code à six chiffres envoyé au ${escapeHtml(state.pendingUser.phone)}.</p>
       <form id="otp-form" novalidate>
-        <label class="field"><span>Code à 4 chiffres</span><input id="otp-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="••••" /></label>
+        <label class="field"><span>Code à 6 chiffres</span><input id="otp-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="••••••" required /></label>
         <p class="form-error" role="alert"></p>
         <button class="gold-button full-width" type="submit">Valider</button>
       </form>
+      <p class="fineprint">Le code est envoyé par SMS lorsque le service SMS du serveur est configuré.</p>
     </section>`;
   }
   return `<section class="auth" aria-labelledby="auth-heading">
     <div class="onboarding-top"><img class="onboarding-logo" src="./assets/emblem-reference.png" alt="G&K Food" /></div>
     <h1 id="auth-heading">${login ? "Bon retour !" : "Créer un compte"}</h1>
-    <p class="auth-lead">${back ? "Connectez-vous pour finaliser votre commande." : "Connectez-vous pour retrouver vos commandes et vos points."}</p>
+    <p class="auth-lead">${back ? "Connectez-vous pour finaliser votre commande." : "Connectez-vous pour consulter vos commandes."}</p>
     <form id="auth-form" novalidate>
-      ${login ? "" : `<label class="field"><span>Nom complet</span><input name="name" autocomplete="name" placeholder="Ex. Salma El Idrissi" /></label>`}
+      ${login ? "" : `<label class="field"><span>Nom complet</span><input name="name" autocomplete="name" placeholder="Votre nom complet" /></label>`}
       <label class="field"><span>Téléphone</span><input name="phone" type="tel" autocomplete="tel" placeholder="06 12 34 56 78" /></label>
       <p class="form-error" role="alert"></p>
       <button class="gold-button full-width" type="submit">${login ? "Recevoir mon code" : "S'inscrire"}</button>
@@ -113,20 +264,54 @@ function renderAuth() {
   </section>`;
 }
 
+function renderBranches() {
+  const branchCards = state.branches.map(branch => `
+    <button class="branch-card" type="button" data-branch="${escapeHtml(branch.id)}">
+      <span class="branch-card-icon">${icon("store")}</span>
+      <span class="branch-card-copy">
+        <strong>${escapeHtml(branch.name)}</strong>
+        <span>${escapeHtml(branch.cuisine || "")}</span>
+        ${branch.address ? `<small>${escapeHtml(branch.address)}</small>` : ""}
+      </span>
+      <span class="branch-card-arrow" aria-hidden="true">${icon("chevronRight")}</span>
+    </button>`).join("");
+  return `<section class="branch-picker" aria-labelledby="branch-heading">
+    <span class="eyebrow">G&amp;K · Choisissez votre restaurant</span>
+    <h1 class="screen-title" id="branch-heading">Où souhaitez-vous commander ?</h1>
+    <p class="auth-lead">Chaque restaurant possède son propre menu et sa zone de livraison.</p>
+    ${state.branchLoading ? `<p class="empty-state">Chargement des restaurants…</p>` : ""}
+    ${state.branchError ? `<p class="cart-notice" role="alert">${escapeHtml(state.branchError)}</p><button class="outline-button" type="button" data-action="reload-branches">Réessayer</button>` : ""}
+    ${!state.branchLoading && !state.branchError && !branchCards ? `<p class="empty-state">Aucun restaurant n'est disponible pour le moment.</p>` : ""}
+    <div class="branch-list">${branchCards}</div>
+    <p class="fineprint">${state.user ? `Connecté en tant que ${escapeHtml(state.user.name)}.` : "Connectez-vous pour choisir votre restaurant."}</p>
+  </section>`;
+}
+
 /* ---------- Home / menu ---------- */
 
 function renderHome() {
+  if (!state.selectedBranchId) {
+    if (state.user) return renderBranches();
+    return `<section class="branch-welcome" aria-labelledby="welcome-heading">
+      <span class="eyebrow">G&amp;K Food</span>
+      <h1 class="screen-title" id="welcome-heading">Deux restaurants, un seul compte.</h1>
+      <p class="auth-lead">Connectez-vous pour choisir entre notre cuisine principale et G&amp;K Shawarma &amp; Crispy.</p>
+      <button class="gold-button full-width" type="button" data-action="login">Se connecter pour choisir</button>
+    </section>`;
+  }
+  if (state.menuStatus === "loading") return `<section><h1 class="screen-title">Accueil</h1><p class="empty-state">Chargement du menu…</p></section>`;
+  if (state.menuStatus === "error") return `<section><h1 class="screen-title">Accueil</h1><p class="cart-notice" role="alert">${escapeHtml(state.menuError)}</p><button class="gold-button" type="button" data-action="reload-menu">Réessayer</button></section>`;
+  const branch = selectedBranch();
   return `<section aria-label="Accueil">
+    <button class="branch-switcher" type="button" data-action="choose-branch">
+      <span class="branch-switcher-icon">${icon("store")}</span>
+      <span><small>Vous commandez chez</small><strong>${escapeHtml(branch?.name || "G&K")}</strong></span>
+      <span class="branch-switcher-change">Changer</span>
+    </button>
     ${renderSearch("home-search", "Rechercher un plat, une envie…")}
-    ${sectionHead("Offres exclusives", seeAll)}
-    <article class="offer-banner">
-      <div class="offer-copy"><span class="offer-tag">${icon("tag")}Offre de la semaine</span><h2>Le Classique G&K<br />jusqu'à <b>-20%</b></h2><button class="dark-button" type="button" data-product="classic">Commander</button></div>
-      <img class="offer-image" src="${img("photo-1568901346375-23c9450c58cd", 600)}" alt="" />
-      <div class="hero-dots" aria-hidden="true"><span class="hero-dot active"></span><span class="hero-dot"></span><span class="hero-dot"></span></div>
-    </article>
     ${sectionHead("Explorer les catégories", seeAll)}
     ${renderCategories()}
-    ${sectionHead(state.query ? "Résultats" : "Plats populaires", seeAll)}
+    ${sectionHead(state.query ? "Résultats" : "Menu", seeAll)}
     ${renderProductGrid(filteredProducts().slice(0, 4))}
     ${sectionHead("Notre maison")}
     ${renderRestaurantCard()}
@@ -134,11 +319,13 @@ function renderHome() {
 }
 
 function renderMenu() {
+  if (state.menuStatus === "loading") return `<section><h1 class="screen-title">Explorer</h1><p class="empty-state">Chargement du menu…</p></section>`;
+  if (state.menuStatus === "error") return `<section><h1 class="screen-title">Explorer</h1><p class="cart-notice" role="alert">${escapeHtml(state.menuError)}</p><button class="gold-button" type="button" data-action="reload-menu">Réessayer</button></section>`;
   return `<section aria-labelledby="menu-heading">
     <h1 class="screen-title" id="menu-heading">Explorer</h1>
     ${renderSearch("menu-search", "Rechercher un plat…")}
     ${renderCategories()}
-    ${sectionHead(`${state.category === "All" ? "Tout le menu" : categories.find(c => c.id === state.category).label} <small>${filteredProducts().length} plats</small>`)}
+    ${sectionHead(`${state.category === "All" ? "Tout le menu" : escapeHtml(categories.find(c => c.id === state.category)?.label || "")} <small>${filteredProducts().length} plats</small>`)}
     ${renderProductGrid()}
     ${sectionHead("Trouvez-nous")}
     ${renderRestaurantCard()}
@@ -146,12 +333,15 @@ function renderMenu() {
 }
 
 function renderRestaurantCard() {
+  const restaurant = state.settings.restaurant;
+  const name = typeof restaurant === "string" ? restaurant : restaurant?.name;
+  const hours = typeof state.settings.hours === "string" ? state.settings.hours : "";
   return `<article class="restaurant-card">
-    <div class="mini-map" role="img" aria-label="Carte : G&K Food, Bouznika"><span class="map-pin restaurant">${icon("store")}</span><span class="map-pin destination">${icon("pin")}</span></div>
+    <div class="mini-map" role="img" aria-label="Restaurant G&K"><span class="map-pin restaurant">${icon("store")}</span></div>
     <div class="restaurant-info">
       <div class="restaurant-logo"><img src="./assets/emblem-reference.png" alt="" /></div>
-      <div class="restaurant-text"><h3 class="restaurant-name">G&K Food</h3><p class="restaurant-description">Snack · Restaurant · Gelato · Bouznika</p>
-        <div class="restaurant-facts"><span class="restaurant-facts-rating">${icon("star", { filled: true })}<strong>4.9</strong> (350+)</span><span>${icon("clock")}25–35 min</span><span>${icon("bike")}Livraison dès 10 MAD</span></div></div>
+      <div class="restaurant-text"><h3 class="restaurant-name">${escapeHtml(name || "G&K Food")}</h3><p class="restaurant-description">${escapeHtml(typeof restaurant === "object" ? restaurant.address || "" : "")}</p>
+        <div class="restaurant-facts">${hours ? `<span>${icon("clock")}${escapeHtml(hours)}</span>` : ""}<span>${icon("bike")}${state.settings.deliveryOn ? "Livraison disponible" : "Livraison indisponible"}</span></div></div>
       <button class="round-button" type="button" data-action="directions" aria-label="Itinéraire vers G&K Food">${icon("navigate")}</button>
     </div>
   </article>`;
@@ -160,16 +350,21 @@ function renderRestaurantCard() {
 /* ---------- Cart ---------- */
 
 function renderCart() {
+  if (state.menuStatus === "loading") return `<section><h1 class="screen-title">Mon panier</h1><p class="empty-state">Chargement du menu…</p></section>`;
+  if (state.menuStatus === "error") return `<section><h1 class="screen-title">Mon panier</h1><p class="cart-notice" role="alert">${escapeHtml(state.menuError)}</p><button class="gold-button" type="button" data-action="reload-menu">Réessayer</button></section>`;
   if (!state.cart.length) {
     return `<section class="cart-empty"><div class="empty-basket-icon" aria-hidden="true">${icon("bag")}</div><h1>Votre panier est vide</h1><p>Ajoutez quelques bons plats et votre prochaine pause G&K commence ici.</p><button class="gold-button" type="button" data-view="menu">Explorer le menu</button></section>`;
   }
+  if (state.settings.deliveryOn === false) return "La livraison est indisponible pour le moment.";
   const address = currentAddress();
   const zone = zoneOf(address);
   const issue = checkoutIssue();
   const subtotal = cartSubtotal();
-  const freeHint = state.delivery === "delivery" && address && subtotal < FREE_DELIVERY
-    ? `Plus que ${formatPrice(FREE_DELIVERY - subtotal)} pour la livraison offerte.` : "";
-  const eta = state.delivery === "delivery" ? zone.etaMin : [20, 30];
+  const freeFrom = zone ? Number(zone.freeFrom ?? freeDeliveryFrom()) : freeDeliveryFrom();
+  const freeHint = state.delivery === "delivery" && address && subtotal < freeFrom
+    ? `Plus que ${formatPrice(freeFrom - subtotal)} pour la livraison offerte.` : "";
+  const eta = state.delivery === "delivery" && zone ? [zone.etaMin, zone.etaMax] : null;
+  const feeLabel = state.delivery !== "delivery" ? "Gratuit" : !address || !zone ? "À calculer" : deliveryFee() ? formatPrice(deliveryFee()) : "Offerte";
   const payment = currentPayment();
   return `<section aria-labelledby="cart-heading">
     <h1 class="screen-title" id="cart-heading">Mon panier</h1>
@@ -184,24 +379,27 @@ function renderCart() {
     </article>`).join("")}</div>
     <h2 class="block-title">Type de commande</h2>
     <div class="delivery-toggle" role="group" aria-label="Type de commande">
-      <button class="delivery-choice ${state.delivery === "delivery" ? "active" : ""}" type="button" data-delivery="delivery" aria-pressed="${state.delivery === "delivery"}">${icon("bike")}Livraison<small>${zone.etaMin[0]}–${zone.etaMin[1]} min</small></button>
-      <button class="delivery-choice ${state.delivery === "pickup" ? "active" : ""}" type="button" data-delivery="pickup" aria-pressed="${state.delivery === "pickup"}">${icon("store")}À emporter<small>20–30 min</small></button>
+      <button class="delivery-choice ${state.delivery === "delivery" ? "active" : ""}" type="button" data-delivery="delivery" aria-pressed="${state.delivery === "delivery"}" ${state.settings.deliveryOn === false ? "disabled" : ""}>${icon("bike")}Livraison<small>${zone ? `${zone.etaMin}–${zone.etaMax} min` : "Choisir une adresse"}</small></button>
+      <button class="delivery-choice ${state.delivery === "pickup" ? "active" : ""}" type="button" data-delivery="pickup" aria-pressed="${state.delivery === "pickup"}">${icon("store")}À emporter<small>Retrait au restaurant</small></button>
     </div>
-    <div class="address-card"><span class="address-icon">${icon("pin")}</span><div><strong>${state.delivery === "delivery" ? (address ? escapeHtml(address.street) : "Aucune adresse") : "G&K Food · Bouznika"}</strong><small>${state.delivery === "delivery" ? (address ? `${escapeHtml(address.label)} · ${zone.name}` : "Ajoutez une adresse de livraison") : "Retrait au restaurant"}</small></div>${state.delivery === "delivery" ? `<button class="text-button" type="button" data-action="addresses">${address ? "Modifier" : "Ajouter"}</button>` : ""}</div>
-    <div class="address-card"><span class="address-icon">${icon(payment.type === "cash" ? "cash" : "card")}</span><div><strong>${escapeHtml(payment.label)}</strong><small>Moyen de paiement</small></div><button class="text-button" type="button" data-action="payments">Modifier</button></div>
-    <form class="promo-box" id="promo-form"><span class="promo-icon" aria-hidden="true">${icon("tag")}</span><input class="promo-input" id="promo-code" type="text" placeholder="Code promo" aria-label="Code promo" /><button class="outline-button" type="submit">${state.promo ? `Appliqué ${icon("check")}` : "Appliquer"}</button></form>
+    <div class="address-card"><span class="address-icon">${icon("pin")}</span><div><strong>${state.delivery === "delivery" ? (address ? escapeHtml(address.street) : "Aucune adresse") : escapeHtml((typeof state.settings.restaurant === "object" && state.settings.restaurant?.name) || state.settings.restaurant || "G&K Food")}</strong><small>${state.delivery === "delivery" ? (address ? `${escapeHtml(address.label)} · ${escapeHtml(zone?.name || "")}` : "Ajoutez une adresse de livraison") : "Retrait au restaurant"}</small></div>${state.delivery === "delivery" ? `<button class="text-button" type="button" data-action="addresses">${address ? "Modifier" : "Ajouter"}</button>` : ""}</div>
+    <div class="address-card"><span class="address-icon">${icon("cash")}</span><div><strong>${escapeHtml(payment.label)}</strong><small>Le paiement par carte n'est pas disponible. Aucun numéro de carte n'est collecté.</small></div></div>
+    <form class="promo-box" id="promo-form"><span class="promo-icon" aria-hidden="true">${icon("tag")}</span><input class="promo-input" id="promo-code" type="text" placeholder="Code promo" aria-label="Code promo" ${state.promo ? `value="${escapeHtml(state.promo.code)}"` : ""} /><button class="outline-button" type="submit">${state.promo ? `Appliqué ${icon("check")}` : "Appliquer"}</button></form>
+    ${state.promoError ? `<p class="form-error" role="alert">${escapeHtml(state.promoError)}</p>` : ""}
+    ${state.promoMessage ? `<p class="cart-notice soft">${escapeHtml(state.promoMessage)}</p>` : ""}
+    ${state.orderError ? `<p class="cart-notice" role="alert">${escapeHtml(state.orderError)}</p>` : ""}
     <label class="note-box"><span>Note pour la cuisine <small>· optionnel</small></span><textarea id="cart-note" rows="2" maxlength="140" placeholder="Ex. sans oignons, bien cuit…">${escapeHtml(state.cartNote || "")}</textarea></label>
-    <div class="bill-card"><div class="bill-row"><span>Sous-total</span><span>${formatPrice(subtotal)}</span></div><div class="bill-row"><span>Frais de ${state.delivery === "delivery" ? "livraison" : "préparation"}</span><span>${state.delivery === "delivery" ? (deliveryFee() ? formatPrice(deliveryFee()) : "Offerte") : "Gratuit"}</span></div>${state.promo ? `<div class="bill-row promo"><span>Bienvenue chez G&K</span><span>-10 MAD</span></div>` : ""}<div class="bill-row total"><span>Total</span><strong>${formatPrice(cartTotal())}</strong></div></div>
+    <div class="bill-card"><div class="bill-row"><span>Sous-total</span><span>${formatPrice(subtotal)}</span></div><div class="bill-row"><span>Frais de ${state.delivery === "delivery" ? "livraison" : "préparation"}</span><span>${feeLabel}</span></div>${state.promo ? `<div class="bill-row promo"><span>${escapeHtml(state.promo.code)}</span><span>-${formatPrice(state.promo.discount)}</span></div>` : ""}<div class="bill-row total"><span>Total</span><strong>${formatPrice(cartTotal())}</strong></div></div>
     ${issue ? `<p class="cart-notice">${escapeHtml(issue)}</p>` : freeHint ? `<p class="cart-notice soft">${freeHint}</p>` : ""}
-    <button class="gold-button full-width" type="button" data-action="checkout">${state.user ? "Passer la commande" : "Se connecter pour commander"} · ${formatPrice(cartTotal())}</button>
-    <p class="fineprint">Préparation estimée ${eta[0]}–${eta[1]} min</p>
+    <button class="gold-button full-width" type="button" data-action="checkout" ${state.orderSubmitting ? "disabled" : ""}>${state.orderSubmitting ? "Envoi en cours…" : state.user ? "Passer la commande" : "Se connecter pour commander"} · ${formatPrice(cartTotal())}</button>
+    ${eta ? `<p class="fineprint">Délai de livraison estimé : ${eta[0]}–${eta[1]} min</p>` : ""}
   </section>`;
 }
 
 /* ---------- Orders & tracking ---------- */
 
 function orderSummary(order) {
-  return order.items.map(item => `${item.quantity}× ${item.name}`).join(", ");
+  return order.items.map(item => `${item.quantity}× ${item.name}`).join(", ") || "Commande";
 }
 
 function renderOrderCard(order) {
@@ -211,71 +409,50 @@ function renderOrderCard(order) {
     : order.status === "refused" ? `<p class="order-stage">Motif : ${escapeHtml(order.refusedReason || "non précisé")}</p>` : "";
   let actions;
   if (order.status === "active") {
-    const cancellable = order.bus ? order.busStatus === "pending" : order.stage <= 1;
-    actions = `${cancellable ? `<button class="outline-button" type="button" data-cancel-order="${order.id}">Annuler</button>` : ""}<button class="gold-button" type="button" data-track-order="${order.id}">Suivre ${icon("navigate")}</button>`;
+    const cancellable = order.status === "active" && order.stage === 0;
+    actions = `${cancellable ? `<button class="outline-button" type="button" data-cancel-order="${escapeHtml(order.id)}">Annuler</button>` : ""}<button class="gold-button" type="button" data-track-order="${escapeHtml(order.id)}">Suivre ${icon("navigate")}</button>`;
   } else {
-    actions = `<button class="gold-button" type="button" data-reorder="${order.id}">Recommander</button>`;
+    actions = "";
   }
   return `<article class="order-card">
-    <div class="order-card-head"><span>Commande #${order.id}</span><span class="status-pill ${order.status}">${label}</span></div>
-    <div class="order-card-body"><img src="${first.image}" alt="" /><div><h3>${escapeHtml(orderSummary(order))}</h3><p>${formatDate(order.createdAt)} · ${order.mode === "delivery" ? "Livraison" : "À emporter"}</p>${stage}<strong>${formatPrice(order.total)}</strong></div></div>
+    <div class="order-card-head"><span>Commande #${escapeHtml(order.id)}</span><span class="status-pill ${order.status}">${label}</span></div>
+    <div class="order-card-body">${first?.image ? `<img src="${escapeHtml(first.image)}" alt="" />` : ""}<div><h3>${escapeHtml(orderSummary(order))}</h3><p>${formatDate(order.createdAt)} · ${order.mode === "delivery" ? "Livraison" : "À emporter"}</p>${stage}<strong>${formatPrice(order.total)}</strong></div></div>
     <div class="order-actions">${actions}</div>
   </article>`;
-}
-
-function courierPoint(order) {
-  const progress = courierProgress(order);
-  return { x: RESTAURANT.x + (DESTINATION.x - RESTAURANT.x) * progress, y: RESTAURANT.y + (DESTINATION.y - RESTAURANT.y) * progress };
 }
 
 function trackingEta(order) {
   if (order.status === "completed") return "Terminée";
   if (order.status === "refused") return "Refusée";
   if (order.status === "cancelled") return "Annulée";
-  if (order.bus && order.promisedAt) {
-    const arrival = order.promisedAt + (order.mode === "delivery" ? (order.travelMin || 10) * 60000 : 0);
-    return `${hhmm(arrival)} – ${hhmm(arrival + 5 * 60000)}`;
-  }
-  return `${hhmm(order.createdAt + order.etaMin[0] * 60000)} – ${hhmm(order.createdAt + order.etaMin[1] * 60000)}`;
+  if (order.promisedAt) return hhmm(order.promisedAt);
+  if (order.etaMin.length) return `${hhmm(order.createdAt + order.etaMin[0] * 60000)} – ${hhmm(order.createdAt + order.etaMin[1] * 60000)}`;
+  return "En cours";
 }
 
 function renderTracking(order) {
   const steps = stagesFor(order);
-  const delivery = order.mode === "delivery";
   const done = order.status === "completed";
   const ended = order.status === "refused" || order.status === "cancelled";
-  const courier = courierPoint(order);
   const etaText = trackingEta(order);
-  const pinVisible = delivery && (order.bus ? order.stage >= 3 : order.stage >= 2);
-  const courierVisible = order.bus ? !!order.courier : delivery && order.stage >= 1;
-  const courierName = order.bus && order.courier ? order.courier.name : "Youssef";
-  const courierPhone = order.bus && order.courier ? order.courier.phone : "+212600000000";
-  const prepNote = order.bus && order.status === "active" && order.prepMin ? `<p class="fineprint">Préparation estimée par la cuisine : ${order.prepMin} min.</p>` : "";
-  const fine = order.status !== "active" ? "" : order.bus ? "" : `<p class="fineprint">${window.GKBus && GKBus.linked ? "Aucune cuisine connectée : " : "Mode démo hors liaison : "}démo accélérée, une étape toutes les ${STAGE_MS / 1000} secondes.</p>`;
   return `<section aria-labelledby="tracking-heading">
     <div class="back-row"><button class="icon-button" type="button" data-back-orders aria-label="Retour aux commandes">${icon("chevronLeft")}</button><h1 class="screen-title" id="tracking-heading">Suivi de commande</h1></div>
-    <div class="tracking-map" role="img" aria-label="Carte illustrative de votre trajet">
-      <svg class="route" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><line x1="${RESTAURANT.x}" y1="${RESTAURANT.y}" x2="${DESTINATION.x}" y2="${DESTINATION.y}" /></svg>
-      <span class="map-pin restaurant" style="left:${RESTAURANT.x}%;top:${RESTAURANT.y}%">${icon("store")}</span>
-      ${delivery ? `<span class="map-pin destination" style="left:${DESTINATION.x}%;top:${DESTINATION.y}%">${icon("pin")}</span>` : ""}
-      ${pinVisible ? `<span class="map-pin courier" id="courier-pin" style="left:${courier.x}%;top:${courier.y}%">${icon("bike")}</span>` : ""}
-      <span class="map-label">${escapeHtml(delivery ? order.address : "G&K Food · Bouznika")}</span>
-    </div>
+    ${state.ordersError ? `<p class="cart-notice" role="alert">${escapeHtml(state.ordersError)}</p>` : ""}
     <article class="tracking-card">
-      <div class="eta-row"><div><small>${done || ended ? "Statut" : "Arrivée estimée"}</small><strong>${etaText}</strong></div><span class="status-pill ${order.status}">Commande #${order.id}</span></div>
+      <div class="eta-row"><div><small>${done || ended ? "Statut" : "Estimation du restaurant"}</small><strong>${etaText}</strong></div><span class="status-pill ${order.status}">Commande #${escapeHtml(order.id)}</span></div>
       ${order.status === "refused" ? `<p class="cart-notice">Commande refusée par la cuisine. Motif : ${escapeHtml(order.refusedReason || "non précisé")}.</p>` : ""}
-      ${courierVisible ? `<div class="courier-card"><span class="courier-avatar">${escapeHtml(courierName[0])}</span><span class="courier-copy"><strong>${escapeHtml(courierName.split(" ")[0])}</strong><small>Votre livreur · ${icon("star", { filled: true })}4.9</small></span><button class="round-button" type="button" data-action="chat" aria-label="Écrire au livreur">${icon("chat")}</button><a class="round-button filled" href="tel:${escapeHtml(courierPhone)}" aria-label="Appeler le livreur">${icon("phone")}</a></div>` : ""}
       ${ended ? "" : `<ol class="step-list">${steps.map((step, index) => {
         const status = index < order.stage || (done && index === steps.length - 1) ? "done" : index === order.stage ? "current" : "";
         return `<li class="step-item ${status}"><span class="step-dot">${icon(step.icon)}</span><span class="step-copy"><strong>${step.title}</strong><small>${step.detail}</small></span></li>`;
       }).join("")}</ol>`}
-      ${order.bus && order.status === "active" && order.busStatus === "pending" ? `<button class="outline-button full-width" type="button" data-cancel-order="${order.id}">Annuler la commande</button>` : ""}
-      ${prepNote}${fine}
+      ${order.status === "active" && order.stage === 0 ? `<button class="outline-button full-width" type="button" data-cancel-order="${escapeHtml(order.id)}">Annuler la commande</button>` : ""}
+      ${order.status === "active" ? `<p class="fineprint">Le suivi reflète les statuts transmis par le restaurant. La position GPS du livreur n'est pas disponible.</p>` : ""}
     </article>
   </section>`;
 }
 
 function renderOrders() {
+  if (!state.user) return `<section aria-labelledby="orders-heading"><h1 class="screen-title" id="orders-heading">Mes commandes</h1><div class="cart-empty"><div class="empty-basket-icon" aria-hidden="true">${icon("receipt")}</div><h2>Connectez-vous pour consulter vos commandes.</h2><button class="gold-button" type="button" data-action="login">Se connecter</button></div></section>`;
   if (state.trackingId) {
     const tracked = state.orders.find(order => order.id === state.trackingId);
     if (tracked) return renderTracking(tracked);
@@ -285,26 +462,26 @@ function renderOrders() {
   const list = state.orders.filter(order => order.status === state.ordersTab || (state.ordersTab === "cancelled" && order.status === "refused"));
   const empty = state.ordersTab === "active" ? "Aucune commande en cours pour l'instant." : "Rien à afficher ici.";
   return `<section aria-labelledby="orders-heading"><h1 class="screen-title" id="orders-heading">Mes commandes</h1>
+    ${state.ordersError ? `<p class="cart-notice" role="alert">${escapeHtml(state.ordersError)}</p><button class="outline-button" type="button" data-action="reload-orders">Réessayer</button>` : ""}
     <div class="tabs" role="tablist">${tabs.map(([id, label]) => `<button class="tab ${state.ordersTab === id ? "active" : ""}" type="button" role="tab" aria-selected="${state.ordersTab === id}" data-orders-tab="${id}">${label}</button>`).join("")}</div>
-    ${list.length ? list.map(renderOrderCard).join("") : `<div class="cart-empty"><div class="empty-basket-icon" aria-hidden="true">${icon("receipt")}</div><h2>${empty}</h2><button class="gold-button" type="button" data-view="menu">Trouver mon prochain favori</button></div>`}
+    ${state.ordersLoading ? `<p class="empty-state">Chargement de vos commandes…</p>` : list.length ? list.map(renderOrderCard).join("") : `<div class="cart-empty"><div class="empty-basket-icon" aria-hidden="true">${icon("receipt")}</div><h2>${empty}</h2><button class="gold-button" type="button" data-view="menu">Explorer le menu</button></div>`}
   </section>`;
 }
 
 /* ---------- Profile ---------- */
 
 function renderProfile() {
-  const points = loyaltyPoints();
-  const next = REWARDS.find(reward => reward.points > points);
   const items = [
     ["orders", "receipt", "Mes commandes"], ["addresses", "pin", "Mes adresses"], ["payments", "card", "Moyens de paiement"],
-    ["favorites", "heart", "Mes favoris"], ["loyalty", "gift", "Programme de fidélité"],     ["support", "help", "Aide & contact"]
-     ];
+    ["favorites", "heart", "Mes favoris"], ["support", "help", "Aide & contact"]
+  ];
   if (installPrompt) items.push(["install", "download", "Installer l'application"]);
   const user = state.user;
+  const branch = selectedBranch();
   return `<section aria-labelledby="profile-heading"><h1 class="screen-title" id="profile-heading">Mon profil</h1>
     <article class="profile-card"><div class="profile-avatar">${escapeHtml((user?.name || "G")[0].toUpperCase())}</div><div class="profile-text"><h2>${user ? escapeHtml(user.name) : "Bienvenue chez G&K"}</h2><p>${user ? escapeHtml(user.phone) : "Connectez-vous pour retrouver vos commandes et favoris."}</p></div>${user ? "" : `<button class="gold-button compact" type="button" data-action="login">Connexion</button>`}</article>
-    <article class="loyalty-card"><small>${icon("gift")}Programme fidélité</small><div class="loyalty-points">${points} <span>${next ? `/ ${next.points} points` : "points"}</span></div><div class="loyalty-progress"><span style="width:${next ? Math.min(100, Math.round(points / next.points * 100)) : 100}%"></span></div><p class="loyalty-hint">${next ? `Encore ${next.points - points} points avant « ${next.label} ».` : "Niveau maximum atteint, merci !"}</p></article>
-    <nav class="profile-menu" aria-label="Raccourcis du compte">${items.map(([action, ico, label]) => `<button class="profile-menu-button" type="button" ${action === "orders" ? 'data-view="orders"' : `data-action="${action}"`}><span>${icon(ico)}</span>${label}</button>`).join("")}${user ? `<button class="profile-menu-button" type="button" data-action="logout"><span>${icon("logout")}</span>Se déconnecter</button>` : ""}<button class="profile-menu-button subtle" type="button" data-action="reset"><span>${icon("refresh")}</span>Réinitialiser les données de démo</button></nav>
+    ${user ? `<button class="branch-switcher profile-branch-switcher" type="button" data-action="choose-branch"><span class="branch-switcher-icon">${icon("store")}</span><span><small>Restaurant sélectionné</small><strong>${escapeHtml(branch?.name || "Choisir un restaurant")}</strong></span><span class="branch-switcher-change">Changer</span></button>` : ""}
+    <nav class="profile-menu" aria-label="Raccourcis du compte">${items.map(([action, ico, label]) => `<button class="profile-menu-button" type="button" ${action === "orders" ? 'data-view="orders"' : `data-action="${action}"`}><span>${icon(ico)}</span>${label}</button>`).join("")}${user ? `<button class="profile-menu-button" type="button" data-action="logout"><span>${icon("logout")}</span>Se déconnecter</button>` : ""}<button class="profile-menu-button subtle" type="button" data-action="reset"><span>${icon("refresh")}</span>Effacer les préférences locales</button></nav>
   </section>`;
 }
 
@@ -312,7 +489,7 @@ function renderProfile() {
 
 function updateChrome() {
   const address = currentAddress();
-  document.querySelector("#location-label").textContent = address ? address.street : "Ajouter une adresse";
+  document.querySelector("#location-label").textContent = address ? address.street : "Choisir une adresse";
   document.querySelector("#location-button").setAttribute("aria-label", `Adresse de livraison : ${address ? address.street : "aucune"}`);
   const unread = state.notifications.some(note => !note.read);
   document.querySelector("#notif-button .dot").style.display = unread ? "" : "none";
@@ -322,9 +499,9 @@ function updateChrome() {
 }
 
 function render() {
-  const views = { onboarding: renderOnboarding, auth: renderAuth, home: renderHome, menu: renderMenu, cart: renderCart, orders: renderOrders, profile: renderProfile };
+  const views = { auth: renderAuth, branches: renderBranches, home: renderHome, menu: renderMenu, cart: renderCart, orders: renderOrders, profile: renderProfile };
   document.body.toggleAttribute("data-bare", BARE_VIEWS.includes(state.view));
-  const banner = isPaused() && ["home", "menu", "cart", "orders"].includes(state.view)
+  const banner = state.menuStatus === "loaded" && isPaused() && ["home", "menu", "cart", "orders"].includes(state.view)
     ? `<div class="pause-banner" role="alert">${icon("clock")}<span>${PAUSE_MESSAGE}</span></div>` : "";
   main.innerHTML = banner + views[state.view]();
   document.querySelectorAll(".nav-button").forEach(button => {
@@ -341,12 +518,23 @@ function goTo(view, { top = true } = {}) {
   if (view !== "orders") state.trackingId = null;
   state.view = view;
   render();
+  if (view === "orders") void refreshOrders();
   main.focus({ preventScroll: true });
   if (top) window.scrollTo({ top: 0 });
 }
 
 function setView(view) {
   if (!["home", "menu", "cart", "orders", "profile"].includes(view)) return;
+  if (["menu", "cart", "orders"].includes(view) && !state.selectedBranchId) {
+    if (!state.user) {
+      state.afterAuth = view;
+      state.authMode = "login";
+      state.authStep = "form";
+      return goTo("auth");
+    }
+    state.afterBranch = view;
+    return goTo("branches");
+  }
   goTo(view);
 }
 
@@ -361,18 +549,15 @@ function renderSheet() {
   const { product, size, extras, quantity } = state.detail;
   const favorite = state.favorites.has(product.id);
   sheet.innerHTML = `<div class="sheet-scroll">
-    <div class="sheet-hero"><img class="sheet-image" src="${product.image}" alt="${escapeHtml(product.name)}" />
+    <div class="sheet-hero">${product.image ? `<img class="sheet-image" src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" />` : `<div class="sheet-image product-image-placeholder" aria-hidden="true">${icon("utensils")}</div>`}
       <button class="sheet-close" type="button" data-action="close-sheet" aria-label="Fermer">${icon("chevronLeft")}</button>
       <button class="favorite-button ${favorite ? "is-favorite" : ""}" type="button" data-detail-favorite aria-label="${favorite ? "Retirer des" : "Ajouter aux"} favoris" aria-pressed="${favorite}">${icon("heart", { filled: favorite })}</button></div>
     <div class="sheet-body">
-      <div class="sheet-meta">${product.discount ? `<span class="discount-badge static">${product.discount}</span>` : ""}<span class="rating">${icon("star", { filled: true })}${product.rating} <small>(${product.reviews})</small></span></div>
+      <div class="sheet-meta">${product.discount ? `<span class="discount-badge static">${escapeHtml(product.discount)}</span>` : ""}<span>${escapeHtml(product.categoryName)}</span></div>
       <h2 id="sheet-title">${escapeHtml(product.name)}</h2>
       <p class="sheet-description">${escapeHtml(product.description)}</p>
-      <div class="info-row"><div class="info-tile">${icon("clock")}<small>Préparation</small><strong>${product.time}</strong></div><div class="info-tile">${icon("utensils")}<small>Cuisine</small><strong>${escapeHtml(product.cuisine)}</strong></div></div>
-      <h3 class="block-title">Choisir la taille</h3>
-      <div class="option-row" role="group" aria-label="Taille">${product.sizes.map((option, index) => `<button class="option ${option === size ? "active" : ""}" type="button" data-size="${index}" aria-pressed="${option === size}"><strong>${escapeHtml(option.name)}</strong><small>${formatPrice(product.price + option.delta)}</small></button>`).join("")}</div>
-      <h3 class="block-title">Suppléments <small>· optionnel</small></h3>
-      <div class="chip-row wrap" role="group" aria-label="Suppléments">${product.extras.map((extra, index) => `<button class="extra-chip ${extras.has(index) ? "active" : ""}" type="button" data-extra="${index}" aria-pressed="${extras.has(index)}">${escapeHtml(extra.name)} <small>+${formatPrice(extra.price)}</small></button>`).join("")}</div>
+      ${product.sizes.length ? `<h3 class="block-title">Choisir la taille</h3><div class="option-row" role="group" aria-label="Taille">${product.sizes.map((option, index) => `<button class="option ${option === size ? "active" : ""}" type="button" data-size="${index}" aria-pressed="${option === size}"><strong>${escapeHtml(option.name)}</strong><small>${formatPrice(product.price + option.delta)}</small></button>`).join("")}</div>` : ""}
+      ${product.extras.length ? `<h3 class="block-title">Suppléments <small>· optionnel</small></h3><div class="chip-row wrap" role="group" aria-label="Suppléments">${product.extras.map((extra, index) => `<button class="extra-chip ${extras.has(index) ? "active" : ""}" type="button" data-extra="${index}" aria-pressed="${extras.has(index)}">${escapeHtml(extra.name)} <small>+${formatPrice(extra.price)}</small></button>`).join("")}</div>` : ""}
     </div></div>
     <div class="sheet-actions"><div class="quantity-control big"><button class="quantity-button" type="button" data-detail-delta="-1" aria-label="Retirer un">${icon("minus")}</button><span class="quantity-number" id="detail-quantity">${quantity}</span><button class="quantity-button primary" type="button" data-detail-delta="1" aria-label="Ajouter un">${icon("plus")}</button></div><button class="gold-button" type="button" data-action="add-to-cart">Ajouter · ${formatPrice(detailTotal())}</button></div>`;
 }
@@ -396,7 +581,7 @@ function openProduct(productId) {
   if (isSoldOut(productId)) return showToast(`${product.name} est épuisé pour le moment.`);
   state.panel = null;
   sheet.className = "sheet";
-  state.detail = { product, size: product.sizes[0], extras: new Set(), quantity: 1 };
+  state.detail = { product, size: product.sizes[0] || { name: "", delta: 0 }, extras: new Set(), quantity: 1 };
   renderSheet();
   showOverlay();
   sheet.querySelector(".sheet-close").focus();
@@ -413,7 +598,7 @@ function renderPanel() {
   let body = "";
   switch (state.panel) {
     case "addresses":
-      body = `${panelHead("Mes adresses")}<div class="panel-body">${state.addresses.length ? state.addresses.map(address => pickRow({ attr: "data-pick-address", id: address.id, active: address.id === state.addressId, icon: labelIcon(address.label), title: address.label, sub: `${address.street} · ${zones.find(zone => zone.id === address.zone).name}`, removable: true })).join("") : `<p class="empty-state">Aucune adresse enregistrée.</p>`}<button class="outline-button full-width" type="button" data-panel-go="address-new">${icon("plus")}Ajouter une adresse</button></div>`;
+      body = `${panelHead("Mes adresses")}<div class="panel-body">${state.addresses.length ? state.addresses.map(address => pickRow({ attr: "data-pick-address", id: address.id, active: address.id === state.addressId, icon: labelIcon(address.label), title: address.label, sub: `${address.street} · ${zones.find(zone => zone.id === address.zone)?.name || "Zone inconnue"}`, removable: true })).join("") : `<p class="empty-state">Aucune adresse enregistrée.</p>`}${zones.length ? `<button class="outline-button full-width" type="button" data-panel-go="address-new">${icon("plus")}Ajouter une adresse</button>` : `<p class="fineprint">Aucune zone de livraison disponible.</p>`}</div>`;
       break;
     case "address-new":
       body = `${panelHead("Nouvelle adresse")}<form class="panel-body" id="address-form" novalidate>
@@ -424,25 +609,13 @@ function renderPanel() {
         <button class="gold-button full-width" type="submit">Enregistrer</button></form>`;
       break;
     case "payments":
-      body = `${panelHead("Moyens de paiement")}<div class="panel-body">${state.payments.map(payment => pickRow({ attr: "data-pick-payment", id: payment.id, active: payment.id === state.payId, icon: payment.type === "cash" ? "cash" : "card", title: payment.label, sub: payment.type === "cash" ? "Payez à la réception" : `Expire ${payment.expiry}`, removable: payment.type !== "cash" })).join("")}<button class="outline-button full-width" type="button" data-panel-go="card-new">${icon("plus")}Ajouter une carte</button><p class="fineprint">Démo : seules la marque et les 4 derniers chiffres sont conservés.</p></div>`;
-      break;
-    case "card-new":
-      body = `${panelHead("Nouvelle carte")}<form class="panel-body" id="card-form" novalidate>
-        <label class="field"><span>Numéro de carte</span><input name="number" inputmode="numeric" autocomplete="cc-number" placeholder="4242 4242 4242 4242" /></label>
-        <div class="field-row"><label class="field"><span>Expiration</span><input name="expiry" inputmode="numeric" autocomplete="cc-exp" placeholder="MM/AA" maxlength="5" /></label><label class="field"><span>CVC</span><input name="cvc" inputmode="numeric" autocomplete="cc-csc" placeholder="123" maxlength="4" /></label></div>
-        <p class="form-error" role="alert"></p>
-        <button class="gold-button full-width" type="submit">Ajouter la carte</button></form>`;
+      body = `${panelHead("Moyen de paiement")}<div class="panel-body"><article class="note"><strong>Espèces à la réception</strong><p>Le paiement par carte n'est pas disponible pour le moment. Aucun numéro de carte n'est demandé ni enregistré.</p></article></div>`;
       break;
     case "notifications":
       body = `${panelHead("Notifications")}<div class="panel-body">${state.notifications.length ? state.notifications.map(note => `<article class="note ${note.read ? "" : "unread"}"><strong>${escapeHtml(note.title)}</strong><p>${escapeHtml(note.text)}</p><small>${formatDate(note.time)}</small></article>`).join("") : `<p class="empty-state">Aucune notification.</p>`}</div>`;
       break;
-    case "loyalty": {
-      const points = loyaltyPoints();
-      body = `${panelHead("Programme fidélité")}<div class="panel-body"><article class="loyalty-card"><small>${icon("gift")}Vos points</small><div class="loyalty-points">${points}</div><p class="loyalty-hint">1 point gagné pour chaque 10 MAD dépensés.</p></article>${REWARDS.map(reward => `<div class="reward ${points >= reward.points ? "unlocked" : ""}"><span class="pick-icon">${icon(points >= reward.points ? "check" : "gift")}</span><span class="pick-copy"><strong>${reward.label}</strong><small>${reward.points} points${points >= reward.points ? " · débloquée" : ` · encore ${reward.points - points}`}</small></span></div>`).join("")}</div>`;
-      break;
-    }
     case "support":
-      body = `${panelHead("Aide & contact")}<div class="panel-body"><a class="outline-button full-width" href="tel:+212612345678">${icon("phone")}Appeler le restaurant</a><a class="outline-button full-width" href="https://wa.me/212612345678" target="_blank" rel="noopener">${icon("chat")}WhatsApp</a><article class="note"><strong>Horaires</strong><p>Tous les jours, 11:00 – 00:00</p></article><article class="note"><strong>Une question sur une commande ?</strong><p>Indiquez le numéro de commande, par exemple #GK-2790.</p></article></div>`;
+      body = `${panelHead("Aide & contact")}<div class="panel-body"><article class="note"><strong>Contactez le restaurant</strong><p>${escapeHtml(typeof state.settings.restaurant === "object" ? state.settings.restaurant.phone || "Les coordonnées ne sont pas renseignées." : "Les coordonnées ne sont pas renseignées.")}</p></article>${state.settings.hours ? `<article class="note"><strong>Horaires</strong><p>${escapeHtml(state.settings.hours)}</p></article>` : ""}</div>`;
       break;
   }
   sheet.className = "sheet panel";
@@ -477,35 +650,13 @@ function panelClick(event) {
     render();
     return setPanel("addresses");
   }
-  if ((el = target.closest("[data-remove-payment]"))) {
-    state.payments = state.payments.filter(payment => payment.id !== el.dataset.removePayment);
-    if (!state.payments.some(payment => payment.id === state.payId)) state.payId = "cash";
-    render();
-    return setPanel("payments");
-  }
   if ((el = target.closest("[data-pick-address]"))) {
     state.addressId = el.dataset.pickAddress;
     render();
     closeOverlay();
     return showToast("Adresse de livraison mise à jour.");
   }
-  if ((el = target.closest("[data-pick-payment]"))) {
-    state.payId = el.dataset.pickPayment;
-    render();
-    closeOverlay();
-    return showToast("Moyen de paiement mis à jour.");
-  }
 }
-
-const luhn = number => {
-  let sum = 0;
-  [...number].reverse().forEach((digit, index) => {
-    let value = Number(digit);
-    if (index % 2) { value *= 2; if (value > 9) value -= 9; }
-    sum += value;
-  });
-  return sum % 10 === 0;
-};
 
 function formError(form, message) {
   form.querySelector(".form-error").textContent = message;
@@ -516,29 +667,12 @@ function submitAddress(form) {
   const street = String(data.get("street")).trim();
   if (street.length < 5) return formError(form, "Saisissez une adresse complète (5 caractères minimum).");
   const address = { id: `a${Date.now()}`, label: String(data.get("label")), street, zone: String(data.get("zone")) };
+  if (!zones.some(zone => zone.id === address.zone)) return formError(form, "Choisissez une zone de livraison valide.");
   state.addresses.push(address);
   state.addressId = address.id;
   render();
   closeOverlay();
   showToast("Adresse ajoutée.");
-}
-
-function submitCard(form) {
-  const data = new FormData(form);
-  const number = String(data.get("number")).replace(/\s/g, "");
-  if (!/^\d{13,19}$/.test(number) || !luhn(number)) return formError(form, "Numéro de carte invalide.");
-  const match = String(data.get("expiry")).match(/^(\d{2})\/(\d{2})$/);
-  const month = match ? Number(match[1]) : 0;
-  const now = new Date();
-  if (!match || month < 1 || month > 12 || new Date(2000 + Number(match[2]), month, 1) <= now) return formError(form, "Date d'expiration invalide ou dépassée.");
-  if (!/^\d{3,4}$/.test(String(data.get("cvc")))) return formError(form, "CVC invalide.");
-  const brand = number.startsWith("4") ? "Visa" : /^(5[1-5]|2[2-7])/.test(number) ? "Mastercard" : "Carte";
-  const payment = { id: `p${Date.now()}`, type: "card", label: `${brand} •••• ${number.slice(-4)}`, expiry: match[0] };
-  state.payments.push(payment);
-  state.payId = payment.id;
-  render();
-  closeOverlay();
-  showToast("Carte ajoutée.");
 }
 
 /* ---------- Cart & orders logic ---------- */
@@ -549,6 +683,8 @@ function addToCart(product, size, extras, quantity) {
   const match = state.cart.find(line => key(line) === key(candidate));
   if (match) match.quantity += quantity;
   else state.cart.push(candidate);
+  state.promo = null;
+  state.promoError = "";
 }
 
 function startCheckout() {
@@ -565,133 +701,44 @@ function startCheckout() {
 }
 
 function placeOrder() {
+  if (state.orderSubmitting) return;
+  state.orderError = "";
+  state.orderSubmitting = true;
+  render();
   const delivery = state.delivery === "delivery";
   const address = currentAddress();
-  const zone = zoneOf(address);
-  const live = busLive();
-  const order = {
-    id: `GK-${state.orderSeq++}`,
-    status: "active",
-    stage: 0,
-    nextAt: Date.now() + STAGE_MS,
-    createdAt: Date.now(),
+  const payload = {
+    items: state.cart.map(line => ({
+      id: line.product.id,
+      qty: line.quantity,
+      size: line.size.name,
+      extras: line.extras.map(extra => extra.name)
+    })),
     mode: state.delivery,
-    address: delivery ? `${address.street} · ${zone.name}` : "G&K Food · Bouznika",
-    etaMin: delivery ? zone.etaMin : [20, 30],
-    total: cartTotal(),
-    payment: currentPayment().label,
-    items: state.cart.map(line => ({ name: line.product.name, quantity: line.quantity, image: line.product.image, detail: line.size.name, extras: line.extras.map(extra => extra.name) }))
+    note: (state.cartNote || "").trim(),
+    payment: "cash"
   };
-  if (live) {
-    const note = (state.cartNote || "").trim();
-    const result = GKBus.publishOrder({
-      items: state.cart.map(line => ({ productId: line.product.id, name: line.product.name, qty: line.quantity, size: line.size.name, extras: line.extras.map(extra => extra.name), price: lineUnit(line), image: line.product.image })),
-      subtotal: cartSubtotal(), fee: deliveryFee(), total: order.total,
-      mode: state.delivery, payment: order.payment, paymentType: currentPayment().type,
-      customer: { name: state.user.name, phone: state.user.phone },
-      address: delivery ? { street: address.street, zone: address.zone, label: address.label } : { street: "Retrait au restaurant", zone: "centre", label: "Comptoir" },
-      createdAt: order.createdAt, etaMin: order.etaMin, travelMin: delivery ? Math.max(5, zone.etaMin[0] - 15) : 0, note
-    });
-    if (result.error) return showToast(result.error);
-    state.orderSeq--;
-    Object.assign(order, { id: result.order.id, bus: true, busStatus: "pending", nextAt: 0, travelMin: result.order.travelMin });
-  }
-  state.orders.unshift(order);
-  pushNotification(`Commande #${order.id}`, live ? "Commande envoyée. En attente de confirmation de la cuisine." : "Votre commande est confirmée. Nous la préparons.");
-  state.cart = [];
-  state.cartNote = "";
-  state.promo = false;
-  state.ordersTab = "active";
-  state.trackingId = order.id;
-  goTo("orders");
-  showToast(live ? "Commande envoyée à la cuisine, en attente de confirmation." : "Merci ! Votre commande G&K est confirmée.");
-}
-
-/* ---------- Kitchen link (GKBus) ---------- */
-
-const BUS_STAGE = { pending: 0, preparing: 1, ready: 2, enroute: 3 };
-let busSignature = "";
-let busDirty = false;
-
-function applyBusOrder(local, remote) {
-  const delivery = local.mode === "delivery";
-  local.busStatus = remote.status;
-  local.stage = remote.status === "delivered" ? (delivery ? 4 : 3) : BUS_STAGE[remote.status] ?? local.stage;
-  local.status = { delivered: "completed", refused: "refused", cancelled: "cancelled" }[remote.status] || "active";
-  local.prepMin = remote.prepMin;
-  local.promisedAt = remote.promisedAt;
-  local.courier = remote.courier;
-  local.refusedReason = remote.refusedReason || "";
-  local.enrouteAt = (remote.history.find(entry => entry.status === "enroute") || {}).at;
-}
-
-function syncFromBus() {
-  if (!window.GKBus || !GKBus.linked) return false;
-  const remote = GKBus.get();
-  state.orders.forEach(order => {
-    const match = order.bus && remote.orders.find(item => item.id === order.id);
-    if (match) applyBusOrder(order, match);
+  if (delivery) payload.address = { zone: address.zone, street: address.street, label: address.label };
+  if (state.promo?.code) payload.promo = state.promo.code;
+  GKApi.post("/api/orders", payload, "client").then(result => {
+    state.orderSubmitting = false;
+    const order = normalizeOrder(result.order);
+    state.orders.unshift(order);
+    state.cart = [];
+    state.cartNote = "";
+    state.promo = null;
+    state.promoError = "";
+    state.promoMessage = "";
+    state.ordersTab = "active";
+    state.trackingId = order.id;
+    goTo("orders");
+    showToast(`Commande #${order.id} envoyée au restaurant.`);
+    void refreshTrackedOrder();
+  }).catch(error => {
+    state.orderSubmitting = false;
+    state.orderError = error.message || "La commande n'a pas pu être créée.";
+    render();
   });
-  if (remote.nid < state.busNoteSeen) state.busNoteSeen = 0;
-  const mine = new Set(state.orders.filter(order => order.bus).map(order => order.id));
-  remote.notifications.client.filter(note => note.id >= state.busNoteSeen && mine.has(note.orderId) && !state.notifications.some(known => known.busId === `${note.orderId}:${note.id}`))
-    .reverse().forEach(note => {
-      pushNotification(note.title, note.text);
-      state.notifications[0].busId = `${note.orderId}:${note.id}`;
-      showToast(`${note.title} · #${note.orderId}`);
-    });
-  state.busNoteSeen = remote.nid;
-  const signature = JSON.stringify([remote.settings.paused, remote.menuAvailability, state.orders.filter(order => order.bus).map(order => [order.id, order.busStatus, order.prepMin, order.promisedAt, order.courier && order.courier.id])]);
-  if (signature === busSignature) return false;
-  busSignature = signature;
-  return true;
-}
-
-const isTyping = () => /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "");
-
-function onBusChange() {
-  if (!syncFromBus()) return;
-  saveState();
-  if (["home", "menu", "cart", "orders"].includes(state.view)) {
-    if (isTyping() && overlay.hidden) busDirty = true;
-    else render();
-  } else updateChrome();
-}
-
-function reorder(order) {
-  order.items.forEach(item => {
-    const product = products.find(candidate => candidate.name === item.name);
-    if (!product) return;
-    const size = product.sizes.find(option => option.name === item.detail) ?? product.sizes[0];
-    addToCart(product, size, product.extras.filter(extra => (item.extras || []).includes(extra.name)), item.quantity);
-  });
-  goTo("cart");
-  showToast("Articles ajoutés à votre panier.");
-}
-
-function tick() {
-  const now = Date.now();
-  let changed = false;
-  onBusChange();
-  if (busDirty && !isTyping()) { busDirty = false; render(); }
-  for (const order of state.orders) {
-    if (order.bus || order.status !== "active" || order.nextAt > now) continue;
-    const step = advanceOrder(order);
-    changed = true;
-    if (step) showToast(`#${order.id} · ${step.title}`);
-  }
-  if (changed) {
-    if (state.view === "orders") render();
-    else { updateChrome(); saveState(); }
-    return;
-  }
-  const tracked = state.view === "orders" && state.trackingId && state.orders.find(order => order.id === state.trackingId);
-  const pin = document.querySelector("#courier-pin");
-  if (tracked && pin && tracked.status === "active" && tracked.stage === (tracked.bus ? 3 : 2)) {
-    const point = courierPoint(tracked);
-    pin.style.left = `${point.x}%`;
-    pin.style.top = `${point.y}%`;
-  }
 }
 
 /* ---------- Events ---------- */
@@ -706,13 +753,14 @@ document.querySelector("#location-button").addEventListener("click", () => openP
 
 const actionMessages = {
   chat: "La messagerie avec le livreur sera bientôt disponible.",
-  directions: "Ouverture de l'itinéraire vers G&K Food…"
+  directions: "L'itinéraire n'est pas disponible dans l'application."
 };
-const panelActions = ["addresses", "payments", "loyalty", "support"];
+const panelActions = ["addresses", "payments", "support"];
 
 main.addEventListener("click", event => {
   const closest = selector => event.target.closest(selector);
   let el;
+  if ((el = closest("[data-branch]"))) { void chooseBranch(el.dataset.branch); return; }
   if ((el = closest("[data-view]"))) return setView(el.dataset.view);
   if ((el = closest("[data-category]"))) { state.category = el.dataset.category; return render(); }
   if ((el = closest("[data-favorite]"))) {
@@ -726,45 +774,48 @@ main.addEventListener("click", event => {
     const index = Number(el.dataset.cartIndex);
     state.cart[index].quantity += Number(el.dataset.delta);
     if (state.cart[index].quantity <= 0) state.cart.splice(index, 1);
+    state.promo = null;
     return render();
   }
   if ((el = closest("[data-delivery]"))) { state.delivery = el.dataset.delivery; return render(); }
   if ((el = closest("[data-orders-tab]"))) { state.ordersTab = el.dataset.ordersTab; return render(); }
-  if ((el = closest("[data-track-order]"))) { state.trackingId = el.dataset.trackOrder; render(); return window.scrollTo({ top: 0 }); }
+  if ((el = closest("[data-track-order]"))) {
+    state.trackingId = el.dataset.trackOrder;
+    render();
+    window.scrollTo({ top: 0 });
+    void refreshTrackedOrder();
+    return;
+  }
   if (closest("[data-back-orders]")) { state.trackingId = null; return render(); }
   if ((el = closest("[data-cancel-order]"))) {
-    const order = state.orders.find(item => item.id === el.dataset.cancelOrder);
-    if (order && order.bus) {
-      const error = GKBus.cancelOrder(order.id);
-      if (error) showToast(error);
-      else { showToast("Commande annulée."); pushNotification(`Commande #${order.id}`, "Votre commande a été annulée."); }
-      syncFromBus();
-      return render();
-    }
-    if (order && order.stage <= 1) {
-      order.status = "cancelled";
-      pushNotification(`Commande #${order.id}`, "Votre commande a été annulée.");
-    }
-    render();
-    return showToast("Commande annulée.");
+    const orderId = el.dataset.cancelOrder;
+    GKApi.post(`/api/orders/${encodeURIComponent(orderId)}/cancel`, { reason: "Annulation demandée par le client." }, "client")
+      .then(result => {
+        const updated = normalizeOrder(result.order);
+        state.orders = state.orders.map(order => order.id === updated.id ? updated : order);
+        pushNotification(`Commande #${updated.id}`, "Votre commande a été annulée.");
+        render();
+        showToast("Commande annulée.");
+      })
+      .catch(error => { state.ordersError = error.message || "Impossible d'annuler cette commande."; render(); });
+    return;
   }
-  if ((el = closest("[data-reorder]"))) return reorder(state.orders.find(item => item.id === el.dataset.reorder));
   if (!(el = closest("[data-action]"))) return;
   const action = el.dataset.action;
   if (panelActions.includes(action)) return openPanel(action);
   switch (action) {
     case "checkout": return startCheckout();
+    case "reload-menu": return void loadMenu();
+    case "reload-branches": return void loadBranches();
+    case "choose-branch":
+      state.afterBranch = state.view === "cart" ? "home" : state.view;
+      return goTo("branches");
+    case "reload-orders": return void refreshOrders();
     case "filters": return setView("menu");
     case "favorites":
       state.category = "Favoris";
       state.query = "";
       return goTo("menu");
-    case "next-slide": state.slide += 1; return render();
-    case "skip-onboarding":
-      state.onboarded = true;
-      state.authMode = "login";
-      state.authStep = "form";
-      return goTo("auth");
     case "login":
       state.afterAuth = "profile";
       state.authMode = "login";
@@ -775,14 +826,34 @@ main.addEventListener("click", event => {
     case "guest": {
       const target = state.afterAuth || "home";
       state.afterAuth = "home";
-      return goTo(target);
+      return goTo(target === "cart" && !state.selectedBranchId ? "home" : target);
     }
     case "logout":
-      state.user = null;
-      render();
-      return showToast("Vous êtes déconnecté.");
+      GKApi.logout("client").then(() => {
+        state.user = null;
+        GKApi.clearBranch();
+        state.selectedBranchId = "";
+        state.orders = [];
+        state.ordersError = "";
+        state.trackingId = null;
+        state.view = "home";
+        render();
+        showToast("Vous êtes déconnecté.");
+      }).catch(error => {
+        try { GKApi.clearSession("client"); } catch { /* logout reports the original revocation failure below */ }
+        try { GKApi.clearBranch(); } catch { /* the server-side logout error remains visible below */ }
+        state.user = null;
+        state.selectedBranchId = "";
+        state.orders = [];
+        state.trackingId = null;
+        state.ordersError = error.message || "La révocation a échoué ; la session locale a été effacée.";
+        state.view = "home";
+        render();
+        showToast("Session locale effacée, mais la révocation serveur a échoué.");
+      });
+      return;
     case "reset":
-      if (confirm("Effacer toutes les données de démo (commandes, adresses, panier) ?")) resetState();
+      if (confirm("Effacer les préférences locales de cette application ? Votre compte et vos commandes serveur ne seront pas supprimés.")) resetState();
       return;
     case "install":
       if (installPrompt) { installPrompt.prompt(); installPrompt = null; render(); }
@@ -790,6 +861,19 @@ main.addEventListener("click", event => {
     default:
       if (actionMessages[action]) showToast(actionMessages[action]);
   }
+});
+
+window.addEventListener("gk-api-session-expired", event => {
+  if (event.detail?.scope !== "client") return;
+  GKApi.clearBranch();
+  state.selectedBranchId = "";
+  state.user = null;
+  state.orders = [];
+  state.trackingId = null;
+  state.ordersError = "Votre session a expiré. Reconnectez-vous pour consulter vos commandes.";
+  state.view = "home";
+  render();
+  showToast("Votre session a expiré. Veuillez vous reconnecter.");
 });
 
 main.addEventListener("input", event => {
@@ -803,16 +887,22 @@ main.addEventListener("input", event => {
   input.setSelectionRange(position, position);
 });
 
-main.addEventListener("submit", event => {
+main.addEventListener("submit", async event => {
   event.preventDefault();
   const form = event.target;
   if (form.id === "promo-form") {
-    if (document.querySelector("#promo-code").value.trim().toUpperCase() === "GKBONJOUR") {
-      state.promo = true;
+    const code = document.querySelector("#promo-code").value.trim().toUpperCase();
+    if (!code) { state.promoError = "Saisissez un code promo."; return render(); }
+    state.promoError = "";
+    state.promoMessage = "";
+    try {
+      state.promo = await GKApi.post("/api/promos/validate", { code, subtotal: cartSubtotal() });
       render();
-      showToast("10 MAD de remise appliqués à votre panier.");
-    } else {
-      showToast("Code non reconnu. Essayez GKBONJOUR.");
+      showToast(`Code ${state.promo.code} appliqué.`);
+    } catch (error) {
+      state.promo = null;
+      state.promoError = error.message || "Ce code promo n'a pas pu être validé.";
+      render();
     }
   } else if (form.id === "auth-form") {
     const data = new FormData(form);
@@ -820,19 +910,50 @@ main.addEventListener("submit", event => {
     const name = String(data.get("name") ?? "").trim();
     if (state.authMode === "signup" && name.length < 2) return formError(form, "Saisissez votre nom.");
     if (!PHONE_RE.test(phone)) return formError(form, "Numéro invalide. Exemple : 06 12 34 56 78.");
-    state.pendingUser = { name: name || "Client G&K", phone };
-    state.authStep = "otp";
-    render();
-    document.querySelector("#otp-code").focus();
+    const button = form.querySelector('[type="submit"]');
+    button.disabled = true;
+    try {
+      await GKApi.post("/api/auth/client/request-code", { phone });
+      state.pendingUser = { name, phone };
+      state.authStep = "otp";
+      render();
+      document.querySelector("#otp-code").focus();
+    } catch (error) {
+      formError(form, error.message || "Impossible de demander un code de vérification.");
+    } finally {
+      if (button.isConnected) button.disabled = false;
+    }
   } else if (form.id === "otp-form") {
-    if (new FormData(form).get("code") !== DEMO_OTP) return formError(form, "Code incorrect. Essayez 1234.");
-    state.user = state.pendingUser;
-    state.pendingUser = null;
-    state.authStep = "form";
-    const target = state.afterAuth || "home";
-    state.afterAuth = "home";
-    goTo(target);
-    showToast(`Bienvenue, ${state.user.name} !`);
+    const code = String(new FormData(form).get("code") || "");
+    if (!/^\d{6}$/.test(code)) return formError(form, "Saisissez le code à six chiffres reçu par SMS.");
+    const button = form.querySelector('[type="submit"]');
+    button.disabled = true;
+    try {
+      const result = await GKApi.post("/api/auth/client/verify-code", {
+        phone: state.pendingUser.phone,
+        code,
+        ...(state.pendingUser.name ? { name: state.pendingUser.name } : {})
+      });
+      const session = GKApi.setSession("client", result);
+      state.user = session.user;
+      state.pendingUser = null;
+      state.authStep = "form";
+      const target = state.afterAuth || "home";
+      state.afterAuth = "home";
+      if (!state.selectedBranchId) {
+        state.afterBranch = target;
+        goTo("branches");
+      } else {
+        goTo(target);
+        void loadMenu();
+      }
+      showToast(`Bienvenue, ${state.user.name} !`);
+      void refreshOrders();
+    } catch (error) {
+      formError(form, error.message || "Le code est incorrect ou expiré.");
+    } finally {
+      if (button.isConnected) button.disabled = false;
+    }
   }
 });
 
@@ -866,7 +987,6 @@ overlay.addEventListener("click", event => {
 overlay.addEventListener("submit", event => {
   event.preventDefault();
   if (event.target.id === "address-form") submitAddress(event.target);
-  else if (event.target.id === "card-form") submitCard(event.target);
 });
 
 document.addEventListener("keydown", event => {
@@ -882,14 +1002,19 @@ window.addEventListener("beforeinstallprompt", event => {
 /* ---------- Boot ---------- */
 
 loadState();
-if (!state.onboarded) state.view = "onboarding";
 document.querySelectorAll("[data-icon]").forEach(slot => { slot.innerHTML = icon(slot.dataset.icon); });
-syncFromBus();
 render();
-setInterval(tick, 1000);
-if (window.GKBus) GKBus.subscribe(onBusChange);
+void loadBranches().then(() => {
+  if (state.selectedBranchId) void loadMenu();
+  if (state.user && state.selectedBranchId) void refreshOrders();
+});
+setInterval(() => {
+  if (state.view === "orders" && state.trackingId) void refreshTrackedOrder();
+  else if (state.view === "orders" && state.user) void refreshOrders();
+}, 20000);
 main.addEventListener("input", event => {
   if (event.target.id === "cart-note") { state.cartNote = event.target.value; saveState(); }
+  if (event.target.id === "promo-code") { state.promoError = ""; state.promoMessage = ""; }
 });
 
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {

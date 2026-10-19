@@ -1,69 +1,63 @@
 const STORAGE_KEY = "gk-cuisine-v1";
-const MAX_FAILS = 5;
-const LOCK_MS = 30000;
-const USERS = [
-  { email: "caissier@gk.com", password: "caisse123", role: "cashier", name: "Caissier", label: "Caissier" },
-  { email: "chef@gk.com", password: "chef123", role: "cook", name: "Chef", label: "Cuisinier" }
-];
+const API_SCOPE = "cuisine";
 
 const defaultState = () => ({
   session: null,
-  auth: { fails: 0, until: 0 },
   prefs: { sound: true, paper: 80, autoBrowserPrint: false, lastPrinter: "" }
 });
 
-let state = load();
+function sessionUser(session) {
+  const user = session?.user;
+  if (!user || !["cashier", "chef"].includes(user.role)) return null;
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    branchId: user.branchId || "",
+    branchName: user.branchName || "",
+    label: user.role === "cashier" ? "Caissier" : "Cuisinier",
+    mustChange: !!session.mustChange
+  };
+}
 
 function load() {
+  const base = defaultState();
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (saved && typeof saved === "object") {
-      const base = defaultState();
-      return { ...base, ...saved, prefs: { ...base.prefs, ...saved.prefs }, auth: { ...base.auth, ...saved.auth } };
+      base.prefs = { ...base.prefs, ...saved.prefs };
     }
-  } catch { /* corrupted storage: start clean */ }
-  return defaultState();
+  } catch { /* corrupted storage: start with defaults */ }
+  base.session = sessionUser(window.GKApi.session(API_SCOPE));
+  return base;
 }
+
+let state = load();
 
 function save() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* storage unavailable */ }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ prefs: state.prefs }));
+  } catch { /* storage unavailable */ }
 }
 
-const lockRemaining = () => Math.max(0, Math.ceil((state.auth.until - Date.now()) / 1000));
-
-function login(email, password) {
-  if (lockRemaining() > 0) return `Trop de tentatives. Réessayez dans ${lockRemaining()} s.`;
-  if (state.auth.until) state.auth = { fails: 0, until: 0 };
-  const user = USERS.find(item => item.email === String(email).trim().toLowerCase() && item.password === password);
-  if (!user) {
-    state.auth.fails++;
-    if (state.auth.fails >= MAX_FAILS) {
-      state.auth.until = Date.now() + LOCK_MS;
-      save();
-      return `Trop de tentatives. Réessayez dans ${lockRemaining()} s.`;
-    }
-    save();
-    return `Identifiants incorrects. ${MAX_FAILS - state.auth.fails} essai(s) restant(s).`;
-  }
-  state.auth = { fails: 0, until: 0 };
-  state.session = { email: user.email, name: user.name, role: user.role, label: user.label };
-  save();
-  return "";
+function setSession(result) {
+  const session = window.GKApi.setSession(API_SCOPE, result);
+  state.session = sessionUser(session);
+  return state.session;
 }
 
 function logout() {
   state.session = null;
-  save();
+  window.GKApi.clearSession(API_SCOPE);
 }
 
 const isCashier = () => state.session?.role === "cashier";
 
-/* ---------- selectors ---------- */
-
 const startOfDay = ts => { const date = new Date(ts); date.setHours(0, 0, 0, 0); return date.getTime(); };
 const isToday = ts => ts >= startOfDay(Date.now());
 const firstName = order => String(order.customer?.name || "Client").split(" ")[0];
-const money = amount => `${Math.round(amount)} MAD`;
+const money = amount => `${Math.round(Number(amount) || 0)} MAD`;
 const clock = ts => new Date(ts).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
 function minutesSince(ts) {
@@ -84,42 +78,13 @@ function columnOf(order) {
   return null;
 }
 
-function groupOrders(bus) {
+function groupOrders(orders) {
   const groups = { new: [], prep: [], ready: [], out: [] };
-  bus.orders.forEach(order => {
+  orders.forEach(order => {
     const column = columnOf(order);
     if (column) groups[column].push(order);
   });
-  // Oldest first so nothing waits behind newer tickets; finished tickets newest first.
   ["new", "prep", "ready"].forEach(key => groups[key].sort((a, b) => a.createdAt - b.createdAt));
   groups.out.sort((a, b) => b.createdAt - a.createdAt);
   return groups;
-}
-
-function orderLines(order) {
-  return order.items.map(item => ({
-    qty: item.qty, name: item.name, size: item.size || "", extras: item.extras || [],
-    total: item.price * item.qty
-  }));
-}
-
-function makeDemoOrder() {
-  const pick = list => list[Math.floor(Math.random() * list.length)];
-  const names = ["Yassine Bakkali", "Salma Idrissi", "Omar Tazi", "Imane Berrada", "Hamza Fassi"];
-  const items = [...MENU].sort(() => Math.random() - 0.5).slice(0, 1 + Math.floor(Math.random() * 3)).map(dish => ({
-    productId: dish.id, name: dish.name, qty: 1 + Math.floor(Math.random() * 2), size: dish.size, extras: dish.id === "classic" ? ["Cheddar"] : [],
-    price: dish.price, image: ""
-  }));
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
-  const delivery = Math.random() < 0.7;
-  const zone = pick(Object.keys(ZONE_NAMES));
-  const fee = delivery ? 10 : 0;
-  const cash = Math.random() < 0.6;
-  return {
-    items, subtotal, fee, total: subtotal + fee, mode: delivery ? "delivery" : "pickup",
-    payment: cash ? "Espèces à la livraison" : "Visa •••• 4242", paymentType: cash ? "cash" : "card",
-    customer: { name: pick(names), phone: `06${Math.floor(10000000 + Math.random() * 89999999)}` },
-    address: delivery ? { street: `${pick(["Av. Hassan II", "Rue Al Massira", "Bd de la Corniche"])} ${1 + Math.floor(Math.random() * 60)}`, zone, label: "Maison" } : { street: "Retrait au restaurant", zone: "centre", label: "Comptoir" },
-    etaMin: delivery ? [25, 35] : [20, 30], note: Math.random() < 0.3 ? "Sans oignons, merci" : ""
-  };
 }

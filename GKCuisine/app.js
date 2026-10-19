@@ -1,15 +1,23 @@
 (() => {
-  const bus = window.GKBus;
+  "use strict";
+
+  const api = window.GKApi;
   const app = document.getElementById("app");
   const sheetRoot = document.getElementById("sheet-root");
   const printArea = document.getElementById("print-area");
   const toastEl = document.getElementById("toast");
   const ui = { view: "board", col: "new", filter: "all", prep: {}, sheet: null, dirty: false };
+  const data = {
+    orders: [], menu: [], categories: [], couriers: [], settings: { paused: false, dispatchMode: "rotation", defaultPrep: 20 },
+    loading: false, loaded: false, error: "", actionError: ""
+  };
   const baseTitle = "G&K Cuisine";
   let audio = null;
   let knownPending = new Set();
   let renderQueued = false;
   let toastTimer = 0;
+  let refreshRunning = false;
+  let bootRefresh = true;
 
   const COLUMNS = [
     { key: "new", label: "Nouvelles", icon: "bell" },
@@ -24,10 +32,9 @@
     { key: "settings", label: "Réglages", icon: "settings" }
   ];
 
-  const busState = () => bus.get();
-  const defaultPrep = () => busState().settings.defaultPrep || 20;
-
-  /* ---------- helpers ---------- */
+  const defaultPrep = () => Number(data.settings.defaultPrep) || 20;
+  const findOrder = id => data.orders.find(order => order.id === id);
+  const statusPill = order => `<span class="pill s-${order.status}">${esc(STATUS_LABELS[order.status] || order.status)}</span>`;
 
   function toast(message) {
     toastEl.textContent = message;
@@ -36,36 +43,161 @@
     toastTimer = setTimeout(() => toastEl.classList.remove("show"), 4200);
   }
 
-  const findOrder = id => busState().orders.find(order => order.id === id);
+  function numberTime(value) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric > 0) return numeric;
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function normalizeOrder(row) {
+    const items = Array.isArray(row.items) ? row.items.map(item => {
+      const qty = Number(item.qty) || 1;
+      const unit = item.unit === undefined ? Number(item.price || 0) / qty : Number(item.unit);
+      return { qty, name: item.name || "", size: item.size || "", extras: item.extras || [], price: unit };
+    }) : [];
+    const dispatchState = row.dispatch_state === "unassigned" ? "failed" : row.dispatch_state === "offered" ? "offering" : row.dispatch_state;
+    const paymentType = row.payment === "cash" ? "cash" : "card";
+    return {
+      id: row.id,
+      status: row.status,
+      mode: row.mode,
+      items,
+      customer: { name: row.customer_name || "", phone: row.customer_phone || "" },
+      address: { street: row.address || "", zone: row.zone_name || row.zone_id || "", label: row.address_label || "" },
+      note: row.note || "",
+      subtotal: Number(row.subtotal) || 0,
+      fee: Number(row.fee) || 0,
+      discount: Number(row.discount) || 0,
+      total: Number(row.total) || 0,
+      payment: paymentType === "cash" ? "Espèces" : "Carte",
+      paymentType,
+      createdAt: numberTime(row.created_at),
+      acceptedAt: numberTime(row.accepted_at),
+      promisedAt: numberTime(row.promised_at),
+      deliveredAt: numberTime(row.delivered_at),
+      prepMin: Number(row.prep_minutes) || 20,
+      refusedReason: row.refused_reason || "",
+      courierStep: Number(row.courier_step) || 0,
+      dispatch: {
+        state: dispatchState,
+        courierId: row.offered_to || row.courier_id || "",
+        expiresAt: numberTime(row.offer_expires),
+        km: row.dispatch_km == null ? null : Number(row.dispatch_km),
+        manual: !!row.dispatch_manual
+      }
+    };
+  }
+
+  function distanceKm(lat, lng) {
+    if (lat == null || lng == null) return null;
+    const radians = value => value * Math.PI / 180;
+    const dLat = radians(Number(lat) - 33.7895);
+    const dLng = radians(Number(lng) - -7.1597);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(radians(33.7895)) * Math.cos(radians(Number(lat))) * Math.sin(dLng / 2) ** 2;
+    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
 
   function courierMap() {
     const map = {};
-    bus.courierInfo(busState()).forEach(info => { map[info.courier.id] = info; });
+    data.couriers.forEach(courier => {
+      map[courier.id] = {
+        courier: { id: courier.id, name: courier.name || "Livreur" },
+        active: courier.active !== false,
+        online: courier.active !== false && !!courier.online,
+        busy: !!courier.busy,
+        km: distanceKm(courier.lat, courier.lng)
+      };
+    });
     return map;
   }
 
-  const statusPill = order => `<span class="pill s-${order.status}">${esc(STATUS_LABELS[order.status] || order.status)}</span>`;
+  async function refreshData() {
+    if (!state.session || state.session.mustChange || refreshRunning) return;
+    refreshRunning = true;
+    if (!data.loaded) {
+      data.loading = true;
+      render();
+    }
+    try {
+      const requests = [
+        api.get("/api/orders", API_SCOPE),
+        api.get("/api/admin/settings", API_SCOPE)
+      ];
+      if (isCashier()) {
+        requests.push(api.get("/api/admin/menu", API_SCOPE));
+        requests.push(api.get("/api/admin/couriers", API_SCOPE));
+      }
+      const results = await Promise.all(requests);
+      const orders = results[0].orders || [];
+      const oldPending = knownPending;
+      data.orders = orders.map(normalizeOrder);
+      data.settings = { ...data.settings, ...results[1] };
+      if (isCashier()) {
+        data.categories = results[2].categories || [];
+        const names = new Map(data.categories.map(category => [category.id, category.name]));
+        data.menu = (results[2].items || []).filter(item => item.visible).map(item => ({
+          ...item, category: names.get(item.categoryId) || ""
+        }));
+        data.couriers = results[3].couriers || [];
+      } else {
+        data.menu = [];
+        data.couriers = [];
+      }
+      knownPending = new Set(data.orders.filter(order => order.status === "pending").map(order => order.id));
+      data.error = "";
+      data.loaded = true;
+      data.loading = false;
+      if (!bootRefresh) {
+        const fresh = [...knownPending].filter(id => !oldPending.has(id));
+        if (fresh.length) {
+          beep();
+          toast(`Nouvelle commande ${fresh.join(", ")}`);
+        }
+      }
+      bootRefresh = false;
+    } catch (error) {
+      data.loading = false;
+      data.error = error.message || "Impossible de charger les données du serveur.";
+    } finally {
+      refreshRunning = false;
+      render();
+    }
+  }
 
   /* ---------- rendering ---------- */
 
   function renderLogin() {
-    const wait = lockRemaining();
     return `<main class="login">
       <form class="login-card" data-form="login" novalidate>
         <div class="brand"><img src="assets/emblem-reference.png" alt="G&amp;K Food" width="56" height="56"><span class="pill-black">CUISINE</span></div>
         <h1>Connexion</h1>
         <p class="muted">Espace caisse et cuisine G&amp;K Food.</p>
-        <label>E-mail<input name="email" type="email" autocomplete="username" inputmode="email" required value="caissier@gk.com"></label>
+        <label>E-mail<input name="email" type="email" autocomplete="username" inputmode="email" required></label>
         <label>Mot de passe<input name="password" type="password" autocomplete="current-password" required></label>
-        <p class="form-error" role="alert" data-login-error>${wait ? `Trop de tentatives. Réessayez dans <b data-lock>${wait}</b> s.` : ""}</p>
-        <button class="btn primary block" type="submit" ${wait ? "disabled" : ""}>Se connecter</button>
-        <p class="hint">Démo — caisse : caissier@gk.com / caisse123<br>Cuisinier : chef@gk.com / chef123</p>
+        <p class="form-error" role="alert" data-login-error></p>
+        <button class="btn primary block" type="submit">Se connecter</button>
+        <p class="hint">Connectez-vous avec le compte personnel créé par un administrateur G&amp;K.</p>
+      </form>
+    </main>`;
+  }
+
+  function renderChangeSecret() {
+    return `<main class="login">
+      <form class="login-card" data-form="change-secret" novalidate>
+        <div class="brand"><img src="assets/emblem-reference.png" alt="G&amp;K Food" width="56" height="56"><span class="pill-black">CUISINE</span></div>
+        <h1>Changer le mot de passe</h1>
+        <p class="muted">Un nouveau mot de passe est requis avant d'accéder à Cuisine.</p>
+        <label>Mot de passe actuel<input name="current" type="password" autocomplete="current-password" required></label>
+        <label>Nouveau mot de passe<input name="next" type="password" autocomplete="new-password" minlength="8" required></label>
+        <p class="form-error" role="alert" data-secret-error></p>
+        <button class="btn primary block" type="submit">Enregistrer et continuer</button>
+        <button class="btn block ghost" type="button" data-action="logout">Se déconnecter</button>
       </form>
     </main>`;
   }
 
   function renderHeader() {
-    const s = busState();
     const connected = GKPrinter.connected();
     const printerChip = isCashier()
       ? `<button class="chip ${connected ? "ok" : "off"}" data-action="view" data-view="settings" aria-label="Imprimante : ${connected ? "connectée" : "déconnectée"}">${icon("printer")}<span>${connected ? `Connectée · ${esc(GKPrinter.name())}` : "Déconnectée"}</span></button>`
@@ -73,15 +205,16 @@
     return `<header class="top">
       <div class="brand"><img src="assets/emblem-reference.png" alt="G&amp;K Food" width="40" height="40"><span class="pill-black">CUISINE</span></div>
       <div class="chips">
-        <span class="chip ${s.settings.paused ? "warn" : "ok"}">${icon(s.settings.paused ? "pause" : "store")}<span>${s.settings.paused ? "Commandes en pause" : "Ouvert"}</span></span>
+        <span class="chip branch-chip">${icon("store")}<span>${esc(state.session.branchName || "Restaurant G&K")}</span></span>
+        <span class="chip ${data.settings.paused ? "warn" : "ok"}">${icon(data.settings.paused ? "pause" : "store")}<span>${data.settings.paused ? "Commandes en pause" : "Ouvert"}</span></span>
         ${printerChip}
-        <span class="chip ${bus.linked ? "ok" : "off"}" title="${bus.linked ? "Liaison Client / Cuisine / Livreur active" : "Chaque appli a son propre stockage"}">${icon("wifi")}<span>${bus.linked ? "Liaison active" : "Mode démo hors liaison"}</span></span>
+        <span class="chip ${data.error ? "off" : "ok"}" title="${data.error ? "Connexion API indisponible" : "Connecté au serveur G&K"}">${icon("wifi")}<span>${data.error ? "API hors ligne" : "API connectée"}</span></span>
       </div>
-      <div class="who"><span class="who-name">${icon("user")}<span>${esc(state.session.name === state.session.label ? state.session.name : `${state.session.name} · ${state.session.label}`)}</span></span>
+      <div class="who"><span class="who-name">${icon("user")}<span>${esc(`${state.session.name} · ${state.session.label}`)}</span></span>
         <button class="icon-btn" data-action="toggle-sound" aria-label="${state.prefs.sound ? "Couper le son" : "Activer le son"}" aria-pressed="${state.prefs.sound}">${icon(state.prefs.sound ? "volume" : "volumeOff")}</button>
         <button class="icon-btn" data-action="logout" aria-label="Se déconnecter">${icon("logout")}</button></div>
     </header>
-    <nav class="tabs" aria-label="Navigation">${VIEWS.filter(v => isCashier() || v.key !== "settings").map(v => `<button class="tab ${ui.view === v.key ? "active" : ""}" data-action="view" data-view="${v.key}" aria-current="${ui.view === v.key}">${icon(v.icon)}<span>${v.label}</span></button>`).join("")}</nav>`;
+    <nav class="tabs" aria-label="Navigation">${VIEWS.filter(v => (v.key !== "settings" && v.key !== "stock") || isCashier()).map(v => `<button class="tab ${ui.view === v.key ? "active" : ""}" data-action="view" data-view="${v.key}" aria-current="${ui.view === v.key}">${icon(v.icon)}<span>${v.label}</span></button>`).join("")}</nav>`;
   }
 
   function stepper(orderId, minutes, scope) {
@@ -94,20 +227,21 @@
 
   function dispatchBlock(order, couriers) {
     if (order.mode !== "delivery" || !["preparing", "ready", "enroute", "delivered"].includes(order.status)) return "";
-    const d = order.dispatch || {};
-    const info = d.courierId ? couriers[d.courierId] : null;
-    const courierChip = info ? `<span class="muted small">${info.online ? "En ligne" : "Hors ligne"}${info.km != null ? ` · ${info.km.toFixed(1)} km` : ""}</span>` : "";
-    if (d.state === "offering" && info) {
-      return `<div class="dispatch offering">${icon("bike")}<div><b>Offre envoyée à ${esc(info.courier.name)}</b> ${courierChip}<div class="small">Réponse sous <b data-until="${d.expiresAt}">${countdown(d.expiresAt - Date.now())}</b></div></div></div>`;
+    const dispatch = order.dispatch || {};
+    const info = dispatch.courierId ? couriers[dispatch.courierId] : null;
+    const distance = info?.km == null ? "" : ` · ${info.km.toFixed(1)} km`;
+    const courierChip = info ? `<span class="muted small">${info.online ? "En ligne" : "Hors ligne"}${distance}</span>` : "";
+    if (dispatch.state === "offering" && info) {
+      return `<div class="dispatch offering">${icon("bike")}<div><b>Offre envoyée à ${esc(info.courier.name)}</b> ${courierChip}<div class="small">Réponse sous <b data-until="${dispatch.expiresAt}">${countdown(dispatch.expiresAt - Date.now())}</b></div></div></div>`;
     }
-    if (d.state === "assigned" && info) {
+    if (dispatch.state === "assigned" && info) {
       const stepNames = ["", "Accepté", "Au restaurant", "Récupérée", "En route", "Livrée"];
-      return `<div class="dispatch assigned">${icon("bike")}<div><b>${esc(info.courier.name)}</b> ${courierChip}<div class="small">${esc(stepNames[order.courierStep] || "Assigné")}${d.manual ? " · assigné manuellement" : ""}</div></div></div>`;
+      return `<div class="dispatch assigned">${icon("bike")}<div><b>${esc(info.courier.name)}</b> ${courierChip}<div class="small">${esc(stepNames[order.courierStep] || "Assigné")}${dispatch.manual ? " · assigné manuellement" : ""}</div></div></div>`;
     }
-    if (d.state === "failed" && ["preparing", "ready"].includes(order.status)) {
-      const options = Object.values(couriers).map(c => `<option value="${esc(c.courier.id)}">${esc(c.courier.name)} — ${c.online ? "en ligne" : "hors ligne"}, ${c.km.toFixed(1)} km</option>`).join("");
-      const controls = isCashier() ? `<div class="assign-row"><select data-assign="${esc(order.id)}" aria-label="Livreur à assigner">${options}</select>
-        <button class="btn small-btn primary" data-action="assign" data-id="${esc(order.id)}">Assigner</button>
+    if (dispatch.state === "failed" && ["preparing", "ready"].includes(order.status)) {
+      const options = Object.values(couriers).filter(c => c.active).map(c => `<option value="${esc(c.courier.id)}">${esc(c.courier.name)} — ${c.online ? (c.busy ? "en mission" : "en ligne") : "hors ligne"}${c.km == null ? "" : `, ${c.km.toFixed(1)} km`}</option>`).join("");
+      const controls = isCashier() ? `<div class="assign-row"><select data-assign="${esc(order.id)}" aria-label="Livreur à assigner" ${options ? "" : "disabled"}>${options || "<option value=\"\">Aucun livreur disponible</option>"}</select>
+        <button class="btn small-btn primary" data-action="assign" data-id="${esc(order.id)}" ${options ? "" : "disabled"}>Assigner</button>
         <button class="btn small-btn" data-action="retry" data-id="${esc(order.id)}">Relancer</button></div>` : "";
       return `<div class="dispatch failed">${icon("alert")}<div><b>Aucun livreur — assigner manuellement</b>${controls}</div></div>`;
     }
@@ -119,7 +253,7 @@
     const isNew = order.status === "pending";
     const lines = order.items.map(item => `<li><span class="qty">${item.qty}×</span><span class="item-main"><b>${esc(item.name)}</b>${item.size ? ` <span class="muted">${esc(item.size)}</span>` : ""}${(item.extras || []).length ? `<span class="extras">+ ${item.extras.map(esc).join(", ")}</span>` : ""}</span><span class="price">${money(item.price * item.qty)}</span></li>`).join("");
     const draft = ui.prep[order.id] ?? defaultPrep();
-    const timing = order.promisedAt && ["preparing", "ready"].includes(order.status) ? `<div class="timing" data-late-for="${order.promisedAt}">${icon("clock")}<span>Promise ${clock(order.promisedAt)} · <b data-until="${order.promisedAt}">${countdown(order.promisedAt - Date.now())}</b></span>    </div>` : "";
+    const timing = order.promisedAt && ["preparing", "ready"].includes(order.status) ? `<div class="timing" data-late-for="${order.promisedAt}">${icon("clock")}<span>Promise ${clock(order.promisedAt)} · <b data-until="${order.promisedAt}">${countdown(order.promisedAt - Date.now())}</b></span></div>` : "";
     let actions = "";
     if (isNew) {
       actions = cashier
@@ -142,25 +276,25 @@
       <div class="card-meta"><span class="who-first">${icon("user")}${esc(firstName(order))}</span><span class="mode-chip ${order.mode}">${icon(order.mode === "delivery" ? "bike" : "store")}${order.mode === "delivery" ? "Livraison" : "À emporter"}</span></div>
       <ul class="lines">${lines}</ul>
       ${order.note ? `<p class="note">${icon("alert")}<span>${esc(order.note)}</span></p>` : ""}
-      <div class="card-total"><span class="pay">${icon(order.paymentType === "cash" ? "cash" : "card")}${esc(order.payment || "")}</span><b>${money(order.total)}</b></div>
+      <div class="card-total"><span class="pay">${icon(order.paymentType === "cash" ? "cash" : "card")}${esc(order.payment)}</span><b>${money(order.total)}</b></div>
       ${timing}${dispatchBlock(order, couriers)}${actions}
     </article>`;
   }
 
   function renderBoard() {
-    const groups = groupOrders(busState());
+    const groups = groupOrders(data.orders);
     const couriers = courierMap();
-    const strip = `<div class="courier-strip" aria-label="Livreurs">${Object.values(couriers).map(c => `<span class="chip ${c.online ? (c.busy ? "warn" : "ok") : "off"}">${icon("bike")}<span>${esc(c.courier.name.split(" ")[0])} · ${c.online ? (c.busy ? "en mission" : "libre") : "hors ligne"} · ${c.km.toFixed(1)} km</span></span>`).join("")}</div>`;
+    const strip = `<div class="courier-strip" aria-label="Livreurs">${Object.values(couriers).map(c => `<span class="chip ${c.online ? (c.busy ? "warn" : "ok") : "off"}">${icon("bike")}<span>${esc(c.courier.name.split(" ")[0])} · ${c.online ? (c.busy ? "en mission" : "libre") : "hors ligne"}${c.km == null ? "" : ` · ${c.km.toFixed(1)} km`}</span></span>`).join("")}</div>`;
     const tabs = `<div class="col-tabs" role="tablist">${COLUMNS.map(c => `<button role="tab" class="col-tab ${ui.col === c.key ? "active" : ""}" data-action="col" data-col="${c.key}" aria-selected="${ui.col === c.key}">${c.label}<b>${groups[c.key].length}</b></button>`).join("")}</div>`;
     const cols = COLUMNS.map(c => `<section class="col col-${c.key} ${ui.col === c.key ? "is-current" : ""}" aria-label="${c.label}">
       <h2>${icon(c.icon)}${c.label}<b>${groups[c.key].length}</b></h2>
-      <div class="col-body">${groups[c.key].length ? groups[c.key].map(o => orderCard(o, couriers)).join("") : `<p class="empty">Aucune commande</p>`}</div></section>`).join("");
+      <div class="col-body">${groups[c.key].length ? groups[c.key].map(order => orderCard(order, couriers)).join("") : `<p class="empty">Aucune commande</p>`}</div></section>`).join("");
     return `${strip}${tabs}<div class="board">${cols}</div>`;
   }
 
   function renderHistory() {
     const filters = [["all", "Toutes"], ["active", "En cours"], ["delivered", "Terminées"], ["refused", "Refusées"], ["cancelled", "Annulées"], ["delivery", "Livraison"], ["pickup", "À emporter"]];
-    const today = busState().orders.filter(order => isToday(order.createdAt));
+    const today = data.orders.filter(order => isToday(order.createdAt));
     const match = order => ({
       all: true, active: ["pending", "preparing", "ready", "enroute"].includes(order.status), delivered: order.status === "delivered",
       refused: order.status === "refused", cancelled: order.status === "cancelled", delivery: order.mode === "delivery", pickup: order.mode === "pickup"
@@ -170,7 +304,7 @@
       <td data-label="Mode">${order.mode === "delivery" ? "Livraison" : "À emporter"}</td><td data-label="Statut">${statusPill(order)}${order.refusedReason ? `<div class="small muted">${esc(order.refusedReason)}</div>` : ""}</td>
       <td data-label="Total"><b>${money(order.total)}</b></td>
       <td>${isCashier() && order.acceptedAt ? `<button class="btn small-btn" data-action="reprint" data-id="${esc(order.id)}" aria-label="Réimprimer ${esc(order.id)}">${icon("printer")}</button>` : ""}</td></tr>`).join("");
-    const revenue = today.filter(o => o.status === "delivered").reduce((sum, o) => sum + o.total, 0);
+    const revenue = today.filter(order => order.status === "delivered").reduce((sum, order) => sum + order.total, 0);
     return `<section class="panel"><h2>Historique du jour</h2>
       <p class="muted">${today.length} commande(s) · chiffre d'affaires encaissé ${money(revenue)}</p>
       <div class="filters" role="group" aria-label="Filtres">${filters.map(([key, label]) => `<button class="chip-btn ${ui.filter === key ? "active" : ""}" data-action="filter" data-filter="${key}" aria-pressed="${ui.filter === key}">${label}</button>`).join("")}</div>
@@ -178,46 +312,41 @@
   }
 
   function renderStock() {
-    const availability = busState().menuAvailability;
-    return `<section class="panel"><h2>Stock / Disponibilité</h2><p class="muted">Un plat épuisé est grisé côté client et ne peut plus être ajouté au panier.</p>
-      <ul class="stock">${MENU.map(dish => {
-        const on = availability[dish.id] !== false;
-        return `<li><div><b>${esc(dish.name)}</b><div class="small muted">${esc(dish.category)}</div></div>
-          <button class="switch ${on ? "on" : ""}" role="switch" aria-checked="${on}" data-action="stock" data-id="${esc(dish.id)}" aria-label="${esc(dish.name)} : ${on ? "disponible" : "épuisé"}"><span class="switch-label">${on ? "Disponible" : "Épuisé"}</span><i></i></button></li>`;
-      }).join("")}</ul></section>`;
+    return `<section class="panel"><h2>Stock / Disponibilité</h2><p class="muted">La disponibilité des articles est synchronisée avec le menu côté client.</p>
+      <ul class="stock">${data.menu.map(item => {
+        const on = !!item.available;
+        return `<li><div><b>${esc(item.name)}</b><div class="small muted">${esc(item.category)}</div></div>
+          <button class="switch ${on ? "on" : ""}" role="switch" aria-checked="${on}" data-action="stock" data-id="${esc(item.id)}" aria-label="${esc(item.name)} : ${on ? "disponible" : "épuisé"}"><span class="switch-label">${on ? "Disponible" : "Épuisé"}</span><i></i></button></li>`;
+      }).join("") || `<li class="empty">Aucun article de menu disponible.</li>`}</ul></section>`;
   }
 
-  function switchRow(label, hint, on, action, extra = "") {
+  function switchRow(label, hint, on, action) {
     return `<div class="setting"><div><b>${label}</b><div class="small muted">${hint}</div></div>
-      <button class="switch ${on ? "on" : ""}" role="switch" aria-checked="${on}" data-action="${action}" ${extra} aria-label="${esc(label)}"><span class="switch-label">${on ? "Oui" : "Non"}</span><i></i></button></div>`;
+      <button class="switch ${on ? "on" : ""}" role="switch" aria-checked="${on}" data-action="${action}" aria-label="${esc(label)}"><span class="switch-label">${on ? "Oui" : "Non"}</span><i></i></button></div>`;
   }
 
   function renderSettings() {
-    if (!isCashier()) return `<section class="panel"><p class="empty">Réglages réservés à la caisse.</p></section>`;
-    const s = busState().settings;
+    const settings = data.settings;
     const connected = GKPrinter.connected();
     return `<section class="panel"><h2>Réglages</h2>
       <div class="group"><h3>Affectation des livreurs</h3>
         <div class="seg" role="radiogroup" aria-label="Mode d'affectation">
-          <button role="radio" aria-checked="${s.dispatchMode === "rotation"}" class="${s.dispatchMode === "rotation" ? "active" : ""}" data-action="dispatch-mode" data-mode="rotation">Rotation</button>
-          <button role="radio" aria-checked="${s.dispatchMode === "proximity"}" class="${s.dispatchMode === "proximity" ? "active" : ""}" data-action="dispatch-mode" data-mode="proximity">Proximité</button></div>
-        <p class="small muted">Rotation : chaque commande va au livreur suivant. Proximité : livreur en ligne et libre le plus proche du restaurant. Offre de 60 s, un livreur à la fois.</p></div>
+          <button role="radio" aria-checked="${settings.dispatchMode === "rotation"}" class="${settings.dispatchMode === "rotation" ? "active" : ""}" data-action="dispatch-mode" data-mode="rotation">Rotation</button>
+          <button role="radio" aria-checked="${settings.dispatchMode === "proximity"}" class="${settings.dispatchMode === "proximity" ? "active" : ""}" data-action="dispatch-mode" data-mode="proximity">Proximité</button></div>
+        <p class="small muted">Le serveur affecte automatiquement un livreur selon ce mode. Les offres expirent après 60 s.</p></div>
       <div class="group"><h3>Imprimante</h3>
         <p class="small ${connected ? "ok-text" : "muted"}">${connected ? `Connectée : ${esc(GKPrinter.name())}` : GKPrinter.supported() ? "Aucune imprimante connectée." : "Bluetooth indisponible (Chrome/Edge en https ou localhost requis) : aperçu à l'écran utilisé."}</p>
         <div class="btn-row wrap"><button class="btn primary" data-action="printer-connect">${icon("bluetooth")}Connecter une imprimante Bluetooth</button>
           ${connected ? `<button class="btn" data-action="printer-disconnect">Déconnecter</button>` : ""}
           <button class="btn" data-action="printer-test">${icon("printer")}Imprimer un ticket de test</button></div>
         <div class="setting"><div><b>Largeur du papier</b></div><div class="seg" role="radiogroup" aria-label="Largeur du papier">
-          ${[58, 80].map(w => `<button role="radio" aria-checked="${state.prefs.paper === w}" class="${state.prefs.paper === w ? "active" : ""}" data-action="paper" data-paper="${w}">${w} mm</button>`).join("")}</div></div>
+          ${[58, 80].map(width => `<button role="radio" aria-checked="${state.prefs.paper === width}" class="${state.prefs.paper === width ? "active" : ""}" data-action="paper" data-paper="${width}">${width} mm</button>`).join("")}</div></div>
         ${switchRow("Ouvrir la boîte d'impression du navigateur", "Lorsque l'aperçu de secours s'affiche (sans imprimante Bluetooth).", state.prefs.autoBrowserPrint, "toggle-autoprint")}</div>
       <div class="group"><h3>Commandes</h3>
-        ${switchRow("Pause des commandes", "Le client voit une bannière et ne peut plus valider son panier.", s.paused, "toggle-pause")}
+        ${switchRow("Pause des commandes", "Les clients ne peuvent plus valider leur panier lorsque le service est en pause.", !!settings.paused, "toggle-pause")}
         <div class="setting"><div><b>Temps de préparation par défaut</b></div>
-          <div class="stepper" role="group" aria-label="Temps par défaut"><button class="icon-btn" data-action="default-prep" data-delta="-5" aria-label="Moins 5 minutes" ${s.defaultPrep <= 5 ? "disabled" : ""}>${icon("minus")}</button><span class="stepper-value"><b>${s.defaultPrep}</b> min</span><button class="icon-btn" data-action="default-prep" data-delta="5" aria-label="Plus 5 minutes" ${s.defaultPrep >= 90 ? "disabled" : ""}>${icon("plus")}</button></div></div>
-        ${switchRow("Alerte sonore", "Bip répété tant qu'une commande attend.", state.prefs.sound, "toggle-sound")}</div>
-      <div class="group"><h3>Démo</h3><div class="btn-row wrap">
-        <button class="btn" data-action="demo-order">${icon("plus")}Simuler une commande</button>
-        <button class="btn danger" data-action="reset">${icon("refresh")}Réinitialiser les données démo</button></div></div>
+          <div class="stepper" role="group" aria-label="Temps par défaut"><button class="icon-btn" data-action="default-prep" data-delta="-5" aria-label="Moins 5 minutes" ${defaultPrep() <= 5 ? "disabled" : ""}>${icon("minus")}</button><span class="stepper-value"><b>${defaultPrep()}</b> min</span><button class="icon-btn" data-action="default-prep" data-delta="5" aria-label="Plus 5 minutes" ${defaultPrep() >= 90 ? "disabled" : ""}>${icon("plus")}</button></div></div>
+        ${switchRow("Alerte sonore", "Bip à l'arrivée d'une nouvelle commande.", state.prefs.sound, "toggle-sound")}</div>
     </section>`;
   }
 
@@ -229,12 +358,20 @@
       document.title = baseTitle;
       return;
     }
-    if (ui.view === "settings" && !isCashier()) ui.view = "board";
-    const body = { board: renderBoard, history: renderHistory, stock: renderStock, settings: renderSettings }[ui.view]();
-    const scroll = app.querySelectorAll(".col-body");
-    const offsets = [...scroll].map(el => el.scrollTop);
-    app.innerHTML = `${renderHeader()}<main class="main view-${ui.view}">${!bus.linked ? `<p class="banner">Mode démo hors liaison : cette page n'échange pas avec le client ni le livreur. Servez le dépôt depuis une seule origine (voir README).</p>` : ""}${body}</main>`;
-    app.querySelectorAll(".col-body").forEach((el, i) => { if (offsets[i]) el.scrollTop = offsets[i]; });
+    if (state.session.mustChange) {
+      app.innerHTML = renderChangeSecret();
+      document.title = baseTitle;
+      return;
+    }
+    if ((!isCashier() && ["settings", "stock"].includes(ui.view))) ui.view = "board";
+    const previousScroll = [...app.querySelectorAll(".col-body")].map(element => element.scrollTop);
+    let body;
+    if (!data.loaded && data.loading) body = `<section class="panel"><p class="empty">Chargement des commandes et des réglages…</p></section>`;
+    else if (!data.loaded && data.error) body = `<section class="panel"><h2>Connexion au serveur impossible</h2><p class="form-error">${esc(data.error)}</p><button class="btn primary" data-action="refresh">Réessayer</button></section>`;
+    else body = { board: renderBoard, history: renderHistory, stock: renderStock, settings: renderSettings }[ui.view]();
+    const banners = `${data.error && data.loaded ? `<p class="banner" role="alert">Erreur de synchronisation : ${esc(data.error)}. Les dernières données chargées sont affichées. <button class="btn small-btn" data-action="refresh">Réessayer</button></p>` : ""}${data.actionError ? `<p class="banner" role="alert">Action impossible : ${esc(data.actionError)}</p>` : ""}`;
+    app.innerHTML = `${renderHeader()}<main class="main view-${ui.view}">${banners}${body}</main>`;
+    app.querySelectorAll(".col-body").forEach((element, index) => { if (previousScroll[index]) element.scrollTop = previousScroll[index]; });
     updateBadge();
   }
 
@@ -246,12 +383,11 @@
       return;
     }
     renderQueued = true;
-    // rAF never fires in hidden tabs; the timeout keeps the board current there.
     setTimeout(() => { if (renderQueued) render(); }, 250);
     requestAnimationFrame(() => { if (renderQueued) render(); });
   }
 
-  /* ---------- sheets ---------- */
+  /* ---------- sheets and printing ---------- */
 
   function closeSheet() {
     ui.sheet = null;
@@ -261,8 +397,7 @@
 
   function openSheet(html) {
     sheetRoot.innerHTML = `<div class="sheet-backdrop" data-action="close-sheet"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
-    const first = sheetRoot.querySelector("button:not([data-action='close-sheet'])");
-    if (first) first.focus();
+    sheetRoot.querySelector("button:not([data-action='close-sheet'])")?.focus();
   }
 
   function openRefuse(id) {
@@ -283,11 +418,9 @@
     if (state.prefs.autoBrowserPrint) setTimeout(() => window.print(), 300);
   }
 
-  /* ---------- printing ---------- */
-
   async function printOrder(order, reprint = false) {
     if (!isCashier()) return false;
-    let reason = "";
+    let reason;
     if (GKPrinter.connected()) {
       try {
         await GKPrinter.write(buildTicket(order, { paper: state.prefs.paper, reprint }));
@@ -304,7 +437,7 @@
     return false;
   }
 
-  /* ---------- sound & title ---------- */
+  /* ---------- sound and notifications ---------- */
 
   function unlockAudio() {
     if (audio || !(window.AudioContext || window.webkitAudioContext)) return;
@@ -314,39 +447,26 @@
   function beep() {
     if (!audio || !state.prefs.sound) return;
     if (audio.state === "suspended") audio.resume().catch(() => {});
-    [880, 1175].forEach((freq, i) => {
-      const osc = audio.createOscillator();
+    [880, 1175].forEach((frequency, index) => {
+      const oscillator = audio.createOscillator();
       const gain = audio.createGain();
-      const start = audio.currentTime + i * 0.18;
-      osc.frequency.value = freq;
+      const start = audio.currentTime + index * 0.18;
+      oscillator.frequency.value = frequency;
       gain.gain.setValueAtTime(0.0001, start);
       gain.gain.exponentialRampToValueAtTime(0.25, start + 0.02);
       gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.16);
-      osc.connect(gain).connect(audio.destination);
-      osc.start(start);
-      osc.stop(start + 0.18);
+      oscillator.connect(gain).connect(audio.destination);
+      oscillator.start(start);
+      oscillator.stop(start + 0.18);
     });
   }
 
-  const pendingOrders = () => busState().orders.filter(order => order.status === "pending");
+  const pendingOrders = () => data.orders.filter(order => order.status === "pending");
 
   function updateBadge() {
-    const count = state.session ? pendingOrders().length : 0;
+    const count = state.session && !state.session.mustChange ? pendingOrders().length : 0;
     document.title = count ? `(${count}) ${baseTitle}` : baseTitle;
   }
-
-  function checkNewOrders() {
-    if (!state.session) return;
-    const ids = new Set(pendingOrders().map(order => order.id));
-    const fresh = [...ids].filter(id => !knownPending.has(id));
-    knownPending = ids;
-    if (fresh.length) {
-      beep();
-      toast(`Nouvelle commande ${fresh.join(", ")}`);
-    }
-  }
-
-  /* ---------- actions ---------- */
 
   const requireCashier = () => {
     if (isCashier()) return true;
@@ -354,60 +474,111 @@
     return false;
   };
 
-  const report = message => { if (message) toast(message); return !message; };
+  async function runAction(operation, afterSuccess) {
+    try {
+      const result = await operation();
+      data.actionError = "";
+      if (afterSuccess) await afterSuccess(result);
+      await refreshData();
+      return result;
+    } catch (error) {
+      data.actionError = error.message || "La demande a échoué.";
+      toast(data.actionError);
+      render();
+      return null;
+    }
+  }
+
+  /* ---------- actions ---------- */
 
   const actions = {
-    logout() { logout(); closeSheet(); render(); },
+    async logout() {
+      let logoutError = null;
+      try {
+        await api.logout(API_SCOPE);
+      } catch (error) {
+        logoutError = error;
+      } finally {
+        try { logout(); } catch (error) { logoutError = logoutError || error; }
+      }
+      closeSheet();
+      data.orders = [];
+      data.menu = [];
+      data.couriers = [];
+      data.loaded = false;
+      data.error = "";
+      data.actionError = "";
+      render();
+      if (logoutError) toast(`Session locale effacée, mais la déconnexion serveur a échoué : ${logoutError.message || "erreur"}`);
+    },
     view(el) { ui.view = el.dataset.view; render(); },
     col(el) { ui.col = el.dataset.col; render(); },
     filter(el) { ui.filter = el.dataset.filter; render(); },
+    refresh() { data.error = ""; refreshData(); },
     "toggle-sound"() { state.prefs.sound = !state.prefs.sound; save(); render(); },
     "toggle-autoprint"() { if (requireCashier()) { state.prefs.autoBrowserPrint = !state.prefs.autoBrowserPrint; save(); render(); } },
     paper(el) { if (requireCashier()) { state.prefs.paper = Number(el.dataset.paper); save(); render(); } },
     prep(el) {
       if (!requireCashier()) return;
       const delta = Number(el.dataset.delta);
-      const id = el.dataset.id;
+      const order = findOrder(el.dataset.id);
       if (el.dataset.scope === "draft") {
-        ui.prep[id] = Math.min(90, Math.max(5, (ui.prep[id] ?? defaultPrep()) + delta));
+        ui.prep[el.dataset.id] = Math.min(90, Math.max(5, (ui.prep[el.dataset.id] ?? defaultPrep()) + delta));
         render();
-      } else {
-        const order = findOrder(id);
-        if (order) report(bus.setPrep(id, order.prepMin + delta, "caisse"));
+      } else if (order) {
+        const prepMinutes = Math.min(90, Math.max(5, order.prepMin + delta));
+        runAction(() => api.patch(`/api/orders/${encodeURIComponent(order.id)}/prep`, { prepMinutes }, API_SCOPE));
       }
     },
     "default-prep"(el) {
-      if (requireCashier()) bus.setSettings({ defaultPrep: Math.min(90, Math.max(5, defaultPrep() + Number(el.dataset.delta))) });
+      if (!requireCashier()) return;
+      const defaultPrepValue = Math.min(90, Math.max(5, defaultPrep() + Number(el.dataset.delta)));
+      runAction(() => api.patch("/api/admin/settings/operations", { defaultPrep: defaultPrepValue }, API_SCOPE));
     },
     async accept(el) {
       if (!requireCashier()) return;
-      const id = el.dataset.id;
-      const minutes = ui.prep[id] ?? defaultPrep();
-      if (!report(bus.acceptOrder(id, minutes, "caisse"))) return;
-      delete ui.prep[id];
-      const order = findOrder(id);
-      ui.col = "prep";
-      render();
-      try { await printOrder(order, false); } catch { toast("Impression impossible : la commande est bien acceptée."); }
+      const order = findOrder(el.dataset.id);
+      if (!order) return;
+      const prepMinutes = ui.prep[order.id] ?? defaultPrep();
+      await runAction(() => api.post(`/api/orders/${encodeURIComponent(order.id)}/accept`, { prepMinutes }, API_SCOPE), async result => {
+        delete ui.prep[order.id];
+        ui.col = "prep";
+        const accepted = result?.order ? normalizeOrder(result.order) : order;
+        render();
+        try { await printOrder(accepted, false); } catch { toast("Impression impossible : la commande est bien acceptée."); }
+      });
     },
     refuse(el) { if (requireCashier()) openRefuse(el.dataset.id); },
-    "refuse-reason"(el) {
+    async "refuse-reason"(el) {
       if (!requireCashier()) return;
-      report(bus.refuseOrder(el.dataset.id, el.dataset.reason, "caisse"));
-      closeSheet();
+      await runAction(() => api.post(`/api/orders/${encodeURIComponent(el.dataset.id)}/refuse`, { reason: el.dataset.reason }, API_SCOPE), () => closeSheet());
     },
-    ready(el) { if (report(bus.markReady(el.dataset.id, state.session.role === "cook" ? "cuisinier" : "caisse"))) ui.col = "ready"; render(); },
-    handover(el) { if (requireCashier()) report(bus.handOver(el.dataset.id, "caisse")); },
+    async ready(el) {
+      await runAction(() => api.post(`/api/orders/${encodeURIComponent(el.dataset.id)}/ready`, {}, API_SCOPE), () => { ui.col = "ready"; });
+    },
+    handover(el) {
+      if (requireCashier()) runAction(() => api.post(`/api/orders/${encodeURIComponent(el.dataset.id)}/handover`, {}, API_SCOPE));
+    },
     reprint(el) { const order = findOrder(el.dataset.id); if (order) printOrder(order, true); },
     assign(el) {
       if (!requireCashier()) return;
       const select = app.querySelector(`select[data-assign="${CSS.escape(el.dataset.id)}"]`);
-      if (select) report(bus.assignManual(el.dataset.id, select.value, "caisse"));
+      if (select?.value) runAction(() => api.post(`/api/orders/${encodeURIComponent(el.dataset.id)}/assign`, { courierId: select.value }, API_SCOPE));
     },
-    retry(el) { if (requireCashier()) report(bus.retryDispatch(el.dataset.id)); },
-    stock(el) { bus.setAvailability(el.dataset.id, busState().menuAvailability[el.dataset.id] === false); },
-    "dispatch-mode"(el) { if (requireCashier()) bus.setSettings({ dispatchMode: el.dataset.mode }); },
-    "toggle-pause"() { if (requireCashier()) bus.setSettings({ paused: !busState().settings.paused }); },
+    retry(el) {
+      if (requireCashier()) runAction(() => api.post(`/api/orders/${encodeURIComponent(el.dataset.id)}/dispatch/retry`, {}, API_SCOPE));
+    },
+    stock(el) {
+      if (!requireCashier()) return;
+      const item = data.menu.find(entry => entry.id === el.dataset.id);
+      if (item) runAction(() => api.patch(`/api/admin/menu/${encodeURIComponent(item.id)}/availability`, { available: !item.available }, API_SCOPE));
+    },
+    "dispatch-mode"(el) {
+      if (requireCashier()) runAction(() => api.patch("/api/admin/settings/operations", { dispatchMode: el.dataset.mode }, API_SCOPE));
+    },
+    "toggle-pause"() {
+      if (requireCashier()) runAction(() => api.patch("/api/admin/settings/operations", { paused: !data.settings.paused }, API_SCOPE));
+    },
     async "printer-connect"() {
       if (!requireCashier()) return;
       try {
@@ -425,33 +596,24 @@
       if (!requireCashier()) return;
       const order = {
         id: "TEST", createdAt: Date.now(), mode: "pickup", customer: { name: "Ticket de test" },
-        items: [{ qty: 1, name: "Impression OK", size: "Éàç œ 123", extras: [], price: 0 }], subtotal: 0, fee: 0, total: 0, payment: "-", paymentType: "card"
+        items: [{ qty: 1, name: "Impression OK", size: "Éàç œ 123", extras: [], price: 0 }],
+        subtotal: 0, fee: 0, total: 0, payment: "-", paymentType: "card"
       };
       printOrder(order, false);
     },
     "browser-print"() { window.print(); },
-    "close-sheet"() { closeSheet(); },
-    "demo-order"() {
-      if (!requireCashier()) return;
-      const result = bus.publishOrder({ ...makeDemoOrder(), createdAt: Date.now() });
-      toast(result.error || `Commande ${result.order.id} simulée.`);
-    },
-    reset() {
-      if (!requireCashier() || !window.confirm("Réinitialiser toutes les données démo (commandes, livreurs, stock) ?")) return;
-      bus.reset();
-      ui.prep = {};
-      toast("Données démo réinitialisées.");
-    }
+    "close-sheet"() { closeSheet(); }
   };
 
   document.addEventListener("click", event => {
     unlockAudio();
-    const el = event.target.closest("[data-action]");
-    if (!el) return;
-    if (el.dataset.action === "close-sheet" && event.target !== el && el.classList.contains("sheet-backdrop")) return;
-    if (el.disabled) return;
-    const run = actions[el.dataset.action];
-    if (run) run(el);
+    const element = event.target.closest("[data-action]");
+    if (!element) return;
+    if (state.session?.mustChange && element.dataset.action !== "logout") return;
+    if (element.dataset.action === "close-sheet" && event.target !== element && element.classList.contains("sheet-backdrop")) return;
+    if (element.disabled) return;
+    const action = actions[element.dataset.action];
+    if (action) action(element);
   });
 
   document.addEventListener("keydown", event => {
@@ -459,59 +621,115 @@
     if (event.key === "Escape" && ui.sheet) closeSheet();
   });
 
-  document.addEventListener("submit", event => {
+  document.addEventListener("submit", async event => {
+    const changeForm = event.target.closest("[data-form='change-secret']");
+    if (changeForm) {
+      event.preventDefault();
+      if (!state.session?.mustChange) return;
+      const button = changeForm.querySelector("[type='submit']");
+      const errorEl = changeForm.querySelector("[data-secret-error]");
+      const formData = new FormData(changeForm);
+      const current = String(formData.get("current") || "");
+      const next = String(formData.get("next") || "");
+      if (!current || next.length < 8 || current === next) {
+        errorEl.textContent = !current
+          ? "Saisissez votre mot de passe actuel."
+          : next.length < 8
+            ? "Le nouveau mot de passe doit contenir au moins 8 caractères."
+            : "Le nouveau mot de passe doit être différent de l'actuel.";
+        return;
+      }
+      button.disabled = true;
+      errorEl.textContent = "";
+      try {
+        const result = await api.post("/api/auth/change-secret", { current, next }, API_SCOPE);
+        setSession(result);
+        ui.view = "board";
+        bootRefresh = true;
+        data.loaded = false;
+        data.error = "";
+        data.actionError = "";
+        render();
+        await refreshData();
+      } catch (error) {
+        errorEl.textContent = error.message || "Impossible de modifier le mot de passe.";
+        button.disabled = false;
+      }
+      return;
+    }
     const form = event.target.closest("[data-form='login']");
     if (!form) return;
     event.preventDefault();
-    const data = new FormData(form);
-    const error = login(data.get("email"), data.get("password"));
-    if (error) {
-      form.querySelector("[data-login-error]").textContent = error;
-      if (lockRemaining()) render();
-      return;
+    const button = form.querySelector("[type='submit']");
+    const errorEl = form.querySelector("[data-login-error]");
+    button.disabled = true;
+    errorEl.textContent = "";
+    try {
+      const formData = new FormData(form);
+      const result = await api.post("/api/auth/staff", {
+        email: formData.get("email"),
+        password: formData.get("password")
+      });
+      if (!["cashier", "chef"].includes(result.user?.role)) {
+        throw new Error("Cette application est réservée aux comptes caisse et cuisine.");
+      }
+      setSession(result);
+      ui.view = "board";
+      bootRefresh = true;
+      data.loaded = false;
+      data.error = "";
+      data.actionError = "";
+      render();
+      if (state.session.mustChange) return;
+      await refreshData();
+    } catch (error) {
+      errorEl.textContent = error.message || "Connexion impossible.";
+      button.disabled = false;
     }
-    ui.view = "board";
-    knownPending = new Set(pendingOrders().map(order => order.id));
-    render();
   });
 
   document.addEventListener("focusout", () => {
     setTimeout(() => { if (ui.dirty && !/^(SELECT|INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || "")) schedule(); }, 0);
   });
 
-  /* ---------- timers & boot ---------- */
+  document.addEventListener("gk-api-session-expired", event => {
+    if (event.detail?.scope !== API_SCOPE) return;
+    state.session = null;
+    data.orders = [];
+    data.loaded = false;
+    data.error = "";
+    toast("Votre session a expiré. Veuillez vous reconnecter.");
+    render();
+  });
 
   function tickDom() {
     const now = Date.now();
-    app.querySelectorAll("[data-until]").forEach(el => {
-      const left = Number(el.dataset.until) - now;
-      el.textContent = countdown(left);
-      el.classList.toggle("late", left < 0);
+    app.querySelectorAll("[data-until]").forEach(element => {
+      const left = Number(element.dataset.until) - now;
+      element.textContent = countdown(left);
+      element.classList.toggle("late", left < 0);
     });
-    app.querySelectorAll("[data-since]").forEach(el => { el.textContent = `${minutesSince(Number(el.dataset.since))} min`; });
-    app.querySelectorAll("[data-lock]").forEach(el => {
-      const wait = lockRemaining();
-      if (wait <= 0) render();
-      else el.textContent = wait;
-    });
+    app.querySelectorAll("[data-since]").forEach(element => { element.textContent = `${minutesSince(Number(element.dataset.since))} min`; });
   }
 
-  bus.subscribe(() => { checkNewOrders(); schedule(); });
-  GKPrinter.onChange(() => { schedule(); });
+  GKPrinter.onChange(() => schedule());
 
   setInterval(() => {
-    bus.tick();
     tickDom();
-  }, 1000);
-  setInterval(() => bus.heartbeat("cuisine"), 8000);
-  setInterval(() => { if (state.session && pendingOrders().length) beep(); }, 5000);
-  window.addEventListener("storage", event => { if (event.key === STORAGE_KEY) { state = load(); schedule(); } });
+    if (state.session && !state.session.mustChange && !refreshRunning) refreshData();
+    if (state.session && !state.session.mustChange && pendingOrders().length) beep();
+  }, 8000);
+  window.addEventListener("storage", event => {
+    if (event.key === STORAGE_KEY) {
+      const saved = load();
+      state.prefs = saved.prefs;
+      render();
+    }
+  });
 
-  bus.heartbeat("cuisine");
-  knownPending = new Set(pendingOrders().map(order => order.id));
   render();
+  if (state.session && !state.session.mustChange) refreshData();
   GKPrinter.reconnect(state.prefs.lastPrinter);
-
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   }

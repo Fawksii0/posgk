@@ -6,10 +6,30 @@
   <meta name="theme-color" content="#e3a81f">
   <title>G&amp;K Admin</title>
   <link rel="icon" href="assets/emblem-reference.png">
-  <link rel="stylesheet" href="styles.css">
-  <script src="data.js" defer></script>
-  <script src="store.js" defer></script>
-  <script src="app.js" defer></script>
+  <script>
+    if ("serviceWorker" in navigator && location.protocol !== "file:") {
+      const appPath = new URL(".", location.href).pathname;
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        const stale = registrations.filter((registration) =>
+          [registration.active, registration.waiting, registration.installing].some((worker) =>
+            worker && new URL(worker.scriptURL).pathname.startsWith(appPath)
+          )
+        );
+        return Promise.all(stale.map((registration) => registration.unregister())).then(() => {
+          const controller = navigator.serviceWorker.controller;
+          if (controller && new URL(controller.scriptURL).pathname.startsWith(appPath)) location.reload();
+        });
+      }).catch(() => {});
+      if ("caches" in window) {
+        caches.keys().then((keys) => Promise.all(keys.filter((key) => /^gk-admin-/i.test(key)).map((key) => caches.delete(key)))).catch(() => {});
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="styles.css?v=api-2">
+  <script src="../shared/gk-api.js?v=api-2" defer></script>
+  <script src="data.js?v=api-2" defer></script>
+  <script src="store.js?v=api-2" defer></script>
+  <script src="app.js?v=api-2" defer></script>
 </head>
 <body>
   <div id="login-view" class="login-view" hidden></div>
@@ -26,6 +46,10 @@
           <input id="global-search" type="search" placeholder="Rechercher une commande, un client…" autocomplete="off" aria-label="Recherche globale">
         </label>
         <div class="topbar-actions">
+          <label id="branch-switch-wrap" class="branch-switch-wrap" hidden>
+            <span>Restaurant</span>
+            <select id="branch-select" aria-label="Restaurant sélectionné"></select>
+          </label>
           <div class="pop-wrap">
             <button id="bell-btn" class="icon-button" type="button" data-action="toggle-bell" aria-label="Notifications" aria-haspopup="true" aria-expanded="false"></button>
             <div id="bell-pop" class="popover" hidden></div>
@@ -36,7 +60,7 @@
           </div>
         </div>
       </header>
-      <div id="notice-bar"></div>
+      <div id="notice-bar" class="notice-bar"></div>
       <main id="view" class="view" tabindex="-1"></main>
     </div>
   </div>

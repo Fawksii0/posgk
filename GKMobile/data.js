@@ -1,62 +1,7 @@
-const img = (id, w = 760) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=82`;
-
-const products = [
-  {
-    id: "classic", name: "Le Classique G&K", category: "Sandwichs", cuisine: "Burger", time: "15 min", discount: "20% OFF",
-    description: "Burger smash de bœuf, cheddar fondant, salade croquante et sauce maison.",
-    price: 55, rating: "4.9", reviews: "1.2k", image: img("photo-1568901346375-23c9450c58cd"),
-    sizes: [{ name: "Simple", delta: 0 }, { name: "Double", delta: 18 }, { name: "XL", delta: 26 }],
-    extras: [{ name: "Cheddar", price: 6 }, { name: "Bacon croustillant", price: 8 }, { name: "Sauce maison", price: 4 }]
-  },
-  {
-    id: "fries", name: "Frites Maison", category: "Accompagnements", cuisine: "Snack", time: "10 min", discount: "",
-    description: "Pommes de terre dorées, persil frais et fleur de sel.",
-    price: 20, rating: "4.8", reviews: "860", image: img("photo-1573080496219-bb080dd4f877"),
-    sizes: [{ name: "Petite", delta: 0 }, { name: "Moyenne", delta: 5 }, { name: "Grande", delta: 10 }],
-    extras: [{ name: "Sauce cheddar", price: 6 }, { name: "Sauce maison", price: 4 }]
-  },
-  {
-    id: "chicken", name: "Crispy Chicken", category: "Sandwichs", cuisine: "Burger", time: "15 min", discount: "10% OFF",
-    description: "Burger de poulet croustillant, coleslaw et sauce légèrement épicée.",
-    price: 48, rating: "4.8", reviews: "940", image: img("photo-1606755962773-d324e0a13086"),
-    sizes: [{ name: "Simple", delta: 0 }, { name: "Double", delta: 16 }],
-    extras: [{ name: "Cheddar", price: 6 }, { name: "Sauce épicée", price: 4 }]
-  },
-  {
-    id: "pizza", name: "Pizza G&K", category: "Plats", cuisine: "Italien", time: "20 min", discount: "20% OFF",
-    description: "Pâte fine, mozzarella, tomates confites et basilic.",
-    price: 62, rating: "4.7", reviews: "1.1k", image: img("photo-1513104890138-7c749659a591"),
-    sizes: [{ name: "Petite 8″", delta: 0 }, { name: "Moyenne 10″", delta: 14 }, { name: "Grande 12″", delta: 26 }],
-    extras: [{ name: "Extra mozzarella", price: 8 }, { name: "Olives", price: 5 }, { name: "Poivrons", price: 5 }]
-  },
-  {
-    id: "gelato", name: "Gelato Pistache", category: "Gelato", cuisine: "Dessert", time: "5 min", discount: "",
-    description: "Glace artisanale à la pistache, préparée chaque jour.",
-    price: 28, rating: "4.9", reviews: "700", image: img("photo-1563805042-7684c019e1cb"),
-    sizes: [{ name: "1 boule", delta: 0 }, { name: "2 boules", delta: 10 }, { name: "3 boules", delta: 20 }],
-    extras: [{ name: "Éclats de pistache", price: 5 }, { name: "Chantilly", price: 4 }]
-  },
-  {
-    id: "lemonade", name: "Citronnade fraîche", category: "Boissons", cuisine: "Boisson", time: "5 min", discount: "",
-    description: "Citrons frais pressés, menthe et juste ce qu'il faut de sucre.",
-    price: 18, rating: "4.8", reviews: "520", image: img("photo-1513558161293-cdaf765ed2fd"),
-    sizes: [{ name: "33 cl", delta: 0 }, { name: "50 cl", delta: 5 }],
-    extras: [{ name: "Extra menthe", price: 3 }]
-  }
-];
-
-const zones = [
-  { id: "centre", name: "Centre-ville", fee: 10, min: 0, etaMin: [25, 35] },
-  { id: "corniche", name: "Corniche & Plage", fee: 15, min: 40, etaMin: [30, 40] },
-  { id: "peripherie", name: "Périphérie", fee: 25, min: 80, etaMin: [40, 55] }
-];
-
-const categories = [
+let products = [];
+let zones = [];
+let categories = [
   { id: "All", label: "Tout", icon: "sparkles" },
-  { id: "Sandwichs", label: "Burgers", icon: "burger" },
-  { id: "Plats", label: "Plats", icon: "utensils" },
-  { id: "Gelato", label: "Gelato", icon: "iceCream" },
-  { id: "Boissons", label: "Boissons", icon: "cup" },
   { id: "Favoris", label: "Favoris", icon: "heart" }
 ];
 

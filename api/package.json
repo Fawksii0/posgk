@@ -1,0 +1,20 @@
+{
+  "name": "gk-api",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "G&K branch-aware backend (Supabase Auth, Postgres and Edge Functions)",
+  "scripts": {
+    "dev": "supabase start --workdir supabase",
+    "migrate:local": "supabase db reset --local --workdir supabase",
+    "functions:serve": "supabase functions serve gk-api --env-file .env.local --workdir supabase",
+    "create-staff": "node scripts/create-staff.mjs",
+    "create-owner": "node scripts/create-owner.mjs",
+    "deploy": "supabase functions deploy gk-api --no-verify-jwt --workdir supabase",
+    "test": "node --test",
+    "check": "node --check src/index.js && node --check src/auth.js && node --check src/admin.js && node --check src/core.js && node --check src/lib.js && node --check src/orders.js && node --check src/postgres-sql.js && node --check scripts/create-staff.mjs && node --check scripts/create-owner.mjs && node --check tests/branch-contract.test.js"
+  },
+  "dependencies": {
+    "postgres": "^3.4.7"
+  }
+}
