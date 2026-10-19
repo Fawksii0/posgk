@@ -164,6 +164,21 @@
     return payload;
   }
 
+  // Owner "view as" hand-off: the admin opens #gk-view=<base64url JSON> on the target app. Consumed once, then removed from the URL.
+  (function consumeOwnerView() {
+    const match = /(?:^#|&)gk-view=([A-Za-z0-9_-]+)/.exec(location.hash);
+    if (!match) return;
+    try {
+      history.replaceState(null, "", location.pathname + location.search);
+      const normalized = match[1].replace(/-/g, "+").replace(/_/g, "/");
+      const data = JSON.parse(decodeURIComponent(escape(atob(normalized + "=".repeat((4 - normalized.length % 4) % 4)))));
+      if (!["client", "courier", "cuisine"].includes(data.scope) || !data.token || !data.user) return;
+      sessionStorage.removeItem(`${SESSION_PREFIX}${data.scope}`);
+      setSession(data.scope, { token: data.token, user: data.user, mustChange: false });
+      if (typeof data.branchId === "string" && data.branchId) setBranch(data.branchId);
+    } catch { /* an invalid hand-off is ignored; the normal sign-in screen appears */ }
+  })();
+
   window.GKApi = Object.freeze({
     ApiError,
     session,

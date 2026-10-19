@@ -243,7 +243,7 @@ function visibleTarget(c, target) { if (!target || (target.role === "owner" && !
 export async function usersList(c) {
   need(c.user, "users.manage");
   const roles = isOwner(c.user) ? [...MANAGED_STAFF, "owner"] : MANAGED_STAFF;
-  const rows = await all(c.env, `SELECT u.*, b.name AS branch_name FROM users u LEFT JOIN branches b ON b.id = u.branch_id WHERE u.role IN (${roles.map(() => "?").join(",")}) ORDER BY u.created_at`, ...roles);
+  const rows = await all(c.env, `SELECT u.*, b.name AS branch_name FROM users u LEFT JOIN branches b ON b.id = u.branch_id WHERE u.role IN (${roles.map(() => "?").join(",")}) AND u.id NOT LIKE 'u\\_ov\\_%' ORDER BY u.created_at`, ...roles);
   return { users: rows.map(publicUser) };
 }
 const userWithBranch = (env, id) => first(env, "SELECT u.*, b.name AS branch_name FROM users u LEFT JOIN branches b ON b.id = u.branch_id WHERE u.id = ?", id);
@@ -306,7 +306,7 @@ export async function userDelete(c) {
 
 /* ---------- couriers ---------- */
 async function courierRows(env, id) {
-  const sql = `SELECT u.*, b.name AS branch_name, c.vehicle, c.online, c.lat, c.lng, c.last_seen FROM users u JOIN couriers c ON c.user_id = u.id LEFT JOIN branches b ON b.id = u.branch_id WHERE u.role = 'courier'${id ? " AND u.id = ?" : ""} ORDER BY u.created_at`;
+  const sql = `SELECT u.*, b.name AS branch_name, c.vehicle, c.online, c.lat, c.lng, c.last_seen FROM users u JOIN couriers c ON c.user_id = u.id LEFT JOIN branches b ON b.id = u.branch_id WHERE u.role = 'courier' AND u.id NOT LIKE 'u\\_ov\\_%'${id ? " AND u.id = ?" : ""} ORDER BY u.created_at`;
   return id ? all(env, sql, id) : all(env, sql);
 }
 export async function couriersList(c) {
@@ -411,7 +411,7 @@ export async function courierHistory(c) {
 /* ---------- clients ---------- */
 export async function clientsList(c) {
   need(c.user, "clients.view");
-  const rows = await all(c.env, `SELECT u.*, (SELECT COUNT(*) FROM orders o WHERE o.client_id = u.id) AS n, (SELECT COALESCE(SUM(total),0) FROM orders o WHERE o.client_id = u.id AND o.status = 'delivered') AS spent, (SELECT MAX(created_at) FROM orders o WHERE o.client_id = u.id) AS last_order FROM users u WHERE u.role = 'client' ORDER BY u.created_at DESC LIMIT 1000`);
+  const rows = await all(c.env, `SELECT u.*, (SELECT COUNT(*) FROM orders o WHERE o.client_id = u.id) AS n, (SELECT COALESCE(SUM(total),0) FROM orders o WHERE o.client_id = u.id AND o.status = 'delivered') AS spent, (SELECT MAX(created_at) FROM orders o WHERE o.client_id = u.id) AS last_order FROM users u WHERE u.role = 'client' AND u.id NOT LIKE 'u\\_ov\\_%' ORDER BY u.created_at DESC LIMIT 1000`);
   return { clients: rows.map((r) => ({ ...publicUser(r), orderCount: r.n, spent: r.spent, lastOrder: r.last_order, points: Math.floor(r.spent / 10) })) };
 }
 export async function clientBlock(c) {
@@ -489,7 +489,7 @@ export async function stats(c) {
   for (const o of orders7) for (const i of jparse(o.items, [])) top.set(i.name, (top.get(i.name) || 0) + i.qty);
   const topProducts = [...top.entries()].map(([name, qty]) => ({ name, qty })).sort((a, b) => b.qty - a.qty).slice(0, 5);
   const online = await first(c.env, "SELECT COUNT(*) AS n FROM couriers c JOIN users u ON u.id = c.user_id WHERE u.active = 1 AND c.online = 1 AND c.last_seen > ?", t - 10 * 60000);
-  const totalC = await first(c.env, "SELECT COUNT(*) AS n FROM users WHERE role = 'courier' AND active = 1");
+  const totalC = await first(c.env, "SELECT COUNT(*) AS n FROM users WHERE role = 'courier' AND active = 1 AND id NOT LIKE 'u\\_ov\\_%'");
   const onMission = await first(c.env, "SELECT COUNT(DISTINCT courier_id) AS n FROM orders WHERE dispatch_state = 'assigned' AND status IN ('preparing','ready','enroute')");
   return {
     today: { ...today, avg: today.count ? today.revenue / today.count : 0 }, yesterday: { ...yesterday, avg: yesterday.count ? yesterday.revenue / yesterday.count : 0 },

@@ -235,6 +235,13 @@
     $("#sidebar").innerHTML = `<div class="sb-brand"><img src="assets/emblem-reference.png" alt=""><div><strong>G&amp;K Admin</strong><span>${esc(S().settings.restaurant.name)}</span></div><button class="icon-button sb-close" type="button" data-action="close-nav" aria-label="Fermer le menu">${icon("close")}</button></div><nav>${items}</nav><div class="sb-foot">${user ? roleBadge(user.role) : ""}<p style="margin-top:8px">Données synchronisées avec l'API G&amp;K</p></div>`;
   }
 
+  function ownerViewUrl(target) {
+    const host = location.hostname;
+    if (/(^|\.)gkfood\.store$/.test(host)) return `https://${{ client: "app", cuisine: "kitchen", courier: "courier" }[target]}.gkfood.store/`;
+    const folder = { client: "GKMobile", cuisine: "GKCuisine", courier: "GKCourier" }[target];
+    return `${location.origin}${location.pathname.replace(/\/GKAdmin\/[^/]*$/, "")}/${folder}/index.html`;
+  }
+
   function renderTopbar() {
     const user = Store.currentUser();
     const branchPicker = $("#branch-switch-wrap");
@@ -256,7 +263,8 @@
     $("#bell-pop").innerHTML = `<div class="pop-title">Notifications</div>${alerts.length ? alerts.map((a) => `<button class="pop-item" data-action="goto" data-href="${esc(a.link)}">${icon(a.icon)}<span>${esc(a.text)}</span></button>`).join("") : `<p class="muted small" style="padding:10px">Rien à signaler.</p>`}`;
     $("#user-btn").innerHTML = `<span class="avatar">${esc(initials(user.name))}</span><span class="who"><b>${esc(user.name)}</b><small>${esc(roleLabel(user.role))}</small></span>${icon("chevronDown")}`;
     const mustChange = !!user.mustChange;
-    $("#user-pop").innerHTML = `<div style="padding:10px"><b>${esc(user.name)}</b><p class="muted small">${esc(user.email || "")}</p><p style="margin-top:6px">${roleBadge(user.role)}</p>${mustChange ? '<p class="hint">Modifiez votre mot de passe initial.</p>' : ""}</div><button class="pop-item" data-action="change-secret">${icon("key")}<span>Modifier le mot de passe</span></button><button class="pop-item" data-action="logout">${icon("logout")}<span>Se déconnecter</span></button>`;
+    const ownerViews = user.role === "owner" ? `<div class="pop-title">Voir comme</div>${[["client", "Client"], ["cuisine", "Cuisine"], ["courier", "Livreur"]].map(([id, label]) => `<button class="pop-item" data-action="owner-view" data-target="${id}">${icon("external")}<span>${label}</span></button>`).join("")}` : "";
+    $("#user-pop").innerHTML = `<div style="padding:10px"><b>${esc(user.name)}</b><p class="muted small">${esc(user.email || "")}</p><p style="margin-top:6px">${roleBadge(user.role)}</p>${mustChange ? '<p class="hint">Modifiez votre mot de passe initial.</p>' : ""}</div>${ownerViews}<button class="pop-item" data-action="change-secret">${icon("key")}<span>Modifier le mot de passe</span></button><button class="pop-item" data-action="logout">${icon("logout")}<span>Se déconnecter</span></button>`;
     $("#bell-pop").hidden = !ui.bell; $("#user-pop").hidden = !ui.user;
     $("#bell-btn").setAttribute("aria-expanded", String(ui.bell)); $("#user-btn").setAttribute("aria-expanded", String(ui.user));
     const branchError = S().errors.branches;
@@ -782,6 +790,22 @@
       if (!r.ok) toast(`Session locale effacée, mais la révocation serveur a échoué : ${r.error}`, "error");
     },
     "change-secret": () => changeSecretModal(),
+    "owner-view": async (el) => {
+      const target = el.dataset.target;
+      const popup = window.open("", "_blank");
+      ui.user = false; renderTopbar();
+      try {
+        const result = await Store.ownerView(target);
+        const url = ownerViewUrl(target);
+        const payload = { scope: target, token: result.token, user: result.user, branchId: result.branchId };
+        const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payload)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+        if (popup) popup.location.href = `${url}#gk-view=${encoded}`;
+        else toast("Autorisez les fenêtres pop-up pour ouvrir cette vue.", "error");
+      } catch (error) {
+        if (popup) popup.close();
+        toast(error.message || "Impossible d'ouvrir cette vue.", "error");
+      }
+    },
     goto: (el) => { ui.bell = false; location.hash = el.dataset.href; renderTopbar(); },
     "retry-branches": async () => {
       if (await Store.loadBranches()) {

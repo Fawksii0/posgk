@@ -34,6 +34,7 @@ route("POST", "/api/auth/refresh", (c) => auth.refresh(c), { public: true, body:
 route("POST", "/api/auth/courier", (c) => auth.courierLogin(c), { public: true, body: true });
 route("POST", "/api/auth/staff", (c) => auth.staffLogin(c), { public: true, body: true });
 route("POST", "/api/auth/owner", (c) => auth.ownerLogin(c), { public: true, body: true });
+route("POST", "/api/owner/switch", (c) => auth.ownerSwitch(c), { body: true, branchScoped: false });
 route("POST", "/api/auth/change-secret", auth.changeSecret, { body: true });
 route("POST", "/api/auth/revoke", auth.revokeAll, { body: true });
 route("GET", "/api/me", admin.me);

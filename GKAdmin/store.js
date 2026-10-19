@@ -408,8 +408,14 @@ const Store = (() => {
   const saveRestaurant = (d) => saveSettings((s) => { s.restaurant = d; }, "Informations du restaurant mises à jour");
   const saveHours = (hours) => saveSettings((s) => { s.hours = hours; }, "Horaires d'ouverture mis à jour");
 
+  async function ownerView(target) {
+    if (state.user?.role !== "owner") throw new Error("Réservé au propriétaire.");
+    return api().post("/api/owner/switch", { target }, state.scope);
+  }
+
   return {
-    load, get, subscribe, currentUser, changeRequired, can, login, changeSecret, logout, loadBranches, refreshForRoute, routeStatus, refreshAll,
+    load, get, subscribe, currentUser, changeRequired, can, login, changeSecret, logout, loadBranches, refreshForRoute, refreshAll, routeStatus,
+    ownerView,
     setBranch,
     advanceOrder, refuseOrder, adjustPrep, assignCourier, cancelOrder, nextStatus, flowFor, statusLabel,
     saveProduct, toggleAvailability, deleteProduct, saveCategory, deleteCategory, saveZone, toggleZone, deleteZone,

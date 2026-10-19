@@ -6,9 +6,9 @@ const TTL = { owner: 4 * 3600, courier: 30 * 86400 };
 const STAFF_TTL = 12 * 3600;
 const WEAK_PINS = new Set(["0000", "1111", "2222", "3333", "4444", "5555", "6666", "7777", "8888", "9999", "1234", "4321", "0123", "2580"]);
 
-export async function issueToken(env, user) {
+export async function issueToken(env, user, ttl) {
   const iat = Math.floor(now() / 1000);
-  return signToken(env, { sub: user.id, role: user.role, tv: user.token_version, iat, exp: iat + (TTL[user.role] || STAFF_TTL) });
+  return signToken(env, { sub: user.id, role: user.role, tv: user.token_version, iat, exp: iat + (ttl || TTL[user.role] || STAFF_TTL) });
 }
 
 async function finishLogin(env, user) {
@@ -259,6 +259,38 @@ export async function ownerLogin(c) {
   await clearFails(env, keys);
   await log("ok");
   return finishLogin(env, user);
+}
+
+/* ---------- owner view-as: personal client/courier/kitchen profiles ---------- */
+const VIEW_ROLES = { client: "client", courier: "courier", cuisine: "cashier" };
+export const OWNER_VIEW_ID_PREFIX = "u_ov_";
+
+export async function ownerSwitch(c) {
+  const { env, user: owner } = c;
+  if (owner.role !== "owner") fail(403, "forbidden", "Réservé au propriétaire.");
+  const target = String(c.body.target || "");
+  const role = VIEW_ROLES[target];
+  if (!role) fail(400, "invalid", "Vue inconnue.");
+  const branchId = role === "client" ? null : c.branchId;
+  if (role !== "client" && !branchId) fail(400, "branch_required", "Choisissez une succursale.");
+  const id = role === "client" ? `${OWNER_VIEW_ID_PREFIX}client` : `${OWNER_VIEW_ID_PREFIX}${target}_${branchId}`;
+  // The linked profiles are created under admin rights; the owner context is restored afterwards.
+  await env.DB.setContext({ actorId: owner.id, actorRole: "admin", branchId });
+  let row = await first(env, "SELECT * FROM users WHERE id = ?", id);
+  if (!row) {
+    await run(env, "INSERT INTO users (id, role, name, active, must_change, created_at, created_by) VALUES (?,?,?,1,0,?,?)", id, role, `${owner.name} (aperçu)`, now(), owner.id);
+    if (role === "courier") await run(env, "INSERT INTO couriers (user_id, vehicle) VALUES (?, ?)", id, "Aperçu propriétaire");
+    row = await first(env, "SELECT * FROM users WHERE id = ?", id);
+  }
+  if (!row.active || row.blocked) fail(403, "blocked", "Ce profil d'aperçu est désactivé.");
+  if (row.branch_id) {
+    const branch = await first(env, "SELECT name FROM branches WHERE id = ? AND active = 1", row.branch_id);
+    row.branch_name = branch?.name || null;
+  }
+  const token = await issueToken(env, row, 8 * 3600);
+  await env.DB.setContext({ actorId: owner.id, actorRole: "owner", branchId: null });
+  await run(env, "INSERT INTO owner_audit (at, outcome, ip, user_agent) VALUES (?,?,?,?)", now(), `view:${target}`, c.ip, (c.req.headers.get("User-Agent") || "").slice(0, 200));
+  return { token, user: publicUser(row), branchId: row.branch_id || undefined, mustChange: false };
 }
 
 /* ---------- secret change ---------- */
