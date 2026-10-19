@@ -115,6 +115,14 @@ function selectedBranch() {
   return state.branches.find(branch => branch.id === state.selectedBranchId) || null;
 }
 
+const BRANCH_DETAILS = {
+  "gk-food": {
+    image: "./assets/gk-food-storefront.jpg",
+    address: "Bd de la Paix, Bouznika",
+    maps: "https://www.google.com/maps/search/?api=1&query=33.7868384,-7.163375"
+  }
+};
+
 async function chooseBranch(branchId) {
   const branch = state.branches.find(item => item.id === branchId);
   if (!branch) return showToast("Ce restaurant n'est pas disponible.");
@@ -326,11 +334,15 @@ function renderRestaurantCard() {
   const restaurant = state.settings.restaurant;
   const name = typeof restaurant === "string" ? restaurant : restaurant?.name;
   const hours = typeof state.settings.hours === "string" ? state.settings.hours : "";
+  const details = BRANCH_DETAILS[state.selectedBranchId] || {};
+  const address = (typeof restaurant === "object" && restaurant.address) || selectedBranch()?.address || details.address || "";
   return `<article class="restaurant-card">
-    <div class="mini-map" role="img" aria-label="Restaurant G&K"><span class="map-pin restaurant">${icon("store")}</span></div>
+    ${details.image
+      ? `<div class="mini-map photo"><img src="${details.image}" alt="Façade de ${escapeHtml(name || selectedBranch()?.name || "G&K Food")}" loading="lazy" /></div>`
+      : `<div class="mini-map" role="img" aria-label="Restaurant G&K"><span class="map-pin restaurant">${icon("store")}</span></div>`}
     <div class="restaurant-info">
       <div class="restaurant-logo"><img src="./assets/emblem-reference.png" alt="" /></div>
-      <div class="restaurant-text"><h3 class="restaurant-name">${escapeHtml(name || "G&K Food")}</h3><p class="restaurant-description">${escapeHtml(typeof restaurant === "object" ? restaurant.address || "" : "")}</p>
+      <div class="restaurant-text"><h3 class="restaurant-name">${escapeHtml(name || selectedBranch()?.name || "G&K Food")}</h3><p class="restaurant-description">${escapeHtml(address)}</p>
         <div class="restaurant-facts">${hours ? `<span>${icon("clock")}${escapeHtml(hours)}</span>` : ""}<span>${icon("bike")}${state.settings.deliveryOn ? "Livraison disponible" : "Livraison indisponible"}</span></div></div>
       <button class="round-button" type="button" data-action="directions" aria-label="Itinéraire vers G&K Food">${icon("navigate")}</button>
     </div>
@@ -849,6 +861,10 @@ main.addEventListener("click", event => {
       if (installPrompt) { installPrompt.prompt(); installPrompt = null; render(); }
       return;
     default:
+      if (action === "directions" && BRANCH_DETAILS[state.selectedBranchId]?.maps) {
+        window.open(BRANCH_DETAILS[state.selectedBranchId].maps, "_blank", "noopener");
+        return;
+      }
       if (actionMessages[action]) showToast(actionMessages[action]);
   }
 });

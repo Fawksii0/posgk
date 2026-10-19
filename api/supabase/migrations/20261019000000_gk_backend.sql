@@ -17,8 +17,8 @@ CREATE TABLE public.branches (
   active smallint NOT NULL DEFAULT 1 CHECK (active IN (0, 1))
 );
 
-INSERT INTO public.branches (id, slug, name, cuisine) VALUES
-  ('gk-food', 'gk-food', 'G&K Food', 'Main cuisine'),
+INSERT INTO public.branches (id, slug, name, cuisine, address) VALUES
+  ('gk-food', 'gk-food', 'G&K Food', 'Main cuisine', 'Bd de la Paix, Bouznika'),
   ('gk-shawarma-crispy', 'gk-shawarma-crispy', 'G&K Shawarma & Crispy', 'Shawarma & Crispy');
 
 CREATE TABLE public.users (
