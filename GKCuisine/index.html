@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#e3a81f">
+  <title>G&amp;K Cuisine</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css">
+  <script src="../shared/gk-bus.js" defer></script>
+  <script src="data.js" defer></script>
+  <script src="store.js" defer></script>
+  <script src="escpos.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="sheet-root"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="print-area" aria-hidden="true"></div>
+  <noscript>Cette application nécessite JavaScript.</noscript>
+</body>
+</html>

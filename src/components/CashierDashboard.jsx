@@ -1005,9 +1005,9 @@ const CashierDashboard = ({
         }
 
         .tab-btn.active {
-          background: #ff8a00;
-          color: white;
-          box-shadow: 0 10px 22px rgba(255, 138, 0, 0.18);
+          background: hsl(var(--primary));
+          color: hsl(var(--primary-foreground));
+          box-shadow: 0 10px 22px hsl(var(--primary) / 0.18);
           border: 1px solid transparent;
         }
 
@@ -1040,9 +1040,9 @@ const CashierDashboard = ({
         .menu-subtab-btn.active {
           opacity: 1;
           border-bottom-color: transparent;
-          background: #ff8a00;
-          color: white;
-          box-shadow: 0 8px 18px rgba(255, 138, 0, 0.14);
+          background: hsl(var(--primary));
+          color: hsl(var(--primary-foreground));
+          box-shadow: 0 8px 18px hsl(var(--primary) / 0.14);
         }
 
         .menu-subtab-btn:hover {

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#e3a81f" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="G&K Livreur" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <link rel="icon" href="./icons/icon-192.png" type="image/png" />
+    <link rel="stylesheet" href="./styles.css" />
+    <title>G&amp;K Livreur</title>
+  </head>
+  <body>
+    <div class="app-frame">
+      <header id="app-header" class="app-header"></header>
+      <main id="app-main"></main>
+      <nav id="bottom-nav" class="bottom-nav" aria-label="Navigation principale"></nav>
+    </div>
+    <div id="overlay" class="overlay" hidden></div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script defer src="../shared/gk-bus.js"></script>
+    <script defer src="./data.js"></script>
+    <script defer src="./store.js"></script>
+    <script defer src="./app.js"></script>
+  </body>
+</html>

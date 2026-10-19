@@ -131,7 +131,7 @@ h1, h2, h3, h4 {
 }
 
 .gradient-text {
-  color: #ff8a00;
+  color: hsl(var(--primary));
 }
 
 /* Buttons */
@@ -150,9 +150,9 @@ h1, h2, h3, h4 {
 }
 
 .btn-primary {
-  background: #ff8a00;
-  border: 1px solid rgba(255,138,0,0.15);
-  color: white;
+  background: hsl(var(--primary));
+  border: 1px solid hsl(var(--primary) / 0.15);
+  color: hsl(var(--primary-foreground));
   box-shadow: var(--shadow-md);
   font-weight: 600;
 }
@@ -194,7 +194,7 @@ h1, h2, h3, h4 {
 .glass-input:focus, input[type="text"]:focus, input[type="email"]:focus, input[type="number"]:focus, textarea:focus, select:focus {
   outline: none;
   border-color: hsl(var(--primary));
-  box-shadow: 0 0 0 3px hsla(var(--primary), 0.15);
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.15);
   background: hsl(var(--card));
 }
 

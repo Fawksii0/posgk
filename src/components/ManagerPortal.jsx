@@ -1524,12 +1524,12 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
         }
 
         .tab-btn:hover {
-          background: hsla(var(--primary), 0.08);
+          background: hsl(var(--primary) / 0.08);
           color: hsl(var(--primary));
         }
 
         .tab-btn.active {
-          background: hsla(var(--primary), 0.12);
+          background: hsl(var(--primary) / 0.12);
           color: hsl(var(--primary));
           border-bottom-color: hsl(var(--primary));
         }
@@ -1594,7 +1594,7 @@ const ManagerPortal = ({ orders, waiters, tables, onLogout, categories, menuItem
 
         .stat-card:hover {
           border-color: hsl(var(--primary));
-          box-shadow: 0 4px 12px hsla(var(--primary), 0.1);
+          box-shadow: 0 4px 12px hsl(var(--primary) / 0.1);
           transform: translateY(-2px);
         }
 

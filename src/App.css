@@ -209,13 +209,13 @@
 .table-btn:hover {
   border-color: hsl(var(--primary));
   color: hsl(var(--primary));
-  background: hsla(var(--primary), 0.1);
+  background: hsl(var(--primary) / 0.1);
 }
 
 .table-btn.active {
-  background: #ff8a00;
-  color: white;
-  border-color: rgba(255,138,0,0.15);
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary) / 0.15);
   box-shadow: var(--shadow-md);
 }
 

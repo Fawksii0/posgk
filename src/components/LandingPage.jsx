@@ -1,4 +1,3 @@
-import appLogo from '../../assests/icon.png';
 import Uicon from './Uicon';
 
 const LandingPage = ({ onGetStarted, onLogin }) => {
@@ -6,7 +5,7 @@ const LandingPage = ({ onGetStarted, onLogin }) => {
     <div className="landing-page">
       <header className="landing-header glass-card">
         <div className="landing-brand">
-          <img src={appLogo} alt="Spark logo" className="landing-logo" />
+          <img src="/gk-emblem.png" alt="G&K emblem" className="landing-logo" />
           <div>
             <div className="landing-brand-title">Spark</div>
             <div className="landing-brand-subtitle">Restaurant Management</div>
@@ -154,7 +153,7 @@ const LandingPage = ({ onGetStarted, onLogin }) => {
         }
         .feature-icon {
           font-size: 1.5rem;
-          color: #ff7a18;
+          color: hsl(var(--primary));
         }
         .feature-card h3 {
           margin: 0.75rem 0 0.5rem;
@@ -169,8 +168,8 @@ const LandingPage = ({ onGetStarted, onLogin }) => {
           display: inline-flex;
           padding: 0.45rem 0.85rem;
           border-radius: 999px;
-          background: rgba(255,165,0,0.16);
-          color: #b45309;
+          background: hsl(var(--secondary));
+          color: hsl(var(--icon-color));
           font-weight: 700;
           text-transform: uppercase;
           letter-spacing: 0.06em;
@@ -192,8 +191,8 @@ const LandingPage = ({ onGetStarted, onLogin }) => {
           gap: 1rem;
         }
         .featured {
-          background: linear-gradient(180deg, rgba(255, 230, 179, 0.9), rgba(255, 255, 255, 0.8));
-          border-color: rgba(255, 160, 0, 0.35);
+          background: linear-gradient(180deg, hsl(var(--primary) / 0.18), rgba(255, 255, 255, 0.8));
+          border-color: hsl(var(--primary) / 0.45);
         }
         .pricing-header {
           font-size: 1.2rem;
@@ -230,7 +229,7 @@ const LandingPage = ({ onGetStarted, onLogin }) => {
         }
         .pricing-card li::before {
           content: '•';
-          color: #ff8f00;
+          color: hsl(var(--icon-color));
           font-weight: 700;
           display: inline-block;
           width: 1rem;

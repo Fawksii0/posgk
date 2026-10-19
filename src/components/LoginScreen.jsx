@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import loginLogo from '../../assests/nobg.png';
 import { isCloudSyncEnabled, getUserByEmail, createUser, verifyPassword } from '../services/posSync';
 
 const LoginScreen = ({ onLogin, onBackToLanding }) => {
@@ -244,7 +243,7 @@ const LoginScreen = ({ onLogin, onBackToLanding }) => {
             <div className="brand-copy">
               <div className="brand-logo-display">
                 <span className="version-badge">BETA</span>
-                <img src={loginLogo} alt="Point of Sale logo" className="brand-copy-logo" />
+                <img src="/gk-emblem.png" alt="G&K emblem" className="brand-copy-logo" />
               </div>
               <h2>Point of Sale System</h2>
               <p>Fast, modern restaurant order management for staff and managers.</p>
@@ -271,7 +270,7 @@ const LoginScreen = ({ onLogin, onBackToLanding }) => {
 
             <div className="auth-panel-header">
               <div className="brand-mini">
-                <img src={loginLogo} alt="Point of Sale logo" className="login-logo-sm" />
+                <img src="/gk-emblem.png" alt="G&K emblem" className="login-logo-sm" />
               </div>
               <h3>{isLogin ? 'Sign in' : 'Create account'}</h3>
             </div>
@@ -464,14 +463,14 @@ const LoginScreen = ({ onLogin, onBackToLanding }) => {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          background: #ff8a00;
-          color: white;
+          background: hsl(var(--primary));
+          color: hsl(var(--primary-foreground));
           font-size: 0.75rem;
           font-weight: 800;
           padding: 0.35rem 0.6rem;
           border-radius: 6px;
           letter-spacing: 0.5px;
-          box-shadow: 0 6px 14px rgba(255, 138, 0, 0.18);
+          box-shadow: 0 6px 14px hsl(var(--primary) / 0.18);
           text-transform: uppercase;
         }
 
@@ -651,8 +650,8 @@ const LoginScreen = ({ onLogin, onBackToLanding }) => {
         }
 
         .btn-primary {
-          background: #ff8a00;
-          color: white;
+          background: hsl(var(--primary));
+          color: hsl(var(--primary-foreground));
         }
 
         .btn-primary:hover {

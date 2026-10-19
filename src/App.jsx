@@ -4,7 +4,7 @@ import CashierDashboard from './components/CashierDashboard';
 import LandingPage from './components/LandingPage';
 import LoginScreen from './components/LoginScreen';
 import ManagerPortal from './components/ManagerPortal';
-import appLogo from '../assests/icon.png';
+import AdminPortal from './components/AdminPortal';
 import Uicon from './components/Uicon';
 import { MENU_ITEMS, CATEGORIES } from './mockData';
 import { isCloudSyncEnabled, readCloudState, writeCloudState } from './services/posSync';
@@ -74,7 +74,8 @@ function App() {
     const parsedUser = JSON.parse(savedUser);
     if (parsedUser.role === 'manager') return 'manager';
     return parsedUser.role === 'cashier' ? 'cashier' : 'waiter';
-  }); // 'waiter' or 'cashier' or 'manager'
+  }); // 'waiter' or 'cashier' or 'manager' or 'admin'
+  const [showAdminPortal, setShowAdminPortal] = useState(false);
   const [orders, setOrders] = useState(() => readLocalJson(STORAGE_KEYS.orders, []));
   const [tables, setTables] = useState(() => readLocalJson(STORAGE_KEYS.tables, DEFAULT_TABLES));
   const [menuItems, setMenuItems] = useState(() => readLocalJson(STORAGE_KEYS.menuItems, MENU_ITEMS));
@@ -535,7 +536,7 @@ function App() {
         <div className="header-content">
           <div className="header-left">
             <div className="brand-header">
-              <img src={appLogo} alt="Spark logo" className="app-logo" />
+              <img src="/gk-emblem.png" alt="G&K emblem" className="app-logo" />
               <span className="header-version-badge">BETA</span>
             </div>
             <span className={`sync-badge ${syncStatus}`}>
@@ -637,6 +638,14 @@ function App() {
                 )}
               </div>
             )}
+            <button 
+              className="btn btn-secondary" 
+              title="Access Admin Portal"
+              onClick={() => setShowAdminPortal(true)}
+              style={{ marginRight: '0.5rem' }}
+            >
+              <Uicon icon="fi-rr-shield-admin" /> Admin
+            </button>
             <button className="btn btn-secondary logout-btn" onClick={handleLogout}>
               <Uicon icon="fi-rr-sign-out" /> Logout
             </button>
@@ -645,7 +654,16 @@ function App() {
       </header>
 
       <main>
-        {currentUser.role === 'manager' ? (
+        {showAdminPortal ? (
+          <AdminPortal 
+            orders={orders}
+            waiters={waiters}
+            syncStatus={syncStatus}
+            onLogout={() => {
+              setShowAdminPortal(false);
+            }}
+          />
+        ) : currentUser.role === 'manager' ? (
           <ManagerPortal 
             orders={orders} 
             waiters={waiters}
@@ -777,11 +795,11 @@ function App() {
           font-size: 0.7rem;
           font-weight: 800;
           text-transform: uppercase;
-          color: white;
-          background: linear-gradient(135deg, #ff9c1f 0%, #ff8a00 100%);
+          color: hsl(var(--primary-foreground));
+          background: hsl(var(--primary));
           padding: 0.3rem 0.65rem;
           border-radius: 999px;
-          box-shadow: 0 6px 16px rgba(255, 146, 31, 0.25);
+          box-shadow: 0 6px 16px hsl(var(--primary) / 0.25);
         }
         .nav-info {
           font-size: 0.9rem;

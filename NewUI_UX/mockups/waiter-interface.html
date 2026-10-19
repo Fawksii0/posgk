@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#111111" />
+    <title>Waiter Service · POSGK Mockup</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #171717;
+        background: #fcfaf5;
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        --primary: #f6b83f;
+        --primary-dark: #a56a00;
+        --ink-muted: #748096;
+        --line: #e7ebf2;
+        --surface: #fff;
+        --green: #14804a;
+        --green-bg: #e8f7ef;
+        --amber: #a86208;
+        --amber-bg: #fff4df;
+        --shadow: 0 12px 34px rgba(26, 42, 72, 0.07);
+      }
+
+      * { box-sizing: border-box; }
+      body { margin: 0; min-width: 320px; }
+      button, input { font: inherit; }
+      button { cursor: pointer; }
+      button:focus-visible, input:focus-visible { outline: 3px solid #d9a52f; outline-offset: 2px; }
+
+      .app-shell { min-height: 100vh; display: grid; grid-template-columns: 224px minmax(0, 1fr); }
+      .sidebar {
+        position: sticky;
+        top: 0;
+        display: flex;
+        height: 100vh;
+        flex-direction: column;
+        padding: 26px 16px 18px;
+        color: #fff;
+        background: #111;
+      }
+      .brand { display: flex; align-items: center; gap: 11px; padding: 0 10px 32px; font-size: 18px; font-weight: 750; letter-spacing: -0.4px; }
+      .brand-mark { display: block; width: 34px; height: 34px; flex: none; border-radius: 9px; object-fit: cover; }
+      .workspace-label { padding: 0 12px 10px; color: #938d80; font-size: 10px; font-weight: 750; letter-spacing: 1.1px; text-transform: uppercase; }
+      .nav-link { display: flex; min-height: 44px; align-items: center; gap: 12px; padding: 0 12px; border: 0; border-radius: 9px; color: #c4c0b8; background: transparent; text-align: left; }
+      .nav-link + .nav-link { margin-top: 4px; }
+      .nav-link.active { color: #171717; background: var(--primary); }
+      .nav-icon { width: 18px; color: inherit; font-size: 17px; text-align: center; }
+      .nav-count { margin-left: auto; padding: 2px 7px; border-radius: 12px; color: #f7d98f; background: #3d3320; font-size: 11px; }
+      .sidebar-spacer { flex: 1; }
+      .shift-card { padding: 14px; border: 1px solid #37342e; border-radius: 12px; background: #1e1d1a; }
+      .shift-card small { display: block; margin-bottom: 6px; color: #aaa49a; font-size: 11px; }
+      .shift-card strong { font-size: 13px; }
+      .profile { display: flex; align-items: center; gap: 10px; padding: 18px 6px 0; }
+      .avatar { display: grid; width: 34px; height: 34px; flex: none; place-items: center; border-radius: 50%; color: #704900; background: #fff1ce; font-size: 12px; font-weight: 750; }
+      .profile-name { font-size: 12px; font-weight: 700; }
+      .profile-role { margin-top: 3px; color: #aaa49a; font-size: 10px; }
+
+      .main { min-width: 0; padding: 24px clamp(18px, 3vw, 42px) 36px; }
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 27px; }
+      .eyebrow { margin: 0 0 5px; color: var(--ink-muted); font-size: 12px; }
+      h1 { margin: 0; font-size: clamp(23px, 2.4vw, 30px); letter-spacing: -1px; }
+      .top-actions { display: flex; align-items: center; gap: 10px; }
+      .service-status { display: flex; align-items: center; gap: 7px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; color: #34435a; background: #fff; font-size: 12px; font-weight: 650; }
+      .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #22a465; }
+      .icon-button { position: relative; display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid var(--line); border-radius: 10px; color: #42516a; background: #fff; font-size: 17px; }
+      .notification-dot { position: absolute; top: 7px; right: 7px; width: 7px; height: 7px; border: 1px solid #fff; border-radius: 50%; background: #ef5964; }
+
+      .stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; margin-bottom: 28px; }
+      .stat-card { display: flex; min-height: 82px; align-items: center; gap: 12px; padding: 15px 17px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+      .stat-icon { display: grid; width: 38px; height: 38px; flex: none; place-items: center; border-radius: 10px; color: #8c5a00; background: #fff3d8; font-size: 17px; }
+      .stat-label { color: var(--ink-muted); font-size: 11px; }
+      .stat-value { margin-top: 4px; font-size: 19px; font-weight: 750; letter-spacing: -0.5px; }
+
+      .content-grid { display: grid; grid-template-columns: minmax(0, 1fr) 326px; align-items: start; gap: 20px; }
+      .left-column { min-width: 0; }
+      .panel { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); }
+      .panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 19px 20px 14px; }
+      .panel-heading h2 { margin: 0; font-size: 15px; letter-spacing: -0.2px; }
+      .panel-heading p { margin: 5px 0 0; color: var(--ink-muted); font-size: 11px; }
+      .text-button { padding: 4px 0; border: 0; color: var(--primary); background: transparent; font-size: 11px; font-weight: 700; }
+      .table-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 0 20px 19px; }
+      .table-card { position: relative; min-height: 93px; padding: 12px; border: 1px solid var(--line); border-radius: 11px; color: #202c40; background: #fff; text-align: left; transition: border-color 150ms, background 150ms, transform 150ms; }
+      .table-card:hover { transform: translateY(-1px); border-color: #d9bd7c; }
+      .table-card.selected { border: 2px solid var(--primary); padding: 11px; background: #fff8e9; }
+      .table-card.occupied .table-state { color: var(--amber); background: var(--amber-bg); }
+      .table-card.ready .table-state { color: var(--green); background: var(--green-bg); }
+      .table-top { display: flex; align-items: center; justify-content: space-between; }
+      .table-number { font-size: 13px; font-weight: 750; }
+      .table-seats { color: var(--ink-muted); font-size: 10px; }
+      .table-state { display: inline-flex; margin-top: 14px; padding: 4px 7px; border-radius: 20px; color: #58677e; background: #f0f2f6; font-size: 9px; font-weight: 700; }
+
+      .menu-panel { margin-top: 18px; }
+      .menu-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 20px 15px; }
+      .categories { display: flex; gap: 6px; overflow-x: auto; }
+      .category-button { flex: none; padding: 8px 11px; border: 1px solid transparent; border-radius: 8px; color: #68758b; background: transparent; font-size: 11px; font-weight: 650; }
+      .category-button.active { border-color: #efd99f; color: var(--primary-dark); background: #fff7e5; }
+      .search { width: min(190px, 40%); padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; color: #26344b; background: #fff; font-size: 11px; }
+      .product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px; padding: 0 20px 20px; }
+      .product-card { overflow: hidden; border: 1px solid var(--line); border-radius: 11px; background: #fff; }
+      .food-art { display: grid; height: 105px; place-items: center; background: linear-gradient(145deg, #f7dec6, #f5efdf 55%, #e9f1dc); font-size: 37px; }
+      .product-card:nth-child(3n + 2) .food-art { background: linear-gradient(145deg, #e7eafd, #f8e8e4 55%, #f6edda); }
+      .product-card:nth-child(3n) .food-art { background: linear-gradient(145deg, #e4f0e9, #fff1d7 55%, #f3e8e0); }
+      .product-info { padding: 10px 11px 11px; }
+      .product-name { overflow: hidden; margin: 0; font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+      .product-description { overflow: hidden; height: 25px; margin: 4px 0 9px; color: var(--ink-muted); font-size: 9px; line-height: 1.4; }
+      .product-bottom { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+      .product-price { font-size: 11px; font-weight: 750; white-space: nowrap; }
+      .add-button { display: grid; width: 27px; height: 27px; place-items: center; border: 0; border-radius: 8px; color: #fff; background: var(--primary); font-size: 17px; line-height: 1; }
+      .add-button:hover, .primary-button:hover { background: var(--primary-dark); }
+      .empty-state { grid-column: 1 / -1; padding: 24px 10px; color: var(--ink-muted); font-size: 12px; text-align: center; }
+
+      .order-panel { position: sticky; top: 18px; overflow: hidden; }
+      .order-heading { padding: 19px 18px 15px; border-bottom: 1px solid var(--line); }
+      .order-heading-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+      .order-heading h2 { margin: 0; font-size: 15px; }
+      .order-tag { padding: 5px 8px; border-radius: 20px; color: #704900; background: #fff1ce; font-size: 9px; font-weight: 750; }
+      .order-table { margin: 7px 0 0; color: var(--ink-muted); font-size: 11px; }
+      .order-items { min-height: 165px; max-height: 310px; overflow-y: auto; padding: 5px 18px; }
+      .order-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 13px 0; border-bottom: 1px solid #f0f2f6; }
+      .line-name { font-size: 11px; font-weight: 700; }
+      .line-price { margin-top: 4px; color: var(--ink-muted); font-size: 10px; }
+      .line-controls { display: flex; align-items: center; gap: 6px; }
+      .quantity-button { display: grid; width: 24px; height: 24px; place-items: center; border: 1px solid var(--line); border-radius: 7px; color: #465570; background: #fff; font-size: 14px; }
+      .quantity { min-width: 12px; font-size: 10px; font-weight: 700; text-align: center; }
+      .order-empty { padding: 34px 8px; color: var(--ink-muted); font-size: 11px; text-align: center; }
+      .order-summary { padding: 12px 18px 18px; border-top: 1px solid var(--line); }
+      .summary-row { display: flex; justify-content: space-between; margin: 9px 0; color: #68758b; font-size: 11px; }
+      .summary-row.total { margin-top: 13px; color: #172033; font-size: 14px; font-weight: 750; }
+      .primary-button { width: 100%; min-height: 42px; margin-top: 9px; border: 0; border-radius: 9px; color: #171717; background: var(--primary); font-size: 11px; font-weight: 750; transition: background 150ms; }
+      .primary-button:disabled { cursor: not-allowed; color: #9aa5b5; background: #e6eaf0; }
+      .order-hint { margin: 9px 0 0; color: var(--ink-muted); font-size: 9px; line-height: 1.5; text-align: center; }
+      .toast { position: fixed; right: 24px; bottom: 24px; z-index: 2; max-width: calc(100vw - 32px); padding: 13px 17px; border-radius: 10px; color: #fff; background: #111; box-shadow: var(--shadow); font-size: 12px; opacity: 0; pointer-events: none; transform: translateY(8px); transition: 180ms; }
+      .toast.show { opacity: 1; transform: translateY(0); }
+
+      @media (max-width: 1120px) {
+        .app-shell { grid-template-columns: 190px minmax(0, 1fr); }
+        .content-grid { grid-template-columns: minmax(0, 1fr) 295px; gap: 14px; }
+        .table-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      }
+      @media (max-width: 850px) {
+        .app-shell { display: block; }
+        .sidebar { position: static; display: flex; width: 100%; height: auto; flex-direction: row; align-items: center; gap: 12px; padding: 10px 18px; }
+        .brand { padding: 0 8px 0 0; }
+        .workspace-label, .sidebar-spacer, .shift-card, .profile { display: none; }
+        .nav-link { min-height: 38px; padding: 0 10px; font-size: 11px; }
+        .nav-link + .nav-link { margin: 0; }
+        .main { padding: 22px 20px 32px; }
+        .content-grid { grid-template-columns: minmax(0, 1fr) 300px; }
+      }
+      @media (max-width: 680px) {
+        .sidebar { gap: 5px; padding: 9px 12px; }
+        .brand { gap: 7px; padding-right: 5px; font-size: 15px; }
+        .brand-mark { width: 30px; height: 30px; }
+        .nav-link { gap: 7px; padding: 0 8px; font-size: 10px; }
+        .nav-icon { width: 14px; }
+        .main { padding: 18px 14px 25px; }
+        .topbar { align-items: flex-start; margin-bottom: 18px; }
+        .top-actions { gap: 6px; }
+        .service-status { padding: 8px; font-size: 0; }
+        .service-status .status-dot { width: 8px; height: 8px; }
+        .icon-button { width: 35px; height: 35px; }
+        .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 18px; }
+        .stat-card { min-height: 68px; gap: 9px; padding: 10px; }
+        .stat-icon { width: 32px; height: 32px; }
+        .stat-value { font-size: 16px; }
+        .content-grid { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+        .panel-heading { padding: 16px 14px 12px; }
+        .table-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; padding: 0 14px 15px; }
+        .table-card { min-height: 80px; padding: 9px; }
+        .table-card.selected { padding: 8px; }
+        .table-state { margin-top: 11px; font-size: 8px; }
+        .menu-toolbar { align-items: flex-start; flex-direction: column; padding: 0 14px 12px; }
+        .categories { max-width: 100%; }
+        .search { width: 100%; }
+        .product-grid { gap: 8px; padding: 0 14px 15px; }
+        .food-art { height: 90px; }
+        .order-panel { position: static; }
+        .order-items { min-height: 90px; max-height: 230px; }
+        .toast { right: 16px; bottom: 16px; }
+      }
+      @media (max-width: 390px) {
+        .brand { font-size: 0; }
+        .brand-mark { width: 30px; height: 30px; }
+        .nav-link { font-size: 9px; }
+        .table-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Main navigation">
+        <div class="brand"><img class="brand-mark" src="../../public/gk-emblem.png" alt="" /> POSGK</div>
+        <div class="workspace-label">Workspace</div>
+        <button class="nav-link active" type="button"><span class="nav-icon" aria-hidden="true">▦</span> Service</button>
+        <button class="nav-link" type="button"><span class="nav-icon" aria-hidden="true">▤</span> My orders <span class="nav-count">3</span></button>
+        <div class="sidebar-spacer"></div>
+        <div class="shift-card"><small>Current shift</small><strong>Today, 10:00 – 18:00</strong></div>
+        <div class="profile">
+          <div class="avatar" aria-hidden="true">AM</div>
+          <div><div class="profile-name">Alex Morgan</div><div class="profile-role">Waiter · Floor 1</div></div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Saturday, October 17, 2026</p>
+            <h1>Good afternoon, Alex</h1>
+          </div>
+          <div class="top-actions">
+            <div class="service-status"><span class="status-dot"></span> Service is live</div>
+            <button class="icon-button" type="button" aria-label="Notifications" title="Notifications">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+                <path d="M10 21h4" />
+              </svg>
+              <span class="notification-dot"></span>
+            </button>
+          </div>
+        </header>
+
+        <section class="stat-grid" aria-label="Shift overview">
+          <div class="stat-card"><div class="stat-icon" aria-hidden="true">▦</div><div><div class="stat-label">My tables</div><div class="stat-value">8</div></div></div>
+          <div class="stat-card"><div class="stat-icon" aria-hidden="true">◷</div><div><div class="stat-label">Active orders</div><div class="stat-value">3</div></div></div>
+          <div class="stat-card"><div class="stat-icon" aria-hidden="true">✓</div><div><div class="stat-label">Ready to serve</div><div class="stat-value">1</div></div></div>
+          <div class="stat-card"><div class="stat-icon" aria-hidden="true">◉</div><div><div class="stat-label">Guests served</div><div class="stat-value">12</div></div></div>
+        </section>
+
+        <div class="content-grid">
+          <div class="left-column">
+            <section class="panel" aria-labelledby="tables-title">
+              <div class="panel-heading">
+                <div><h2 id="tables-title">Choose a table</h2><p>Select a table to start or continue an order.</p></div>
+                <button class="text-button" type="button" id="clear-table">Clear selection</button>
+              </div>
+              <div class="table-grid" id="table-grid"></div>
+            </section>
+
+            <section class="panel menu-panel" aria-labelledby="menu-title">
+              <div class="panel-heading">
+                <div><h2 id="menu-title">Menu</h2><p>Tap an item to add it to the current order.</p></div>
+                <span class="order-tag">8 items</span>
+              </div>
+              <div class="menu-toolbar">
+                <div class="categories" id="categories" role="group" aria-label="Menu categories"></div>
+                <input class="search" id="search" type="search" placeholder="Search menu…" aria-label="Search menu items" />
+              </div>
+              <div class="product-grid" id="products"></div>
+            </section>
+          </div>
+
+          <aside class="panel order-panel" aria-labelledby="order-title">
+            <div class="order-heading">
+              <div class="order-heading-top"><h2 id="order-title">Current order</h2><span class="order-tag" id="item-count">0 items</span></div>
+              <p class="order-table" id="order-table">Select a table to get started</p>
+            </div>
+            <div class="order-items" id="order-items" aria-live="polite"></div>
+            <div class="order-summary">
+              <div class="summary-row"><span>Subtotal</span><strong id="subtotal">0.00 MAD</strong></div>
+              <div class="summary-row"><span>Tax</span><strong>Included</strong></div>
+              <div class="summary-row total"><span>Total</span><strong id="total">0.00 MAD</strong></div>
+              <button class="primary-button" id="send-order" type="button" disabled>Send order to kitchen</button>
+              <p class="order-hint">The cashier will be notified when this order is sent.</p>
+            </div>
+          </aside>
+        </div>
+      </main>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      const tables = [
+        { name: "Table 01", seats: 2, state: "Available", kind: "available" },
+        { name: "Table 02", seats: 4, state: "In service", kind: "occupied" },
+        { name: "Table 03", seats: 4, state: "Available", kind: "available" },
+        { name: "Table 04", seats: 2, state: "In service", kind: "occupied" },
+        { name: "Table 05", seats: 6, state: "Ready", kind: "ready" },
+        { name: "Table 06", seats: 4, state: "Available", kind: "available" },
+        { name: "Table 07", seats: 2, state: "Available", kind: "available" },
+        { name: "Table 08", seats: 4, state: "In service", kind: "occupied" }
+      ];
+      const products = [
+        { id: 1, name: "Bruschetta", category: "Starters", description: "Tomato, garlic & fresh basil", price: 8.5, art: "🍅" },
+        { id: 2, name: "Calamari Fritti", category: "Starters", description: "Crispy squid with lemon aioli", price: 12, art: "🍤" },
+        { id: 3, name: "Margherita Pizza", category: "Mains", description: "San Marzano tomato & mozzarella", price: 14, art: "🍕" },
+        { id: 4, name: "Seafood Pasta", category: "Mains", description: "Mussels, clams & fresh shrimp", price: 22, art: "🍝" },
+        { id: 5, name: "Ribeye Steak", category: "Mains", description: "Rosemary potatoes & seasonal greens", price: 28.5, art: "🥩" },
+        { id: 6, name: "Fresh Lemonade", category: "Drinks", description: "Homemade with organic lemons", price: 5.5, art: "🍋" },
+        { id: 7, name: "Red Wine · Glass", category: "Drinks", description: "Local Montepulciano", price: 9, art: "🍷" },
+        { id: 8, name: "Tiramisu", category: "Desserts", description: "Espresso-soaked, made in-house", price: 7.5, art: "🍰" }
+      ];
+      const categories = ["All", "Starters", "Mains", "Drinks", "Desserts"];
+      let selectedTable = "Table 04";
+      let selectedCategory = "All";
+      let order = [{ id: 3, quantity: 1 }, { id: 6, quantity: 2 }];
+      let toastTimeout;
+
+      const money = value => `${value.toFixed(2)} MAD`;
+      const tableGrid = document.querySelector("#table-grid");
+      const categoryList = document.querySelector("#categories");
+      const productGrid = document.querySelector("#products");
+      const orderItems = document.querySelector("#order-items");
+
+      function renderTables() {
+        tableGrid.innerHTML = tables.map(table => `
+          <button class="table-card ${table.kind} ${selectedTable === table.name ? "selected" : ""}" type="button" data-table="${table.name}" aria-pressed="${selectedTable === table.name}">
+            <span class="table-top"><span class="table-number">${table.name}</span><span class="table-seats">${table.seats} seats</span></span>
+            <span class="table-state">${table.state}</span>
+          </button>
+        `).join("");
+      }
+
+      function renderCategories() {
+        categoryList.innerHTML = categories.map(category => `
+          <button class="category-button ${selectedCategory === category ? "active" : ""}" type="button" data-category="${category}" aria-pressed="${selectedCategory === category}">${category}</button>
+        `).join("");
+      }
+
+      function renderProducts() {
+        const query = document.querySelector("#search").value.trim().toLowerCase();
+        const visibleProducts = products.filter(product =>
+          (selectedCategory === "All" || product.category === selectedCategory) &&
+          `${product.name} ${product.description}`.toLowerCase().includes(query)
+        );
+        productGrid.innerHTML = visibleProducts.length ? visibleProducts.map(product => `
+          <article class="product-card">
+            <div class="food-art" aria-hidden="true">${product.art}</div>
+            <div class="product-info">
+              <h3 class="product-name">${product.name}</h3>
+              <p class="product-description">${product.description}</p>
+              <div class="product-bottom"><span class="product-price">${money(product.price)}</span><button class="add-button" type="button" data-add="${product.id}" aria-label="Add ${product.name}">+</button></div>
+            </div>
+          </article>
+        `).join("") : '<div class="empty-state">No menu items match your search.</div>';
+      }
+
+      function renderOrder() {
+        const count = order.reduce((sum, line) => sum + line.quantity, 0);
+        const total = order.reduce((sum, line) => sum + products.find(product => product.id === line.id).price * line.quantity, 0);
+        orderItems.innerHTML = order.length ? order.map(line => {
+          const product = products.find(item => item.id === line.id);
+          return `
+            <div class="order-line">
+              <div><div class="line-name">${product.name}</div><div class="line-price">${money(product.price * line.quantity)}</div></div>
+              <div class="line-controls">
+                <button class="quantity-button" type="button" data-quantity="${line.id}" data-delta="-1" aria-label="Remove one ${product.name}">−</button>
+                <span class="quantity">${line.quantity}</span>
+                <button class="quantity-button" type="button" data-quantity="${line.id}" data-delta="1" aria-label="Add one ${product.name}">+</button>
+              </div>
+            </div>`;
+        }).join("") : '<div class="order-empty">Your order is empty.<br />Choose an item from the menu.</div>';
+        document.querySelector("#item-count").textContent = `${count} ${count === 1 ? "item" : "items"}`;
+        document.querySelector("#order-table").textContent = selectedTable ? `${selectedTable} · Alex Morgan` : "Select a table to get started";
+        document.querySelector("#subtotal").textContent = money(total);
+        document.querySelector("#total").textContent = money(total);
+        document.querySelector("#send-order").disabled = !selectedTable || order.length === 0;
+      }
+
+      function showToast(message) {
+        const toast = document.querySelector("#toast");
+        toast.textContent = message;
+        toast.classList.add("show");
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => toast.classList.remove("show"), 2600);
+      }
+
+      tableGrid.addEventListener("click", event => {
+        const button = event.target.closest("[data-table]");
+        if (!button) return;
+        selectedTable = button.dataset.table;
+        renderTables();
+        renderOrder();
+      });
+      categoryList.addEventListener("click", event => {
+        const button = event.target.closest("[data-category]");
+        if (!button) return;
+        selectedCategory = button.dataset.category;
+        renderCategories();
+        renderProducts();
+      });
+      productGrid.addEventListener("click", event => {
+        const button = event.target.closest("[data-add]");
+        if (!button) return;
+        const id = Number(button.dataset.add);
+        const line = order.find(item => item.id === id);
+        if (line) line.quantity += 1;
+        else order.push({ id, quantity: 1 });
+        renderOrder();
+      });
+      orderItems.addEventListener("click", event => {
+        const button = event.target.closest("[data-quantity]");
+        if (!button) return;
+        const id = Number(button.dataset.quantity);
+        const line = order.find(item => item.id === id);
+        line.quantity += Number(button.dataset.delta);
+        order = order.filter(item => item.quantity > 0);
+        renderOrder();
+      });
+      document.querySelector("#search").addEventListener("input", renderProducts);
+      document.querySelector("#clear-table").addEventListener("click", () => {
+        selectedTable = "";
+        renderTables();
+        renderOrder();
+      });
+      document.querySelector("#send-order").addEventListener("click", () => {
+        if (!selectedTable || order.length === 0) return;
+        showToast(`Order for ${selectedTable} sent to the kitchen.`);
+        order = [];
+        renderOrder();
+      });
+
+      renderTables();
+      renderCategories();
+      renderProducts();
+      renderOrder();
+    </script>
+  </body>
+</html>
