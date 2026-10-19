@@ -24,7 +24,6 @@ try {
     count(*) FILTER (WHERE role = 'admin')::int AS admins,
     count(*) FILTER (WHERE role = 'manager')::int AS managers,
     count(*) FILTER (WHERE role = 'owner')::int AS owners FROM public.users`);
-  if (!counts.admins || !counts.managers) throw new Error("Create a platform admin and at least one branch manager first.");
   if (counts.owners) throw new Error("An owner already exists.");
   const email = (await prompt("Owner e-mail: ")).trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 120) throw new Error("Invalid e-mail.");

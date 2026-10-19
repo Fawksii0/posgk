@@ -43,7 +43,7 @@ The owner is not created automatically. First configure `OWNER_DOOR_KEY` as an E
 npm run create-owner
 ```
 
-The bootstrap script requires both an administrator and at least one manager, prevents creating a second owner, and stores only a PBKDF2 password hash. Owner sign-in still requires both that password and the private door key; owner audit remains separate from ordinary audit.
+The bootstrap script prevents creating a second owner and stores only a PBKDF2 password hash. An administrator and managers are not required first and can be added later. Owner sign-in still requires both that password and the private door key; owner audit remains separate from ordinary audit.
 
 ## API and branch contract
 
