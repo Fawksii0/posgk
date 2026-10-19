@@ -236,28 +236,18 @@ function renderProductGrid(items = filteredProducts()) {
 function renderAuth() {
   const login = state.authMode === "login";
   const back = state.afterAuth === "cart";
-  if (state.authStep === "otp") {
-    return `<section class="auth" aria-labelledby="auth-heading">
-      <button class="icon-button" type="button" data-action="auth-back" aria-label="Retour">${icon("chevronLeft")}</button>
-      <h1 id="auth-heading">Code de vérification</h1>
-      <p class="auth-lead">Saisissez le code à six chiffres envoyé au ${escapeHtml(state.pendingUser.phone)}.</p>
-      <form id="otp-form" novalidate>
-        <label class="field"><span>Code à 6 chiffres</span><input id="otp-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="••••••" required /></label>
-        <p class="form-error" role="alert"></p>
-        <button class="gold-button full-width" type="submit">Valider</button>
-      </form>
-      <p class="fineprint">Le code est envoyé par SMS lorsque le service SMS du serveur est configuré.</p>
-    </section>`;
-  }
   return `<section class="auth" aria-labelledby="auth-heading">
     <div class="onboarding-top"><img class="onboarding-logo" src="./assets/emblem-reference.png" alt="G&K Food" /></div>
     <h1 id="auth-heading">${login ? "Bon retour !" : "Créer un compte"}</h1>
     <p class="auth-lead">${back ? "Connectez-vous pour finaliser votre commande." : "Connectez-vous pour consulter vos commandes."}</p>
     <form id="auth-form" novalidate>
-      ${login ? "" : `<label class="field"><span>Nom complet</span><input name="name" autocomplete="name" placeholder="Votre nom complet" /></label>`}
+      ${login ? `<label class="field"><span>E-mail ou téléphone</span><input name="identifier" autocomplete="username" placeholder="vous@exemple.com ou 06 12 34 56 78" /></label>` : `
+      <label class="field"><span>Nom complet</span><input name="name" autocomplete="name" placeholder="Votre nom complet" /></label>
       <label class="field"><span>Téléphone</span><input name="phone" type="tel" autocomplete="tel" placeholder="06 12 34 56 78" /></label>
+      <label class="field"><span>E-mail</span><input name="email" type="email" autocomplete="email" placeholder="vous@exemple.com" /></label>`}
+      <label class="field"><span>Mot de passe</span><input name="password" type="password" autocomplete="${login ? "current-password" : "new-password"}" placeholder="${login ? "Votre mot de passe" : "8 caractères minimum"}" /></label>
       <p class="form-error" role="alert"></p>
-      <button class="gold-button full-width" type="submit">${login ? "Recevoir mon code" : "S'inscrire"}</button>
+      <button class="gold-button full-width" type="submit">${login ? "Se connecter" : "S'inscrire"}</button>
     </form>
     <p class="auth-switch">${login ? "Pas encore de compte ?" : "Déjà inscrit ?"} <button class="text-button" type="button" data-action="auth-switch">${login ? "Créer un compte" : "Se connecter"}</button></p>
     <button class="outline-button full-width" type="button" data-action="guest">${back ? "Retour au panier" : "Continuer en invité"}</button>
@@ -906,38 +896,31 @@ main.addEventListener("submit", async event => {
     }
   } else if (form.id === "auth-form") {
     const data = new FormData(form);
-    const phone = String(data.get("phone")).replace(/[\s.-]/g, "");
-    const name = String(data.get("name") ?? "").trim();
-    if (state.authMode === "signup" && name.length < 2) return formError(form, "Saisissez votre nom.");
-    if (!PHONE_RE.test(phone)) return formError(form, "Numéro invalide. Exemple : 06 12 34 56 78.");
-    const button = form.querySelector('[type="submit"]');
-    button.disabled = true;
-    try {
-      await GKApi.post("/api/auth/client/request-code", { phone });
-      state.pendingUser = { name, phone };
-      state.authStep = "otp";
-      render();
-      document.querySelector("#otp-code").focus();
-    } catch (error) {
-      formError(form, error.message || "Impossible de demander un code de vérification.");
-    } finally {
-      if (button.isConnected) button.disabled = false;
+    const signup = state.authMode === "signup";
+    const password = String(data.get("password") ?? "");
+    let path, body;
+    if (signup) {
+      const name = String(data.get("name") ?? "").trim();
+      const phone = String(data.get("phone") ?? "").replace(/[\s.-]/g, "");
+      const email = String(data.get("email") ?? "").trim().toLowerCase();
+      if (name.length < 2) return formError(form, "Saisissez votre nom.");
+      if (!PHONE_RE.test(phone)) return formError(form, "Numéro invalide. Exemple : 06 12 34 56 78.");
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return formError(form, "E-mail invalide.");
+      if (password.length < 8) return formError(form, "Le mot de passe doit contenir au moins 8 caractères.");
+      path = "/api/auth/client/signup";
+      body = { name, phone, email, password };
+    } else {
+      const identifier = String(data.get("identifier") ?? "").trim();
+      if (!identifier || !password) return formError(form, "Saisissez votre e-mail ou téléphone et votre mot de passe.");
+      path = "/api/auth/client/login";
+      body = { identifier, password };
     }
-  } else if (form.id === "otp-form") {
-    const code = String(new FormData(form).get("code") || "");
-    if (!/^\d{6}$/.test(code)) return formError(form, "Saisissez le code à six chiffres reçu par SMS.");
     const button = form.querySelector('[type="submit"]');
     button.disabled = true;
     try {
-      const result = await GKApi.post("/api/auth/client/verify-code", {
-        phone: state.pendingUser.phone,
-        code,
-        ...(state.pendingUser.name ? { name: state.pendingUser.name } : {})
-      });
+      const result = await GKApi.post(path, body);
       const session = GKApi.setSession("client", result);
       state.user = session.user;
-      state.pendingUser = null;
-      state.authStep = "form";
       const target = state.afterAuth || "home";
       state.afterAuth = "home";
       if (!state.selectedBranchId) {
@@ -950,7 +933,7 @@ main.addEventListener("submit", async event => {
       showToast(`Bienvenue, ${state.user.name} !`);
       void refreshOrders();
     } catch (error) {
-      formError(form, error.message || "Le code est incorrect ou expiré.");
+      formError(form, error.message || "Connexion impossible. Vérifiez vos informations.");
     } finally {
       if (button.isConnected) button.disabled = false;
     }

@@ -1,5 +1,5 @@
 // Authentication endpoints. Supabase Auth owns client/staff credentials; courier and owner checks stay here.
-import { fail, now, hashSecret, verifySecret, safeEqual, signToken, randomId, normPhone, str } from "./lib.js";
+import { fail, now, hashSecret, verifySecret, safeEqual, signToken, randomId, normPhone, normEmail, str } from "./lib.js";
 import { run, first, audit, publicUser, lockLeft, recordFail, clearFails, tooMany, POLICY } from "./core.js";
 
 const TTL = { owner: 4 * 3600, courier: 30 * 86400 };
@@ -68,7 +68,7 @@ export async function createAuthUser(env, { email, password, phone, metadata = {
   const body = { email, password, email_confirm: true, user_metadata: metadata };
   if (phone) body.phone = phone;
   const result = await authRequest(env, "admin/users", body, true);
-  if (!result.ok || !result.data.id) fail(result.data.status === 422 ? 409 : 502, "auth_user_create_failed", "Impossible de créer le compte Supabase Auth.");
+  if (!result.ok || !result.data.id) fail(result.data.code === 422 || result.data.status === 422 ? 409 : 502, "auth_user_create_failed", "Impossible de créer le compte Supabase Auth.");
   return result.data;
 }
 
@@ -112,13 +112,14 @@ async function logoutAll(env, token) {
   if (!response.ok) fail(502, "auth_revoke_failed", "Impossible de révoquer les sessions Supabase Auth.");
 }
 
-async function profileForAuthUser(env, authUser, role, name) {
+async function profileForAuthUser(env, authUser, role, name, contact = {}) {
   await env.DB.setContext({ actorId: authUser.id, actorRole: "anonymous", branchId: null });
   let user = await first(env, "SELECT * FROM users WHERE auth_user_id = ?", authUser.id);
   if (!user && role === "client") {
-    const phone = authUser.phone ? normPhone(authUser.phone) : null;
+    const phone = contact.phone || null;
+    const email = contact.email || authUser.email || null;
     const id = randomId("u_");
-    await run(env, "INSERT INTO users (id, auth_user_id, role, name, phone, active, created_at) VALUES (?, ?, 'client', ?, ?, 1, ?) ON CONFLICT (auth_user_id) DO NOTHING", id, authUser.id, name || "Client", phone, now());
+    await run(env, "INSERT INTO users (id, auth_user_id, role, name, email, phone, active, created_at) VALUES (?, ?, 'client', ?, ?, ?, 1, ?) ON CONFLICT (auth_user_id) DO NOTHING", id, authUser.id, name || "Client", email, phone, now());
     user = await first(env, "SELECT * FROM users WHERE auth_user_id = ?", authUser.id);
   }
   if (!user || (role && user.role !== role) || !user.active || user.blocked) fail(403, "blocked", "Ce compte n'est pas autorisé.");
@@ -147,46 +148,62 @@ export async function refresh(c) {
     fail(401, "invalid_refresh_token", "Session expirée. Veuillez vous reconnecter.");
   }
   const authUser = result.data.user;
-  const role = authUser.phone ? "client" : authUser.user_metadata?.gk_role || null;
+  const role = authUser.user_metadata?.gk_role || null;
   const user = await profileForAuthUser(c.env, authUser, role, "");
   return supabaseLogin(result.data, user);
 }
 
-/* ---------- Supabase Auth OTP (clients) ---------- */
-export async function otpRequest(c) {
+/* ---------- Clients: name, phone, e-mail and password (no SMS/e-mail verification) ---------- */
+export async function clientSignup(c) {
+  const name = str(c.body.name, { max: 60, min: 2, field: "Nom" });
   const phone = normPhone(c.body.phone);
-  const t = now();
-  const recent = await first(c.env, "SELECT COUNT(*) AS n FROM otp_codes WHERE phone = ? AND created_at > ?", phone, t - 10 * 60000);
-  if (recent.n >= 3) fail(429, "otp_rate", "Trop de demandes. Réessayez dans quelques minutes.", { retryAfter: 600 });
-  await run(c.env, "INSERT INTO otp_codes (phone, code_hash, expires_at, created_at) VALUES (?,?,?,?)", phone, "supabase-auth", t + 5 * 60000, t);
-  const result = await authRequest(c.env, "otp", { phone: `+212${phone.slice(1)}`, create_user: true });
-  if (!result.ok) fail(502, "otp_failed", "Impossible d'envoyer le code. Réessayez plus tard.");
-  return { ok: true, expiresIn: 300 };
-}
-
-export async function otpVerify(c) {
-  const phone = normPhone(c.body.phone);
-  const code = str(c.body.code, { max: 6, min: 6, field: "Code" });
-  const keys = [[`otp:${phone}`, POLICY.account], [`ip:${c.ip}`, POLICY.ip]];
+  const email = normEmail(c.body.email);
+  const password = str(c.body.password, { max: 100, min: 8, field: "Mot de passe", trim: false });
+  const keys = [[`signup:ip:${c.ip}`, POLICY.ip]];
   const left = await lockLeft(c.env, keys);
   if (left) tooMany(left);
-  const t = now();
-  const row = await first(c.env, "SELECT * FROM otp_codes WHERE phone = ? AND used = 0 AND expires_at > ? ORDER BY id DESC LIMIT 1", phone, t);
-  if (!row || row.attempts >= 5) { await recordFail(c.env, keys); fail(401, "invalid_code", "Code incorrect ou expiré."); }
-  const result = await authRequest(c.env, "verify", { type: "sms", phone: `+212${phone.slice(1)}`, token: code });
-  if (!result.ok || !result.data.access_token || !result.data.user) {
-    await run(c.env, "UPDATE otp_codes SET attempts = attempts + 1 WHERE id = ?", row.id);
-    await recordFail(c.env, keys);
-    fail(401, "invalid_code", "Code incorrect ou expiré.");
+  await recordFail(c.env, keys); // counts attempts so signups are rate-limited per IP
+
+  await c.env.DB.setContext({ actorId: null, actorRole: "admin", branchId: null });
+  const taken = await first(c.env, "SELECT id FROM users WHERE role = 'client' AND (email = ? OR phone = ?) LIMIT 1", email, phone);
+  await c.env.DB.setContext({ actorId: null, actorRole: "anonymous", branchId: null });
+  if (taken) fail(409, "account_exists", "Un compte existe déjà avec cet e-mail ou ce numéro.");
+
+  const created = await createAuthUser(c.env, { email, password, metadata: { gk_role: "client" } });
+  try {
+    const login = await authRequest(c.env, "token?grant_type=password", { email, password });
+    if (!login.ok || !login.data.user) fail(502, "auth_unavailable", "Création du compte impossible. Réessayez.");
+    const user = await profileForAuthUser(c.env, login.data.user, "client", name, { email, phone });
+    return supabaseLogin(login.data, user);
+  } catch (error) {
+    await deleteAuthUser(c.env, created.id).catch(() => {});
+    throw error;
   }
-  await run(c.env, "UPDATE otp_codes SET used = 1 WHERE phone = ?", phone);
+}
+
+export async function clientLogin(c) {
+  const identifier = str(c.body.identifier, { max: 120, min: 1, field: "E-mail ou téléphone" });
+  const password = str(c.body.password, { max: 200, min: 1, field: "Mot de passe", trim: false });
+  const keys = [[`client:${identifier.toLowerCase()}`, POLICY.account], [`ip:${c.ip}`, POLICY.ip]];
+  const left = await lockLeft(c.env, keys);
+  if (left) tooMany(left);
+
+  let email = identifier.includes("@") ? identifier.toLowerCase() : null;
+  if (!email) {
+    let phone = null;
+    try { phone = normPhone(identifier); } catch { /* handled as bad credentials */ }
+    if (phone) {
+      await c.env.DB.setContext({ actorId: null, actorRole: "admin", branchId: null });
+      const row = await first(c.env, "SELECT email FROM users WHERE role = 'client' AND phone = ?", phone);
+      await c.env.DB.setContext({ actorId: null, actorRole: "anonymous", branchId: null });
+      email = row?.email || null;
+    }
+  }
+  const result = email ? await authRequest(c.env, "token?grant_type=password", { email, password }) : { ok: false, data: {} };
+  if (!result.ok || !result.data.user) { await recordFail(c.env, keys); BAD(); }
+  let user;
+  try { user = await profileForAuthUser(c.env, result.data.user, "client", ""); } catch { await recordFail(c.env, keys); BAD(); }
   await clearFails(c.env, keys);
-  const name = str(c.body.name, { max: 60 }) || "Client";
-  const user = await profileForAuthUser(c.env, result.data.user, "client", name);
-  if (user.name === "Client" && name !== "Client") {
-    await run(c.env, "UPDATE users SET name = ? WHERE id = ?", name, user.id);
-    user.name = name;
-  }
   return supabaseLogin(result.data, user);
 }
 

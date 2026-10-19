@@ -7,7 +7,7 @@ import * as orders from "./orders.js";
 const routes = [];
 const route = (method, path, handler, options = {}) => routes.push({
   method, path: new RegExp(`^${path}$`), handler,
-  branchScoped: !["/api/branches", "/api/me/branches", "/api/auth/client/request-code", "/api/auth/client/verify-code",
+  branchScoped: !["/api/branches", "/api/me/branches", "/api/auth/client/signup", "/api/auth/client/login",
     "/api/auth/courier", "/api/auth/staff", "/api/auth/owner", "/api/auth/refresh", "/api/auth/change-secret",
     "/api/auth/revoke", "/api/me"].includes(path),
   ...options
@@ -28,8 +28,8 @@ route("GET", "/api/me/branches", async (c) => {
     ? await all(c.env, sql, c.user.branch_id) : await all(c.env, sql);
   return { branches: branches.map((branch) => ({ ...branch, active: !!branch.active })) };
 }, { branchScoped: false });
-route("POST", "/api/auth/client/request-code", (c) => auth.otpRequest(c), { public: true, body: true });
-route("POST", "/api/auth/client/verify-code", (c) => auth.otpVerify(c), { public: true, body: true });
+route("POST", "/api/auth/client/signup", (c) => auth.clientSignup(c), { public: true, body: true });
+route("POST", "/api/auth/client/login", (c) => auth.clientLogin(c), { public: true, body: true });
 route("POST", "/api/auth/refresh", (c) => auth.refresh(c), { public: true, body: true, branchScoped: false });
 route("POST", "/api/auth/courier", (c) => auth.courierLogin(c), { public: true, body: true });
 route("POST", "/api/auth/staff", (c) => auth.staffLogin(c), { public: true, body: true });

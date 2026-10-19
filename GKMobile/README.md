@@ -16,13 +16,9 @@ No sample menu, customer, or order data is seeded. The two G&K restaurant record
 
 - The restaurant list loads from `GET /api/branches`. After signing in, the client selects a restaurant; the selected branch scopes the menu, zones, settings, promotions, and order submission. Changing restaurants clears the cart and requires the client to reselect a delivery address.
 - Public menu, visible items, availability, zones and restaurant settings load from `GET /api/menu` and `GET /api/zones` for the selected branch. An empty backend menu remains empty in GKMobile.
-- Sign-in and account creation use Supabase Auth phone OTP through the G&K Edge Function. The six-digit code is never displayed by GKMobile.
+- Account creation asks for name, phone, e-mail and password; sign-in accepts e-mail or phone plus the password. There is no SMS or e-mail verification step.
 - Checkout sends orders to `POST /api/orders`; the account's order list, detail and cancellation use the authenticated client order endpoints. Promo codes are validated by `POST /api/promos/validate` using the entered code and current cart subtotal.
 - Cash on delivery is the only available payment method. GKMobile does not collect card details or process card payments. The API does not provide live courier GPS in the client order response.
-
-## SMS limitation
-
-Supabase Auth phone OTP requires an SMS provider configured in the Supabase project. Do not echo or display OTP codes in the app.
 
 ## Project structure
 

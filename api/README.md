@@ -1,6 +1,6 @@
 # G&K API — Supabase backend
 
-The G&K backend is hosted in this folder and is separate from the POS application. It runs as a Supabase Edge Function, uses Supabase Auth for client phone OTP and staff email/password, and uses branch-scoped Postgres tables for G&K data. No operational data or demo accounts are seeded. The only migration data is the two branch records.
+The G&K backend is hosted in this folder and is separate from the POS application. It runs as a Supabase Edge Function, uses Supabase Auth email/password for clients and staff, and uses branch-scoped Postgres tables for G&K data. No operational data or demo accounts are seeded. The only migration data is the two branch records.
 
 ## Local, no-data setup
 
@@ -23,7 +23,7 @@ Prerequisites: Node.js, Docker, and the Supabase CLI.
    ```
 
    The function URL is `http://127.0.0.1:54321/functions/v1/gk-api`. It returns a safe `503 configuration_required` response until its private keys and database URL are set. API errors do not turn into successful/demo responses.
-5. Configure a real SMS provider for Supabase Auth before testing client OTP. Until configured, OTP requests fail. Do not enable OTP echo or add a hard-coded code.
+5. No SMS provider is needed: clients register with name, phone, e-mail and password, and e-mail confirmation is disabled.
 
 The local stack contains no users, menus, orders, couriers, zones, promotions, or settings. Create an initial platform administrator and one branch manager with the bootstrap scripts below, then add operational data through the Admin app.
 
@@ -49,7 +49,7 @@ The bootstrap script requires both an administrator and at least one manager, pr
 
 - `GET /api/branches` returns `{ branches: [{ id, slug, name, cuisine, address, active }] }`.
 - `GET /api/me/branches` returns branch choices for a signed-in client or global owner/admin; branch-bound staff/couriers receive only their assigned branch.
-- Client OTP routes: `POST /api/auth/client/request-code` and `/verify-code`.
+- Client routes: `POST /api/auth/client/signup` (`name`, `phone`, `email`, `password`; no SMS or e-mail verification) and `POST /api/auth/client/login` (`identifier` = e-mail or phone, `password`).
 - Staff credentials use Supabase Auth email/password: `POST /api/auth/staff`.
 - `POST /api/auth/refresh` accepts `{ "refreshToken": "..." }` and returns `{ token, refreshToken, user, branchId? }`; `token` is the Supabase Auth access token. Client/staff sessions include `user.branchId` when account-bound and `user.branchName` when available.
 - Courier phone+PIN and owner email/password+door-key continue through `POST /api/auth/courier` and `/api/auth/owner`, respectively, with short-lived API-signed tokens and no Supabase refresh token.
@@ -69,7 +69,7 @@ Menus, categories, zones, promotions, settings, notifications, audit entries, co
    supabase db push --workdir supabase
    ```
 
-3. In Supabase Auth, enable phone sign-up/OTP and configure a real SMS provider/template. Configure staff email/password sign-in. No Auth account is seeded.
+3. In Supabase Auth > Sign In / Providers, keep **Email** enabled and turn **Confirm email** off (clients and staff sign in with email/password; no SMS provider is required). Leave Phone disabled. No Auth account is seeded.
 4. Set Edge Function secrets through Supabase CLI or Dashboard. Required secrets: `GK_DATABASE_URL` (private database direct/session-pooler connection), `SESSION_SECRET`, `OWNER_DOOR_KEY`, and `DISPATCH_SECRET`. The function also uses Supabase's server-side `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`; verify these are available as Edge Function secrets in the project. Set `ALLOWED_ORIGINS` to the exact G&K app origins.
 5. Deploy the Edge Function:
 
@@ -81,4 +81,4 @@ Menus, categories, zones, promotions, settings, notifications, audit entries, co
 6. Bootstrap the administrator and branch manager, then the owner as described above. Add menus, zones, hours and all other operational records through the Admin app.
 7. Configure a once-per-minute Supabase Cron invocation for `POST /api/internal/dispatch`, with `X-GK-Cron-Secret` set to `DISPATCH_SECRET`. Keep the URL and header secret in Supabase Vault; do not put them in source control. This replaces the old Worker cron trigger and preserves expiry/retry dispatch processing.
 
-There are no project credentials in this repository, so hosted migration, Auth/SMS delivery, DB grants, and deployment have not been tested here. Never deploy until credentials, SMS delivery, origins, branch selection and the frontend API URL have been configured and verified.
+There are no project credentials in this repository, so hosted migration, Auth/DB grants, and deployment have not been tested here. Never deploy until credentials, origins, branch selection and the frontend API URL have been configured and verified.

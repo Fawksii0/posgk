@@ -18,8 +18,11 @@ site_url = "http://localhost:8800"
 additional_redirect_urls = ["http://127.0.0.1:8800"]
 
 [auth.sms]
+enable_signup = false
+
+[auth.email]
 enable_signup = true
-template = "Votre code G&K : {{ .Code }}"
+enable_confirmations = false
 
 [functions.gk-api]
 verify_jwt = false

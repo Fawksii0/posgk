@@ -95,6 +95,37 @@ test("global admins must select a branch for branch-scoped operations", async ()
   assert.equal((await response.json()).error.code, "branch_required");
 });
 
+test("client sign-in by phone resolves the e-mail and returns a session; wrong password is rejected", async (t) => {
+  const client = { id: "c-1", auth_user_id: "auth-c-1", role: "client", token_version: 0, active: 1, blocked: 0, branch_id: null, name: "Client", email: "a@b.co", phone: "0612345678" };
+  const db = mockDb(client);
+  const baseFirst = db.prepare.bind(db);
+  db.prepare = (sql) => {
+    const q = baseFirst(sql);
+    if (sql.includes("SELECT email FROM users WHERE role = 'client' AND phone = ?")) q.first = async () => ({ email: "a@b.co" });
+    return q;
+  };
+  let good = true;
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    const body = JSON.parse(init.body);
+    assert.equal(body.email, "a@b.co");
+    return good
+      ? new Response(JSON.stringify({ access_token: "tok", refresh_token: "ref", user: { id: "auth-c-1", email: "a@b.co" } }), { status: 200 })
+      : new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 });
+  });
+  const env = { SUPABASE_URL: "https://p.supabase.co", SUPABASE_ANON_KEY: "anon", DB: db, ALLOWED_ORIGINS: "" };
+  const send = (password) => app.fetch(new Request("https://api.test/api/auth/client/login", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ identifier: "06 12 34 56 78", password })
+  }), env);
+  const ok = await send("secret-pass");
+  assert.equal(ok.status, 200);
+  const session = await ok.json();
+  assert.equal(session.token, "tok");
+  assert.equal(session.refreshToken, "ref");
+  good = false;
+  assert.equal((await send("wrong")).status, 401);
+});
+
 test("Supabase refresh returns the access token, rotated refresh token and branch identity", async (t) => {
   const user = {
     id: "staff-2", auth_user_id: "auth-staff-2", role: "manager", token_version: 0,
