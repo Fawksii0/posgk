@@ -391,6 +391,7 @@ function renderCart() {
     ${state.promoMessage ? `<p class="cart-notice soft">${escapeHtml(state.promoMessage)}</p>` : ""}
     ${state.orderError ? `<p class="cart-notice" role="alert">${escapeHtml(state.orderError)}</p>` : ""}
     <label class="note-box"><span>Note pour la cuisine <small>· optionnel</small></span><textarea id="cart-note" rows="2" maxlength="140" placeholder="Ex. sans oignons, bien cuit…">${escapeHtml(state.cartNote || "")}</textarea></label>
+    ${state.user && !state.user.phone ? `<label class="note-box"><span>Téléphone pour la livraison</span><input id="cart-phone" type="tel" autocomplete="tel" placeholder="06 12 34 56 78" value="${escapeHtml(state.orderPhone || "")}" /></label>` : ""}
     <div class="bill-card"><div class="bill-row"><span>Sous-total</span><span>${formatPrice(subtotal)}</span></div><div class="bill-row"><span>Frais de ${state.delivery === "delivery" ? "livraison" : "préparation"}</span><span>${feeLabel}</span></div>${state.promo ? `<div class="bill-row promo"><span>${escapeHtml(state.promo.code)}</span><span>-${formatPrice(state.promo.discount)}</span></div>` : ""}<div class="bill-row total"><span>Total</span><strong>${formatPrice(cartTotal())}</strong></div></div>
     ${issue ? `<p class="cart-notice">${escapeHtml(issue)}</p>` : freeHint ? `<p class="cart-notice soft">${freeHint}</p>` : ""}
     <button class="gold-button full-width" type="button" data-action="checkout" ${state.orderSubmitting ? "disabled" : ""}>${state.orderSubmitting ? "Envoi en cours…" : state.user ? "Passer la commande" : "Se connecter pour commander"} · ${formatPrice(cartTotal())}</button>
@@ -699,6 +700,10 @@ function startCheckout() {
   }
   const issue = checkoutIssue();
   if (issue) return showToast(issue);
+  if (!state.user.phone && !PHONE_RE.test(String(state.orderPhone || "").replace(/[\s.-]/g, ""))) {
+    state.orderError = "Saisissez un numéro de téléphone valide (06 12 34 56 78) pour être joint à la livraison.";
+    return render();
+  }
   placeOrder();
 }
 
@@ -722,6 +727,7 @@ function placeOrder() {
   };
   if (delivery) payload.address = { zone: address.zone, street: address.street, label: address.label };
   if (state.promo?.code) payload.promo = state.promo.code;
+  if (!state.user.phone) payload.customer = { phone: String(state.orderPhone).replace(/[\s.-]/g, "") };
   GKApi.post("/api/orders", payload, "client").then(result => {
     state.orderSubmitting = false;
     const order = normalizeOrder(result.order);
@@ -1013,6 +1019,7 @@ setInterval(() => {
 }, 20000);
 main.addEventListener("input", event => {
   if (event.target.id === "cart-note") { state.cartNote = event.target.value; saveState(); }
+  if (event.target.id === "cart-phone") state.orderPhone = event.target.value;
   if (event.target.id === "promo-code") { state.promoError = ""; state.promoMessage = ""; }
 });
 

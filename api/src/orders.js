@@ -1,4 +1,4 @@
-import { fail, now, randomDigits, randomId, str, numv, jparse, haversineKm } from "./lib.js";
+import { fail, now, randomDigits, randomId, str, numv, jparse, haversineKm, normPhone } from "./lib.js";
 import { all, first, run, stmt, batch, getSetting, setSetting, audit, notify, need } from "./core.js";
 
 const STORE = { lat: 33.7895, lng: -7.1597 };
@@ -187,7 +187,7 @@ export async function orderCreate(c) {
   const seq = Number(counter.value);
   const id = randomId("o_"), t = now(), prep = Number(await getSetting(c.env, "defaultPrep", 20));
   const name = str(body.customer?.name || c.user.name, { max: 60, min: 1, field: "Nom" });
-  const phone = str(body.customer?.phone || c.user.phone, { max: 20, min: 1, field: "Téléphone" });
+  const phone = body.customer?.phone ? normPhone(body.customer.phone) : str(c.user.phone, { max: 20, min: 1, field: "Téléphone" });
   const note = str(body.note, { max: 300, field: "Note" });
   const history = JSON.stringify([{ status: "pending", at: t, by: c.user.id }]);
   const total = Math.max(0, Math.round((subtotal + fee - discount) * 100) / 100);
