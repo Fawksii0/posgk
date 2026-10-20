@@ -280,6 +280,8 @@
     </article>`;
   }
 
+  const EMPTY_HINTS = { new: "Les nouvelles commandes apparaîtront ici.", prep: "Acceptez une commande pour la préparer.", ready: "Les commandes prêtes seront listées ici.", out: "Aucune commande en livraison." };
+
   function renderBoard() {
     const groups = groupOrders(data.orders);
     const couriers = courierMap();
@@ -287,7 +289,7 @@
     const tabs = `<div class="col-tabs" role="tablist">${COLUMNS.map(c => `<button role="tab" class="col-tab ${ui.col === c.key ? "active" : ""}" data-action="col" data-col="${c.key}" aria-selected="${ui.col === c.key}">${c.label}<b>${groups[c.key].length}</b></button>`).join("")}</div>`;
     const cols = COLUMNS.map(c => `<section class="col col-${c.key} ${ui.col === c.key ? "is-current" : ""}" aria-label="${c.label}">
       <h2>${icon(c.icon)}${c.label}<b>${groups[c.key].length}</b></h2>
-      <div class="col-body">${groups[c.key].length ? groups[c.key].map(order => orderCard(order, couriers)).join("") : `<p class="empty">Aucune commande</p>`}</div></section>`).join("");
+      <div class="col-body">${groups[c.key].length ? groups[c.key].map(order => orderCard(order, couriers)).join("") : `<div class="empty-state"><span class="empty-ico">${icon(c.icon)}</span><strong>Aucune commande</strong><small>${EMPTY_HINTS[c.key] || ""}</small></div>`}</div></section>`).join("");
     return `${strip}${tabs}<div class="board">${cols}</div>`;
   }
 
@@ -407,8 +409,8 @@
 
   function openRefuse(id) {
     ui.sheet = { type: "refuse", id };
-    openSheet(`<h2>Refuser ${esc(id)}</h2><p class="muted">Le client sera prévenu avec le motif.</p>
-      <div class="reasons">${REFUSE_REASONS.map(reason => `<button class="btn block" data-action="refuse-reason" data-id="${esc(id)}" data-reason="${esc(reason)}">${esc(reason)}</button>`).join("")}</div>
+    openSheet(`<div class="refuse-head"><span class="refuse-ico">${icon("close")}</span><div><h2>Refuser la commande #${esc(id)}</h2><p class="muted">Le client sera prévenu avec le motif.</p></div></div>
+      <div class="reasons">${REFUSE_REASONS.map(reason => `<button class="reason-btn" data-action="refuse-reason" data-id="${esc(id)}" data-reason="${esc(reason)}"><span>${esc(reason)}</span></button>`).join("")}</div>
       <button class="btn block ghost" data-action="close-sheet">Annuler</button>`);
   }
 
