@@ -740,7 +740,7 @@
   setInterval(() => {
     tickDom();
     if (state.session && !state.session.mustChange && !refreshRunning) refreshData();
-  }, 8000);
+  }, 5000);
   // The ring (about 1.7s) loops without pause until every new order is accepted or refused.
   setInterval(() => {
     if (state.session && !state.session.mustChange && pendingOrders().length) beep();

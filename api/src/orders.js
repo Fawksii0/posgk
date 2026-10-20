@@ -34,7 +34,7 @@ async function updateStatus(env, row, status, by, fields = {}, extra = {}) {
     values.push(value);
   }
   values.push(row.id);
-  await run(env, `UPDATE orders SET ${sets.join(", ")} WHERE id = ?`, ...values);
+  return first(env, `UPDATE orders SET ${sets.join(", ")} WHERE id = ? RETURNING *`, ...values);
 }
 function requireOrder(row) { if (!row) fail(404, "not_found", "Commande introuvable."); }
 function clientOwns(c, row) {
@@ -48,21 +48,24 @@ async function notifyOrder(env, row, title, text, { client = true, courier = fal
 const orderStatusForCourier = (status) => status === "pending" ? "pending" : status;
 
 async function candidates(env, row, exclude = []) {
-  const couriers = await all(env, `SELECT u.id, u.name, c.lat, c.lng FROM couriers c
+  const [couriers, busy, mode, pointerValue] = await Promise.all([
+    all(env, `SELECT u.id, u.name, c.lat, c.lng FROM couriers c
     JOIN users u ON u.id = c.user_id
-    WHERE u.active = 1 AND c.online = 1 AND c.last_seen > ?`, now() - 10 * 60000);
-  const busy = await all(env, `SELECT DISTINCT courier_id FROM orders WHERE status IN ('preparing','ready','enroute')
-    AND dispatch_state IN ('assigned','accepted') AND courier_id IS NOT NULL`);
+    WHERE u.active = 1 AND c.online = 1 AND c.last_seen > ?`, now() - 10 * 60000),
+    all(env, `SELECT DISTINCT courier_id FROM orders WHERE status IN ('preparing','ready','enroute')
+    AND dispatch_state IN ('assigned','accepted') AND courier_id IS NOT NULL`),
+    getSetting(env, "dispatchMode", "rotation"),
+    getSetting(env, "rotationPointer", -1)
+  ]);
   const busyIds = new Set(busy.map((r) => r.courier_id));
   const excluded = new Set([...exclude, ...busyIds]);
   const ready = couriers.filter((courier) => !excluded.has(courier.id) && courier.lat != null && courier.lng != null);
-  const mode = await getSetting(env, "dispatchMode", "rotation");
   if (mode === "proximity") {
     return ready.filter((courier) => courier.lat != null && courier.lng != null)
       .map((courier) => ({ ...courier, km: haversineKm(STORE, { lat: courier.lat, lng: courier.lng }) }))
       .sort((a, b) => a.km - b.km);
   }
-  const pointer = Number(await getSetting(env, "rotationPointer", -1));
+  const pointer = Number(pointerValue);
   const ordered = couriers.filter((courier) => !excluded.has(courier.id)).sort((a, b) => a.id.localeCompare(b.id));
   if (!ordered.length) return [];
   const start = (pointer + 1) % ordered.length;
@@ -81,16 +84,19 @@ async function offerNext(env, row, exclude = []) {
     return { offered: false, manual: true };
   }
   const courier = list[0];
-  if (await getSetting(env, "dispatchMode", "rotation") === "rotation") {
+  const advancePointer = async () => {
+    if (await getSetting(env, "dispatchMode", "rotation") !== "rotation") return;
     const onlineIds = (await all(env, "SELECT c.user_id AS id FROM couriers c JOIN users u ON u.id = c.user_id WHERE u.active = 1 AND c.online = 1 AND c.last_seen > ? ORDER BY c.user_id", now() - 10 * 60000)).map((item) => item.id);
-    const pointer = onlineIds.indexOf(courier.id);
-    await setSetting(env, "rotationPointer", pointer);
-  }
+    await setSetting(env, "rotationPointer", onlineIds.indexOf(courier.id));
+  };
   const expires = now() + 60000;
   const nextTried = [...tried, courier.id];
-  await run(env, "UPDATE orders SET offered_to = ?, offered_at = ?, offer_expires = ?, tried = ?, dispatch_state = 'offered', dispatch_km = ?, updated_at = ? WHERE id = ?",
-    courier.id, now(), expires, JSON.stringify(nextTried), courier.km, now(), row.id);
-  await notify(env, { audience: "courier", userId: courier.id, title: "Nouvelle mission", text: `Commande #${row.seq} · ${row.zone_name || "Bouznika"}`, orderId: row.id });
+  await Promise.all([
+    advancePointer(),
+    run(env, "UPDATE orders SET offered_to = ?, offered_at = ?, offer_expires = ?, tried = ?, dispatch_state = 'offered', dispatch_km = ?, updated_at = ? WHERE id = ?",
+      courier.id, now(), expires, JSON.stringify(nextTried), courier.km, now(), row.id),
+    notify(env, { audience: "courier", userId: courier.id, title: "Nouvelle mission", text: `Commande #${row.seq} · ${row.zone_name || "Bouznika"}`, orderId: row.id })
+  ]);
   return { offered: true, courier: courier.id, expiresAt: expires, km: courier.km };
 }
 
@@ -160,13 +166,20 @@ export async function orderGet(c) {
 export async function orderCreate(c) {
   if (c.user.role !== "client") fail(403, "forbidden", "Réservé aux clients.");
   const body = c.body;
-  if (await getSetting(c.env, "paused", false)) fail(409, "paused", "Les commandes sont temporairement en pause.");
   if (body.mode !== "delivery" && body.mode !== "pickup") fail(400, "invalid", "Mode de commande invalide.");
   if (!Array.isArray(body.items) || !body.items.length || body.items.length > 30) fail(400, "invalid", "Panier invalide.");
+  const lineIds = body.items.map((line) => str(line.id, { max: 80, min: 1, field: "Produit" }));
+  const [settingRows, productRows] = await Promise.all([
+    all(c.env, "SELECT key, value FROM settings WHERE key IN ('paused', 'freeDelivery', 'deliveryOn', 'defaultPrep')"),
+    all(c.env, "SELECT * FROM menu_items WHERE visible = 1 AND available = 1 AND id = ANY(?::text[])", lineIds)
+  ]);
+  const setting = (key, def) => { const r = settingRows.find((x) => x.key === key); return r ? jparse(r.value, def) : def; };
+  if (setting("paused", false)) fail(409, "paused", "Les commandes sont temporairement en pause.");
+  const productsById = new Map(productRows.map((r) => [r.id, r]));
   const normalized = [];
   let subtotal = 0;
   for (const line of body.items) {
-    const product = await first(c.env, "SELECT * FROM menu_items WHERE id = ? AND visible = 1 AND available = 1", str(line.id, { max: 80, min: 1, field: "Produit" }));
+    const product = productsById.get(line.id);
     if (!product) fail(409, "unavailable", "Un produit n'est plus disponible.");
     const qty = numv(line.qty, { min: 1, max: 50, int: true, field: "Quantité" });
     const size = jparse(product.sizes, []).find((item) => item.name === line.size);
@@ -176,17 +189,17 @@ export async function orderCreate(c) {
     subtotal += price;
     normalized.push({ id: product.id, name: product.name, qty, size: size?.name || "", extras: extras.map((item) => item.name), unit, price, image: product.image_url });
   }
-  const settings = await getSetting(c.env, "freeDelivery", 150);
-  let fee = 0, zoneId = null, zoneName = "", address = "", addressLabel = "";
+  const settings = setting("freeDelivery", 150);
+  let fee = 0, zoneId = null, zoneName = "", address = "", addressLabel = "", etaMin = null;
   if (body.mode === "delivery") {
-    if (!(await getSetting(c.env, "deliveryOn", true))) fail(409, "delivery_paused", "La livraison est indisponible.");
+    if (!setting("deliveryOn", true)) fail(409, "delivery_paused", "La livraison est indisponible.");
     zoneId = str(body.address?.zone, { max: 40, min: 1, field: "Zone" });
     const zone = await first(c.env, "SELECT * FROM zones WHERE id = ? AND enabled = 1", zoneId);
     if (!zone) fail(400, "invalid_zone", "Zone de livraison invalide.");
     if (subtotal < zone.min_order) fail(400, "minimum_order", `Commande minimum de ${zone.min_order} MAD.`);
     address = str(body.address?.street, { max: 200, min: 5, field: "Adresse" });
     addressLabel = str(body.address?.label, { max: 30 });
-    zoneName = zone.name;
+    zoneName = zone.name; etaMin = zone.eta_min;
     fee = subtotal >= (zone.free_from ?? settings) ? 0 : zone.fee;
   }
   let discount = 0, promo = null;
@@ -199,7 +212,7 @@ export async function orderCreate(c) {
   }
   const counter = await first(c.env, "INSERT INTO order_counters (branch_id, value) VALUES (?, 1000) ON CONFLICT (branch_id) DO UPDATE SET value = order_counters.value + 1 RETURNING value", c.branchId);
   const seq = Number(counter.value);
-  const id = "1" + randomDigits(8), t = now(), prep = Number(await getSetting(c.env, "defaultPrep", 20));
+  const id = "1" + randomDigits(8), t = now(), prep = Number(setting("defaultPrep", 20));
   const name = str(body.customer?.name || c.user.name, { max: 60, min: 1, field: "Nom" });
   const phone = body.customer?.phone ? normPhone(body.customer.phone) : str(c.user.phone, { max: 20, min: 1, field: "Téléphone" });
   const note = str(body.note, { max: 300, field: "Note" });
@@ -210,11 +223,13 @@ export async function orderCreate(c) {
     VALUES (?,?,?,?,? ,?,'pending',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'none',?,?,?)`,
     id, seq, c.user.id, name, phone, body.mode, JSON.stringify(normalized), subtotal, fee, discount, promo, total,
     str(body.payment || "cash", { max: 40 }), zoneId, zoneName, address, addressLabel, note, randomDigits(4),
-    body.mode === "delivery" ? (await first(c.env, "SELECT eta_min FROM zones WHERE id = ?", zoneId)).eta_min : prep,
+    body.mode === "delivery" ? etaMin : prep,
     prep, t + prep * 60000, history, t, t);
   const row = await getOrder(c.env, id);
-  await notify(c.env, { audience: "staff", title: `Nouvelle commande #${seq}`, text: `${name} · ${total} MAD`, orderId: id });
-  await audit(c.env, c.user, "Commande créée", `#${seq} · ${total} MAD`, { id, role: "client" });
+  await Promise.all([
+    notify(c.env, { audience: "staff", title: `Nouvelle commande #${seq}`, text: `${name} · ${total} MAD`, orderId: id }),
+    audit(c.env, c.user, "Commande créée", `#${seq} · ${total} MAD`, { id, role: "client" })
+  ]);
   return { order: orderOut(row, { revealCode: true }) };
 }
 
@@ -224,10 +239,12 @@ export async function orderCancel(c) {
   if (c.user.role !== "client" && !["cashier", "manager", "admin", "owner"].includes(c.user.role)) fail(403, "forbidden", "Accès refusé.");
   if (row.status !== "pending") fail(409, "invalid_status", "Seules les commandes en attente peuvent être annulées.");
   const reason = str(c.body.reason, { max: 200 });
-  await updateStatus(c.env, row, "cancelled", c.user.id, { cancel_reason: reason });
-  await notifyOrder(c.env, row, `Commande #${row.seq} annulée`, reason || "La commande a été annulée.", { client: row.client_id !== c.user.id });
-  await audit(c.env, c.user, "Commande annulée", `#${row.seq}`, row);
-  return { order: orderOut(await getOrder(c.env, row.id), { revealCode: c.user.role === "client" }) };
+  const updated = await updateStatus(c.env, row, "cancelled", c.user.id, { cancel_reason: reason });
+  await Promise.all([
+    notifyOrder(c.env, row, `Commande #${row.seq} annulée`, reason || "La commande a été annulée.", { client: row.client_id !== c.user.id }),
+    audit(c.env, c.user, "Commande annulée", `#${row.seq}`, row)
+  ]);
+  return { order: orderOut(updated, { revealCode: c.user.role === "client" }) };
 }
 
 export async function orderAccept(c) {
@@ -236,12 +253,13 @@ export async function orderAccept(c) {
   if (row.status !== "pending") fail(409, "invalid_status", "Cette commande n'est plus en attente.");
   const prep = numv(c.body.prepMinutes, { min: 5, max: 90, int: true, def: 20, field: "Préparation" });
   const t = now();
-  await updateStatus(c.env, row, "preparing", c.user.id, { accepted_at: t, prep_minutes: prep, promised_at: t + prep * 60000, eta_min: prep, dispatch_state: row.mode === "delivery" ? "searching" : "none" }, { prepMinutes: prep });
-  const fresh = await getOrder(c.env, row.id);
-  await notifyOrder(c.env, fresh, `Commande #${row.seq} acceptée`, `Préparation estimée : ${prep} min.`);
-  if (row.mode === "delivery") await offerNext(c.env, fresh);
-  await audit(c.env, c.user, "Commande acceptée", `#${row.seq} · ${prep} min`, row);
-  return { order: orderOut(await getOrder(c.env, row.id)) };
+  const fresh = await updateStatus(c.env, row, "preparing", c.user.id, { accepted_at: t, prep_minutes: prep, promised_at: t + prep * 60000, eta_min: prep, dispatch_state: row.mode === "delivery" ? "searching" : "none" }, { prepMinutes: prep });
+  await Promise.all([
+    notifyOrder(c.env, fresh, `Commande #${row.seq} acceptée`, `Préparation estimée : ${prep} min.`),
+    audit(c.env, c.user, "Commande acceptée", `#${row.seq} · ${prep} min`, row)
+  ]);
+  if (row.mode === "delivery") { await offerNext(c.env, fresh); return { order: orderOut(await getOrder(c.env, row.id)) }; }
+  return { order: orderOut(fresh) };
 }
 
 export async function orderRefuse(c) {
@@ -249,10 +267,12 @@ export async function orderRefuse(c) {
   const row = await getOrder(c.env, c.params.id); requireOrder(row);
   if (row.status !== "pending") fail(409, "invalid_status", "Cette commande n'est plus en attente.");
   const reason = str(c.body.reason, { max: 200, min: 2, field: "Motif" });
-  await updateStatus(c.env, row, "refused", c.user.id, { refused_reason: reason });
-  await notifyOrder(c.env, row, `Commande #${row.seq} refusée`, reason);
-  await audit(c.env, c.user, "Commande refusée", `#${row.seq} · ${reason}`, row);
-  return { order: orderOut(await getOrder(c.env, row.id)) };
+  const updated = await updateStatus(c.env, row, "refused", c.user.id, { refused_reason: reason });
+  await Promise.all([
+    notifyOrder(c.env, row, `Commande #${row.seq} refusée`, reason),
+    audit(c.env, c.user, "Commande refusée", `#${row.seq} · ${reason}`, row)
+  ]);
+  return { order: orderOut(updated) };
 }
 
 export async function orderAdjust(c) {
@@ -260,20 +280,23 @@ export async function orderAdjust(c) {
   const row = await getOrder(c.env, c.params.id); requireOrder(row);
   if (row.status !== "preparing") fail(409, "invalid_status", "La préparation n'est pas en cours.");
   const prep = numv(c.body.prepMinutes, { min: 5, max: 90, int: true, field: "Préparation" });
-  await run(c.env, "UPDATE orders SET prep_minutes = ?, eta_min = ?, promised_at = ?, updated_at = ? WHERE id = ?", prep, prep, now() + prep * 60000, now(), row.id);
-  await notifyOrder(c.env, row, `Délai mis à jour · commande #${row.seq}`, `Nouvelle estimation : ${prep} min.`);
-  await audit(c.env, c.user, "Délai modifié", `#${row.seq} · ${prep} min`, row);
-  return { order: orderOut(await getOrder(c.env, row.id)) };
+  const updated = await first(c.env, "UPDATE orders SET prep_minutes = ?, eta_min = ?, promised_at = ?, updated_at = ? WHERE id = ? RETURNING *", prep, prep, now() + prep * 60000, now(), row.id);
+  await Promise.all([
+    notifyOrder(c.env, row, `Délai mis à jour · commande #${row.seq}`, `Nouvelle estimation : ${prep} min.`),
+    audit(c.env, c.user, "Délai modifié", `#${row.seq} · ${prep} min`, row)
+  ]);
+  return { order: orderOut(updated) };
 }
 
 export async function orderReady(c) {
   need(c.user, "orders.ready");
   const row = await getOrder(c.env, c.params.id); requireOrder(row);
   if (row.status !== "preparing") fail(409, "invalid_status", "La commande ne peut pas être marquée prête.");
-  await updateStatus(c.env, row, row.mode === "delivery" ? "ready" : "ready", c.user.id, { ready_at: now() });
-  const fresh = await getOrder(c.env, row.id);
-  await notifyOrder(c.env, fresh, `Commande #${row.seq} prête`, row.mode === "delivery" ? "Le livreur peut venir la récupérer." : "Votre commande est prête à retirer.", { client: row.mode === "pickup", courier: row.mode === "delivery" });
-  await audit(c.env, c.user, "Commande prête", `#${row.seq}`, row);
+  const fresh = await updateStatus(c.env, row, "ready", c.user.id, { ready_at: now() });
+  await Promise.all([
+    notifyOrder(c.env, fresh, `Commande #${row.seq} prête`, row.mode === "delivery" ? "Le livreur peut venir la récupérer." : "Votre commande est prête à retirer.", { client: row.mode === "pickup", courier: row.mode === "delivery" }),
+    audit(c.env, c.user, "Commande prête", `#${row.seq}`, row)
+  ]);
   return { order: orderOut(fresh) };
 }
 
@@ -281,10 +304,12 @@ export async function orderHandover(c) {
   need(c.user, "orders.handover");
   const row = await getOrder(c.env, c.params.id); requireOrder(row);
   if (row.mode !== "pickup" || row.status !== "ready") fail(409, "invalid_status", "Cette commande n'est pas prête à être remise.");
-  await updateStatus(c.env, row, "delivered", c.user.id, { delivered_at: now() });
-  await notifyOrder(c.env, row, `Commande #${row.seq} remise`, "Bonne dégustation !");
-  await audit(c.env, c.user, "Commande remise au client", `#${row.seq}`, row);
-  return { order: orderOut(await getOrder(c.env, row.id)) };
+  const updated = await updateStatus(c.env, row, "delivered", c.user.id, { delivered_at: now() });
+  await Promise.all([
+    notifyOrder(c.env, row, `Commande #${row.seq} remise`, "Bonne dégustation !"),
+    audit(c.env, c.user, "Commande remise au client", `#${row.seq}`, row)
+  ]);
+  return { order: orderOut(updated) };
 }
 
 export async function courierOffers(c) {

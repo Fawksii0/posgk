@@ -1039,7 +1039,7 @@ setInterval(() => {
 setInterval(() => {
   if (state.view === "orders" && state.trackingId) void refreshTrackedOrder();
   else if (state.view === "orders" && state.user) void refreshOrders();
-}, 20000);
+}, 8000);
 main.addEventListener("input", event => {
   if (event.target.id === "cart-note") { state.cartNote = event.target.value; saveState(); }
   if (event.target.id === "cart-phone") state.orderPhone = event.target.value;

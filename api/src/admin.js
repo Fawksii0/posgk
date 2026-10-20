@@ -14,16 +14,16 @@ const PUBLIC_SETTINGS = ["paused", "deliveryOn", "restaurant", "hours", "freeDel
 const HIDDEN_SETTINGS = ["rotationPointer"];
 
 export async function publicMenu(c) {
-  const [cats, items, zones] = await Promise.all([
+  const defaults = { paused: false, deliveryOn: true, freeDelivery: 150 };
+  const [cats, items, zones, rows] = await Promise.all([
     all(c.env, "SELECT * FROM menu_categories ORDER BY position, name"),
     all(c.env, "SELECT * FROM menu_items WHERE visible = 1 ORDER BY created_at"),
-    all(c.env, "SELECT * FROM zones WHERE enabled = 1 ORDER BY fee, name")
+    all(c.env, "SELECT * FROM zones WHERE enabled = 1 ORDER BY fee, name"),
+    all(c.env, `SELECT key, value FROM settings WHERE key IN (${PUBLIC_SETTINGS.map(() => "?").join(",")})`, ...PUBLIC_SETTINGS)
   ]);
+  const stored = new Map(rows.map((r) => [r.key, r.value]));
   const settings = {};
-  for (const k of PUBLIC_SETTINGS) {
-    const defaults = { paused: false, deliveryOn: true, freeDelivery: 150 };
-    settings[k] = await getSetting(c.env, k, defaults[k] ?? null);
-  }
+  for (const k of PUBLIC_SETTINGS) settings[k] = stored.has(k) ? jparse(stored.get(k), defaults[k] ?? null) : (defaults[k] ?? null);
   settings.paused = !!settings.paused; settings.deliveryOn = !!settings.deliveryOn;
   return { categories: cats.map(catOut), items: items.map(itemOut), zones: zones.map(zoneOut), settings };
 }
@@ -495,19 +495,23 @@ export async function stats(c) {
   let dayStart = Number(c.url.searchParams.get("dayStart"));
   if (!Number.isFinite(dayStart) || dayStart <= 0 || dayStart > t) dayStart = t - (t % 86400000);
   const D = 86400000;
-  const sum = async (from, to) => first(c.env, "SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS revenue FROM orders WHERE status NOT IN ('refused','cancelled') AND created_at >= ? AND created_at < ?", from, to);
-  const today = await sum(dayStart, dayStart + D), yesterday = await sum(dayStart - D, dayStart);
+  const base = dayStart - 7 * D;
+  const [dayRows, statusRows, orders7, online, totalC, onMission] = await Promise.all([
+    all(c.env, "SELECT ((created_at - ?::bigint) / ?::bigint)::int AS d, COUNT(*) AS count, COALESCE(SUM(total),0) AS revenue FROM orders WHERE status NOT IN ('refused','cancelled') AND created_at >= ? AND created_at < ? GROUP BY 1", base, D, base, dayStart + D),
+    all(c.env, "SELECT status, COUNT(*) AS n FROM orders WHERE created_at >= ? GROUP BY status", dayStart),
+    all(c.env, "SELECT items FROM orders WHERE status NOT IN ('refused','cancelled') AND created_at >= ?", dayStart - 6 * D),
+    first(c.env, "SELECT COUNT(*) AS n FROM couriers c JOIN users u ON u.id = c.user_id WHERE u.active = 1 AND c.online = 1 AND c.last_seen > ?", t - 10 * 60000),
+    first(c.env, "SELECT COUNT(*) AS n FROM users WHERE role = 'courier' AND active = 1 AND id NOT LIKE 'u\\_ov\\_%'"),
+    first(c.env, "SELECT COUNT(DISTINCT courier_id) AS n FROM orders WHERE dispatch_state = 'assigned' AND status IN ('preparing','ready','enroute')")
+  ]);
+  const byDay = new Map(dayRows.map((r) => [Number(r.d), { count: Number(r.count), revenue: Number(r.revenue) }]));
+  const at = (d) => byDay.get(d) || { count: 0, revenue: 0 };
+  const today = at(7), yesterday = at(6);
   const series = [];
-  for (let i = 6; i >= 0; i--) { const s = dayStart - i * D; const r = await sum(s, s + D); series.push({ start: s, count: r.count, revenue: r.revenue }); }
-  const statusRows = await all(c.env, "SELECT status, COUNT(*) AS n FROM orders WHERE created_at >= ? GROUP BY status", dayStart);
-  const orders7 = await all(c.env, "SELECT items FROM orders WHERE status NOT IN ('refused','cancelled') AND created_at >= ?", dayStart - 6 * D);
+  for (let i = 6; i >= 0; i--) series.push({ start: dayStart - i * D, ...at(7 - i) });
   const top = new Map();
   for (const o of orders7) for (const i of jparse(o.items, [])) top.set(i.name, (top.get(i.name) || 0) + i.qty);
-  const topProducts = [...top.entries()].map(([name, qty]) => ({ name, qty })).sort((a, b) => b.qty - a.qty).slice(0, 5);
-  const online = await first(c.env, "SELECT COUNT(*) AS n FROM couriers c JOIN users u ON u.id = c.user_id WHERE u.active = 1 AND c.online = 1 AND c.last_seen > ?", t - 10 * 60000);
-  const totalC = await first(c.env, "SELECT COUNT(*) AS n FROM users WHERE role = 'courier' AND active = 1 AND id NOT LIKE 'u\\_ov\\_%'");
-  const onMission = await first(c.env, "SELECT COUNT(DISTINCT courier_id) AS n FROM orders WHERE dispatch_state = 'assigned' AND status IN ('preparing','ready','enroute')");
-  return {
+  const topProducts = [...top.entries()].map(([name, qty]) => ({ name, qty })).sort((a, b) => b.qty - a.qty).slice(0, 5);  return {
     today: { ...today, avg: today.count ? today.revenue / today.count : 0 }, yesterday: { ...yesterday, avg: yesterday.count ? yesterday.revenue / yesterday.count : 0 },
     series, statusToday: Object.fromEntries(statusRows.map((r) => [r.status, r.n])), topProducts,
     couriers: { online: online.n, total: totalC.n, onMission: onMission.n }
