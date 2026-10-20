@@ -5,16 +5,22 @@ type Context = { actorId: string | null; actorRole: string; branchId: string | n
 type BoundStatement = { text: string; values: unknown[] };
 
 export function createDatabase(connectionString: string) {
-  const client = postgres(connectionString, { max: 3, prepare: false, idle_timeout: 20, connect_timeout: 15 });
-  const execute = async (statement: BoundStatement, context: Context) =>
-    await client.begin(async (tx) => {
-      await tx.unsafe("SET LOCAL ROLE gk_api");
-      await tx`SELECT
-        set_config('gk.actor_id', ${context.actorId || ""}, true),
-        set_config('gk.actor_role', ${context.actorRole || "anonymous"}, true),
-        set_config('gk.branch_id', ${context.branchId || ""}, true)`;
-      return await tx.unsafe(numberedParameters(statement.text), statement.values as any[]);
-    });
+  const client = postgres(connectionString, { max: 6, prepare: false, idle_timeout: 20, connect_timeout: 15 });
+  // Role + actor context + statement are pipelined in one transaction to cut database round trips.
+  const contextQueries = (tx: any, context: Context) => [
+    tx.unsafe("SET LOCAL ROLE gk_api"),
+    tx`SELECT
+      set_config('gk.actor_id', ${context.actorId || ""}, true),
+      set_config('gk.actor_role', ${context.actorRole || "anonymous"}, true),
+      set_config('gk.branch_id', ${context.branchId || ""}, true)`
+  ];
+  const execute = async (statement: BoundStatement, context: Context) => {
+    const results: any[] = await client.begin((tx: any) => [
+      ...contextQueries(tx, context),
+      tx.unsafe(numberedParameters(statement.text), statement.values as any[])
+    ]);
+    return results[2];
+  };
 
   const forRequest = () => {
     let context: Context = { actorId: null, actorRole: "anonymous", branchId: null };
@@ -46,14 +52,11 @@ export function createDatabase(connectionString: string) {
         const requestContext = context;
         const batchStatements = statements.map((item: any) => item.asStatement ? item.asStatement() : item);
         return await client.begin(async (tx) => {
-          await tx.unsafe("SET LOCAL ROLE gk_api");
-          await tx`SELECT
-            set_config('gk.actor_id', ${requestContext.actorId || ""}, true),
-            set_config('gk.actor_role', ${requestContext.actorRole || "anonymous"}, true),
-            set_config('gk.branch_id', ${requestContext.branchId || ""}, true)`;
-          const results = [];
-          for (const statement of batchStatements) results.push(await tx.unsafe(numberedParameters(statement.text), statement.values as any[]));
-          return results;
+          const results: any[] = await Promise.all([
+            ...contextQueries(tx, requestContext),
+            ...batchStatements.map((statement: BoundStatement) => tx.unsafe(numberedParameters(statement.text), statement.values as any[]))
+          ]);
+          return results.slice(2);
         });
       }
     };

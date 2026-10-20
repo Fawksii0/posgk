@@ -122,16 +122,20 @@ async function refreshHistory() {
   }
 }
 
+let onlineEpoch = 0;
+
 async function refreshProfile() {
   if (!state.session) return;
   state.profileLoading = true;
   state.profileError = "";
+  const epoch = onlineEpoch;
   try {
     const response = await API.get("/api/courier/me", SCOPE);
     state.profile = response;
     state.profileLoaded = true;
     state.session = response.user || state.session;
-    state.online = !!response.online;
+    // A toggle made while this request was in flight wins over the stale server value.
+    if (epoch === onlineEpoch) state.online = !!response.online;
   } catch (error) {
     state.profileError = error.message || "Impossible de charger le profil.";
     throw error;
@@ -146,12 +150,13 @@ async function refreshNotifications() {
   state.notifications = Array.isArray(response.notifications) ? response.notifications : [];
 }
 
-async function refreshAll() {
+// Polls skip the history, which only changes after a delivery.
+async function refreshAll({ light = false } = {}) {
   if (!state.session || state.mustChange) return [];
   const results = await Promise.allSettled([
     refreshProfile(),
     refreshOffers(),
-    refreshHistory(),
+    light && state.historyLoaded ? Promise.resolve() : refreshHistory(),
     refreshNotifications()
   ]);
   return results.filter(result => result.status === "rejected").map(result => result.reason);
@@ -185,7 +190,7 @@ async function login(rawPhone, pin) {
 async function changeSecret(current, next) {
   if (!state.mustChange) return;
   if (!current) throw new Error("Saisissez votre PIN actuel.");
-  if (!/^\d{4,6}$/.test(next)) throw new Error("Le nouveau PIN doit contenir 4 à 6 chiffres.");
+  if (!/^\d{4}$/.test(next)) throw new Error("Le nouveau PIN doit contenir exactement 4 chiffres.");
   const response = await API.post("/api/auth/change-secret", { current, next }, SCOPE);
   const currentSession = API.setSession(SCOPE, response);
   state.session = currentSession.user;
@@ -222,8 +227,13 @@ async function logout() {
 }
 
 async function goOnline(online) {
-  const response = await API.patch("/api/courier/online", { online }, SCOPE);
-  state.online = !!response.online;
+  onlineEpoch += 1;
+  try {
+    const response = await API.patch("/api/courier/online", { online }, SCOPE);
+    state.online = !!response.online;
+  } finally {
+    onlineEpoch += 1;
+  }
   if (!online) state.missions = [];
   return state.online;
 }

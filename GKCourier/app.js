@@ -114,8 +114,8 @@ function changeSecretView() {
           <input id="current-pin" name="current" type="password" inputmode="numeric" autocomplete="current-password" maxlength="12" required />
         </div>
         <div class="field">
-          <label for="next-pin">Nouveau PIN (4 à 6 chiffres)</label>
-          <input id="next-pin" name="next" type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" required />
+          <label for="next-pin">Nouveau PIN (4 chiffres)</label>
+          <input id="next-pin" name="next" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4" required />
         </div>
         <p id="change-error" class="form-error" role="alert"></p>
         <button class="gold-button" type="submit">Enregistrer le nouveau PIN ${icon("arrowRight")}</button>
@@ -583,7 +583,7 @@ async function pollServer() {
   void pollChatUnread();
   const before = JSON.stringify([state.online, { ...state.profile, serverTime: 0 }, state.missions, state.active, state.history, state.notifications, state.offersError, state.historyError, state.profileError, state.actionError]);
   try {
-    const errors = await refreshAll();
+    const errors = await refreshAll({ light: true });
     if (!errors.length) soundForMissions();
     if (errors.length) state.actionError = errors[0].message || "Certaines données n’ont pas pu être actualisées.";
     else state.actionError = "";

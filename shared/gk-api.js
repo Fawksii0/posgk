@@ -135,6 +135,8 @@
     }
     const branchId = getBranch();
     if (branchId) headers["X-GK-Branch"] = branchId;
+    // The database lives in eu-west-1; running the function there avoids a cross-region hop per query.
+    if (/\.supabase\.co\//.test(API_URL)) headers["x-region"] = "eu-west-1";
 
     let response;
     try {

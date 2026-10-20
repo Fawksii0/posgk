@@ -265,8 +265,7 @@
         <div class="btn-row">${cashier ? `<button class="btn" data-action="reprint" data-id="${esc(order.id)}">${icon("printer")}Réimprimer</button>` : ""}<button class="btn primary" data-action="ready" data-id="${esc(order.id)}">${icon("check")}Prête</button></div>`;
     } else if (order.status === "ready") {
       const pickup = order.mode === "pickup";
-      actions = `${cashier ? `<div class="prep-row"><span class="small muted">Temps total</span>${stepper(order.id, order.prepMin, "live")}</div>` : ""}
-        <div class="btn-row">${cashier ? `<button class="btn" data-action="reprint" data-id="${esc(order.id)}">${icon("printer")}Réimprimer</button>` : ""}
+      actions = `<div class="btn-row">${cashier ? `<button class="btn" data-action="reprint" data-id="${esc(order.id)}">${icon("printer")}Réimprimer</button>` : ""}
         ${pickup ? (cashier ? `<button class="btn primary" data-action="handover" data-id="${esc(order.id)}">${icon("check")}Remise au client</button>` : `<span class="small muted">À remettre au client</span>`) : `<span class="small muted">En attente du livreur</span>`}</div>`;
     } else if (cashier) {
       actions = `<div class="btn-row"><button class="btn" data-action="reprint" data-id="${esc(order.id)}">${icon("printer")}Réimprimer</button></div>`;

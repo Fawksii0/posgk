@@ -144,18 +144,28 @@ async function authorize(request, env, isPublic) {
   return user;
 }
 
+const branchCache = new Map();
+// Active-branch lookups repeat on every request; branches change rarely, so keep them for 30 s.
+async function activeBranch(env, id) {
+  const hit = branchCache.get(id);
+  if (hit && hit.until > Date.now()) return hit.value;
+  const value = await first(env, "SELECT id, name FROM branches WHERE id = ? AND active = 1", id);
+  if (value) branchCache.set(id, { value, until: Date.now() + 30000 });
+  return value;
+}
+
 async function selectBranch(request, env, user, branchScoped) {
   const requested = request.headers.get("X-GK-Branch");
   if (user && user.role !== "client" && user.role !== "admin" && user.role !== "owner") {
     if (!user.branch_id) throw new HttpError(403, "branch_unassigned", "Ce compte n'est associé à aucune succursale.");
     if (requested && requested !== user.branch_id) throw new HttpError(403, "branch_forbidden", "Accès à cette succursale refusé.");
-    const branch = await first(env, "SELECT id FROM branches WHERE id = ? AND active = 1", user.branch_id);
+    const branch = await activeBranch(env, user.branch_id);
     if (!branch) throw new HttpError(403, "branch_inactive", "Cette succursale est inactive.");
     return user.branch_id;
   }
   if (!branchScoped) {
     if (requested && user && ["client", "admin", "owner"].includes(user.role)) {
-      const branch = await first(env, "SELECT id FROM branches WHERE id = ? AND active = 1", str(requested, { max: 80, min: 1, field: "Succursale" }));
+      const branch = await activeBranch(env, str(requested, { max: 80, min: 1, field: "Succursale" }));
       if (!branch) throw new HttpError(400, "invalid_branch", "Succursale inconnue ou inactive.");
       return branch.id;
     }
@@ -163,7 +173,7 @@ async function selectBranch(request, env, user, branchScoped) {
   }
   if (!requested) throw new HttpError(400, "branch_required", "Choisissez une succursale avec X-GK-Branch.");
   const id = str(requested, { max: 80, min: 1, field: "Succursale" });
-  const branch = await first(env, "SELECT id FROM branches WHERE id = ? AND active = 1", id);
+  const branch = await activeBranch(env, id);
   if (!branch) throw new HttpError(400, "invalid_branch", "Succursale inconnue ou inactive.");
   return branch.id;
 }
@@ -184,7 +194,7 @@ export default {
       };
       c.branchId = await selectBranch(request, env, c.user, r.branchScoped);
       if (c.user && c.branchId) {
-        const branch = await first(env, "SELECT name FROM branches WHERE id = ? AND active = 1", c.branchId);
+        const branch = await activeBranch(env, c.branchId);
         c.user.active_branch_id = c.branchId;
         c.user.active_branch_name = branch?.name || null;
         if (c.user.branch_id) c.user.branch_name = branch?.name || null;

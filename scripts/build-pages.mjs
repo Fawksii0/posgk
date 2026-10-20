@@ -30,4 +30,22 @@ writeFileSync(resolve(out, "_headers"), `/*
 /sw.js
   Cache-Control: no-cache
 `);
+// Same rules for Apache/cPanel hosting (ignored by Cloudflare Pages).
+writeFileSync(resolve(out, ".htaccess"), `RewriteEngine On
+RewriteCond %{HTTPS} off
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "DENY"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), payment=()"
+  <Files "sw.js">
+    Header set Cache-Control "no-cache"
+  </Files>
+</IfModule>
+
+AddType application/manifest+json .webmanifest
+Options -Indexes
+`);
 console.log(`Built ${app} -> gk-dist`);

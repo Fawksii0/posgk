@@ -297,7 +297,7 @@ export async function ownerSwitch(c) {
 /* ---------- secret change ---------- */
 export function validateNewSecret(role, value) {
   if (role === "courier") {
-    if (!/^\d{4,6}$/.test(value)) fail(400, "weak_secret", "Le PIN doit contenir 4 à 6 chiffres.");
+    if (!/^\d{4}$/.test(value)) fail(400, "weak_secret", "Le PIN doit contenir exactement 4 chiffres.");
     if (WEAK_PINS.has(value)) fail(400, "weak_secret", "PIN trop simple. Choisissez-en un autre.");
   } else if (typeof value !== "string" || value.length < 8 || value.length > 100) {
     fail(400, "weak_secret", "Le mot de passe doit contenir au moins 8 caractères.");
