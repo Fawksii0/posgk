@@ -38,8 +38,8 @@ async function loadMenu() {
   render();
   try {
     const [menu, zonesResponse] = await Promise.all([
-      GKApi.get("/api/menu", "client"),
-      GKApi.get("/api/zones", "client")
+      GKApi.get("/api/menu"),
+      GKApi.get("/api/zones")
     ]);
     const categoryMap = new Map((menu.categories || []).map(category => [category.id, category]));
     categories = [
@@ -281,7 +281,7 @@ function renderBranches() {
     ${state.branchError ? `<p class="cart-notice" role="alert">${escapeHtml(state.branchError)}</p><button class="outline-button" type="button" data-action="reload-branches">Réessayer</button>` : ""}
     ${!state.branchLoading && !state.branchError && !branchCards ? `<p class="empty-state">Aucun restaurant n'est disponible pour le moment.</p>` : ""}
     <div class="branch-list">${branchCards}</div>
-    <p class="fineprint">${state.user ? `Connecté en tant que ${escapeHtml(state.user.name)}.` : "Connectez-vous pour choisir votre restaurant."}</p>
+    <p class="fineprint">${state.user ? `Connecté en tant que ${escapeHtml(state.user.name)}.` : "Choisissez un restaurant pour voir son menu."}</p>
   </section>`;
 }
 
@@ -290,12 +290,7 @@ function renderBranches() {
 function renderHome() {
   if (!state.selectedBranchId) {
     if (state.user) return renderBranches();
-    return `<section class="branch-welcome" aria-labelledby="welcome-heading">
-      <span class="eyebrow">G&amp;K Food</span>
-      <h1 class="screen-title" id="welcome-heading">Deux restaurants, un seul compte.</h1>
-      <p class="auth-lead">Connectez-vous pour choisir entre notre cuisine principale et G&amp;K Shawarma &amp; Crispy.</p>
-      <button class="gold-button full-width" type="button" data-action="login">Se connecter pour choisir</button>
-    </section>`;
+    return renderBranches();
   }
   if (state.menuStatus === "loading") return `<section><h1 class="screen-title">Accueil</h1><p class="empty-state">Chargement du menu…</p></section>`;
   if (state.menuStatus === "error") return `<section><h1 class="screen-title">Accueil</h1><p class="cart-notice" role="alert">${escapeHtml(state.menuError)}</p><button class="gold-button" type="button" data-action="reload-menu">Réessayer</button></section>`;
@@ -529,12 +524,6 @@ function goTo(view, { top = true } = {}) {
 function setView(view) {
   if (!["home", "menu", "cart", "orders", "profile"].includes(view)) return;
   if (["menu", "cart", "orders"].includes(view) && !state.selectedBranchId) {
-    if (!state.user) {
-      state.afterAuth = view;
-      state.authMode = "login";
-      state.authStep = "form";
-      return goTo("auth");
-    }
     state.afterBranch = view;
     return goTo("branches");
   }
