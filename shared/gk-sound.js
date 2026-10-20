@@ -29,13 +29,13 @@
     order(t) {
       for (let burst = 0; burst < 3; burst += 1) {
         const at = t + burst * 0.55;
-        tone(1046, at, 0.14, "square", 0.22);
-        tone(784, at + 0.16, 0.14, "square", 0.22);
-        tone(1046, at + 0.32, 0.18, "square", 0.22);
+        tone(1046, at, 0.14, "square", 1);
+        tone(784, at + 0.16, 0.14, "square", 1);
+        tone(1046, at + 0.32, 0.18, "square", 1);
       }
     },
     ready(t) {
-      [523, 659, 784, 1046].forEach((freq, i) => tone(freq, t + i * 0.14, 0.34, "sine", 0.35));
+      [523, 659, 784, 1046].forEach((freq, i) => tone(freq, t + i * 0.14, 0.34, "sine", 1));
     }
   };
 
