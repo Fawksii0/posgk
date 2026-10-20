@@ -267,3 +267,7 @@ body { background: #dcdcd8; }
 .cash-alert { background: #fff1d6; border-left: 5px solid var(--new); }
 .field input:focus, .field textarea:focus { border-color: var(--ready); box-shadow: 0 0 0 3px #d6f0e1; }
 .login-logo { box-shadow: none; }
+
+.contact-row { grid-template-columns: 1fr 1fr; }
+.contact-row > :first-child { grid-column: 1 / -1; }
+.contact-row .gkc-badge { margin-left: 8px; }

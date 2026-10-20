@@ -34,6 +34,10 @@
         tone(1046, at + 0.32, 0.18, "square", 1);
       }
     },
+    message(t) {
+      tone(880, t, 0.12, "sine", 1);
+      tone(1318, t + 0.12, 0.22, "sine", 1);
+    },
     ready(t) {
       [523, 659, 784, 1046].forEach((freq, i) => tone(freq, t + i * 0.14, 0.34, "sine", 1));
     }

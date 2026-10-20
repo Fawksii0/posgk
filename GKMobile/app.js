@@ -173,6 +173,35 @@ async function refreshOrders() {
   if (state.view === "orders") render();
 }
 
+let chatUnread = {};
+function renderCourierCard(order) {
+  const links = GKChat.contactLinks(order.courier.phone);
+  const unread = chatUnread[order.id] || 0;
+  return `<div class="courier-card"><div class="courier-who"><span class="courier-avatar">${escapeHtml((order.courier.name || "L")[0].toUpperCase())}</span><div><small>Votre livreur</small><strong>${escapeHtml(order.courier.name || "Livreur G&K")}</strong></div></div>
+    <div class="courier-actions"><button class="gold-button compact" type="button" data-chat-order="${escapeHtml(order.id)}">${icon("chat")} Chat${unread ? `<span class="gkc-badge">${unread}</span>` : ""}</button>${links ? `<a class="outline-button compact" href="${escapeHtml(links.tel)}">${icon("phone")} Appeler</a><a class="outline-button compact" href="${escapeHtml(links.wa)}" target="_blank" rel="noopener">WhatsApp</a>` : ""}</div></div>`;
+}
+
+async function pollChatUnread() {
+  if (!GKApi.session("client")?.token) return;
+  try {
+    const res = await GKApi.get("/api/chat/unread", "client");
+    const grew = res.total > Object.values(chatUnread).reduce((a, b) => a + b, 0);
+    const changed = JSON.stringify(res.unread) !== JSON.stringify(chatUnread);
+    chatUnread = res.unread || {};
+    if (grew && window.GKSound) GKSound.play("message");
+    if (changed && state.view === "orders" && state.trackingId) render();
+  } catch { /* badge is best effort */ }
+}
+
+function openChat(orderId) {
+  GKChat.open({
+    scope: "client", orderId, title: "Votre livreur", subtitle: `Commande #${orderId}`,
+    quick: ["Je descends", "Merci !", "Le code porte est …"],
+    onMessage: () => window.GKSound && GKSound.play("message"),
+    onClose: () => { void pollChatUnread(); }
+  });
+}
+
 async function refreshTrackedOrder() {
   if (!state.trackingId || !GKApi.session("client")?.token) return;
   try {
@@ -443,6 +472,7 @@ function renderTracking(order) {
         const status = index < order.stage || (done && index === steps.length - 1) ? "done" : index === order.stage ? "current" : "";
         return `<li class="step-item ${status}"><span class="step-dot">${icon(step.icon)}</span><span class="step-copy"><strong>${step.title}</strong><small>${step.detail}</small></span></li>`;
       }).join("")}</ol>`}
+      ${order.courier ? renderCourierCard(order) : ""}
       ${order.status === "active" && order.stage === 0 ? `<button class="outline-button full-width" type="button" data-cancel-order="${escapeHtml(order.id)}">Annuler la commande</button>` : ""}
       ${order.status === "active" ? `<p class="fineprint">Le suivi reflète les statuts transmis par le restaurant. La position GPS du livreur n'est pas disponible.</p>` : ""}
     </article>
@@ -749,7 +779,6 @@ document.querySelector("#notif-button").addEventListener("click", () => openPane
 document.querySelector("#location-button").addEventListener("click", () => openPanel("addresses"));
 
 const actionMessages = {
-  chat: "La messagerie avec le livreur sera bientôt disponible.",
   directions: "L'itinéraire n'est pas disponible dans l'application."
 };
 const panelActions = ["addresses", "payments", "support"];
@@ -784,6 +813,7 @@ main.addEventListener("click", event => {
     return;
   }
   if (closest("[data-back-orders]")) { state.trackingId = null; return render(); }
+  if ((el = closest("[data-chat-order]"))) { openChat(el.dataset.chatOrder); return; }
   if ((el = closest("[data-cancel-order]"))) {
     const orderId = el.dataset.cancelOrder;
     GKApi.post(`/api/orders/${encodeURIComponent(orderId)}/cancel`, { reason: "Annulation demandée par le client." }, "client")
@@ -1002,6 +1032,10 @@ void loadBranches().then(() => {
   if (state.selectedBranchId) void loadMenu();
   if (state.user && state.selectedBranchId) void refreshOrders();
 });
+setInterval(() => {
+  if (state.view === "orders" && state.trackingId) void pollChatUnread();
+}, 6000);
+
 setInterval(() => {
   if (state.view === "orders" && state.trackingId) void refreshTrackedOrder();
   else if (state.view === "orders" && state.user) void refreshOrders();

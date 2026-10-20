@@ -217,10 +217,11 @@ function activeView() {
         <div><span>Articles</span><span>${esc(m.items)}</span></div>
         <div><span>Paiement</span><span>${m.payment === "cash" ? "Espèces" : "Payé en ligne"}</span></div>
       </div>
-      ${m.phone ? `<div class="contact-row">
-        <a class="outline-button" href="${telLink(m.phone)}" aria-label="Appeler ${esc(m.customer)}">${icon("phone")} Appeler</a>
-        <a class="outline-button" href="${waLink(m.phone)}" target="_blank" rel="noopener" aria-label="WhatsApp ${esc(m.customer)}">${icon("chat")} WhatsApp</a>
-      </div>` : ""}
+      <div class="contact-row">
+        <button class="outline-button" type="button" data-act="open-chat" data-id="${esc(m.id)}" data-name="${esc(m.customer)}">${icon("chat")} Message${chatUnread[m.id] ? `<span class="gkc-badge">${chatUnread[m.id]}</span>` : ""}</button>
+        ${m.phone ? `<a class="outline-button" href="${telLink(m.phone)}" aria-label="Appeler ${esc(m.customer)}">${icon("phone")} Appeler</a>
+        <a class="outline-button" href="${waLink(m.phone)}" target="_blank" rel="noopener" aria-label="WhatsApp ${esc(m.customer)}">${icon("chat")} WhatsApp</a>` : ""}
+      </div>
       ${cash}
     </div>
     <div class="sticky-actions">
@@ -392,6 +393,14 @@ function notifSheet() {
 /* ---------- Events ---------- */
 
 const actions = {
+  "open-chat"(el) {
+    GKChat.open({
+      scope: "courier", orderId: el.dataset.id, title: el.dataset.name, subtitle: "Client",
+      quick: ["J'arrive dans 5 min", "Je suis devant", "Pouvez-vous descendre ?", "Quel est le code porte ?"],
+      onMessage: () => GKSound.play("message"),
+      onClose: () => { void pollChatUnread(); }
+    });
+  },
   tab(el) { ui.tab = el.dataset.tab; render(); window.scrollTo(0, 0); },
   filter(el) { ui.filter = el.dataset.filter; render(); },
   async "toggle-online"() {
@@ -556,9 +565,22 @@ function stopLocationTracking() {
   state.locationError = "";
 }
 
+let chatUnread = {};
+async function pollChatUnread() {
+  try {
+    const res = await GKApi.get("/api/chat/unread", "courier");
+    const grew = res.total > Object.values(chatUnread).reduce((a, b) => a + b, 0);
+    const changed = JSON.stringify(res.unread) !== JSON.stringify(chatUnread);
+    chatUnread = res.unread || {};
+    if (grew) GKSound.play("message");
+    if (changed && $("overlay").hidden) render();
+  } catch { /* chat badge is best effort */ }
+}
+
 async function pollServer() {
   if (!state.session || state.mustChange || polling) return;
   polling = true;
+  void pollChatUnread();
   const before = JSON.stringify([state.online, { ...state.profile, serverTime: 0 }, state.missions, state.active, state.history, state.notifications, state.offersError, state.historyError, state.profileError, state.actionError]);
   try {
     const errors = await refreshAll();

@@ -3,6 +3,7 @@ import { first, all } from "./core.js";
 import * as auth from "./auth.js";
 import * as admin from "./admin.js";
 import * as orders from "./orders.js";
+import * as chat from "./chat.js";
 
 const routes = [];
 const route = (method, path, handler, options = {}) => routes.push({
@@ -89,6 +90,9 @@ route("GET", "/api/admin/audit", admin.auditList);
 route("GET", "/api/owner/audit", admin.ownerAuditList, { branchScoped: false });
 route("GET", "/api/admin/stats", admin.stats);
 
+route("GET", "/api/chat/unread", chat.unreadCounts);
+route("GET", "/api/orders/(?<id>[^/]+)/messages", chat.messagesList);
+route("POST", "/api/orders/(?<id>[^/]+)/messages", chat.messageSend, { body: true });
 route("GET", "/api/orders", orders.ordersList);
 route("POST", "/api/orders", orders.orderCreate, { body: true });
 route("GET", "/api/orders/(?<id>[^/]+)", orders.orderGet);

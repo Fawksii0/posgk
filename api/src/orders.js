@@ -1,5 +1,6 @@
 import { fail, now, randomDigits, randomId, str, numv, jparse, haversineKm, normPhone } from "./lib.js";
 import { all, first, run, stmt, batch, getSetting, setSetting, audit, notify, need } from "./core.js";
+import { courierContact } from "./chat.js";
 
 export const STORE = { lat: 33.7895, lng: -7.1597 };
 const ACTIVE = ["preparing", "ready", "enroute"];
@@ -132,7 +133,15 @@ export async function ordersList(c) {
       ? await all(c.env, "SELECT * FROM orders WHERE status = ? ORDER BY created_at DESC LIMIT 300", status)
       : await all(c.env, "SELECT * FROM orders ORDER BY created_at DESC LIMIT 300");
   }
-  return { orders: rows.map((row) => orderOut(row, { revealCode: u.role === "client" || u.role === "owner" })) };
+  const revealCode = u.role === "client" || u.role === "owner";
+  const out = rows.map((row) => orderOut(row, { revealCode }));
+  if (u.role === "client") {
+    for (let i = 0; i < rows.length; i += 1) {
+      const courier = await courierContact(c.env, rows[i]);
+      if (courier) out[i].courier = courier;
+    }
+  }
+  return { orders: out };
 }
 
 export async function orderGet(c) {
@@ -140,7 +149,12 @@ export async function orderGet(c) {
   clientOwns(c, row);
   if (c.user.role === "courier" && row.courier_id !== c.user.id && row.offered_to !== c.user.id) fail(404, "not_found", "Commande introuvable.");
   if (c.user.role !== "client" && c.user.role !== "courier") need(c.user, "orders.view");
-  return { order: orderOut(row, { revealCode: c.user.role === "client" || c.user.role === "owner" }) };
+  const out = orderOut(row, { revealCode: c.user.role === "client" || c.user.role === "owner" });
+  if (c.user.role === "client") {
+    const courier = await courierContact(c.env, row);
+    if (courier) out.courier = courier;
+  }
+  return { order: out };
 }
 
 export async function orderCreate(c) {
