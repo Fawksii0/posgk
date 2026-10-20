@@ -32,6 +32,7 @@
   const ROUTES = {
     dashboard: { title: "Tableau de bord", icon: "grid", perm: "stats" },
     commandes: { title: "Commandes", icon: "receipt" },
+    factures: { title: "Factures", icon: "invoice", perm: "invoices" },
     menu: { title: "Menu", icon: "utensils" },
     livreurs: { title: "Livreurs", icon: "bike", perm: "couriers" },
     clients: { title: "Clients", icon: "users", perm: "clients" },
@@ -42,7 +43,7 @@
     reglages: { title: "Réglages", icon: "gear" }
   };
   const NAV_GROUPS = [
-    { label: "Exploitation", routes: ["dashboard", "commandes", "menu", "livreurs", "clients"] },
+    { label: "Exploitation", routes: ["dashboard", "commandes", "factures", "menu", "livreurs", "clients"] },
     { label: "Configuration", routes: ["zones", "promotions", "activite"] },
     { label: "Administration", routes: ["utilisateurs", "reglages"] }
   ];
@@ -50,6 +51,7 @@
   const ui = {
     route: "dashboard", soft: false, bell: false, user: false, drawer: null, catEdit: null, returnFocus: null,
     orders: { q: "", status: "all", mode: "all", range: "all", page: 1 },
+    invoices: { q: "", range: "month", payment: "all", page: 1 },
     menu: { q: "", cat: "all", view: "grid" },
     couriers: { q: "" },
     customers: { q: "", blocked: "all", page: 1 },
@@ -106,9 +108,9 @@
 
   /* ---------- Modal ---------- */
   let modalReturn = null;
-  function openModal({ title, message = "", body = "", confirmLabel = "Confirmer", cancelLabel = "Annuler", danger = false, hideCancel = false, onSubmit }) {
+  function openModal({ title, message = "", body = "", confirmLabel = "Confirmer", cancelLabel = "Annuler", danger = false, hideCancel = false, wide = false, onSubmit }) {
     modalReturn = document.activeElement;
-    $("#modal-root").innerHTML = `<div class="modal-overlay"><form class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" novalidate><h2 id="modal-title">${esc(title)}</h2>${message ? `<p class="msg">${esc(message)}</p>` : ""}${body}<div class="modal-actions">${hideCancel ? "" : `<button type="button" class="btn" data-action="close-modal">${esc(cancelLabel)}</button>`}<button type="submit" class="${danger ? "btn-danger" : "btn-gold"}">${esc(confirmLabel)}</button></div></form></div>`;
+    $("#modal-root").innerHTML = `<div class="modal-overlay"><form class="modal${wide ? " wide" : ""}"  role="dialog" aria-modal="true" aria-labelledby="modal-title" novalidate><h2 id="modal-title">${esc(title)}</h2>${message ? `<p class="msg">${esc(message)}</p>` : ""}${body}<div class="modal-actions">${hideCancel ? "" : `<button type="button" class="btn" data-action="close-modal">${esc(cancelLabel)}</button>`}<button type="submit" class="${danger ? "btn-danger" : "btn-gold"}">${esc(confirmLabel)}</button></div></form></div>`;
     const form = $("#modal-root form");
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -429,14 +431,85 @@
       ${o.mode === "livraison" ? `<div class="card"><h3 class="small muted" style="margin-bottom:10px">LIVREUR</h3>${c ? `<p style="margin-bottom:10px"><b>${esc(c.name)}</b> · ${esc(c.phone)}</p>` : `<p class="muted" style="margin-bottom:10px">Aucun livreur assigné.</p>`}
         ${closed || !Store.can("orderAct") ? "" : `<div class="field" data-field="courier" style="margin-bottom:0"><label for="assign-select">${c ? "Réassigner à" : "Assigner à"}</label><div style="display:flex;gap:8px"><select id="assign-select" class="select" style="flex:1"><option value="">Choisir un livreur…</option>${couriers.map((x) => `<option value="${esc(x.id)}" ${x.id === o.courierId ? "selected" : ""}>${esc(x.name)} — ${statusText[Store.courierStatus(x)] || ""}</option>`).join("")}</select><button class="btn btn-dark" data-action="assign-courier" data-id="${esc(o.id)}">Assigner</button></div></div>`}</div>` : ""}
       <div class="card"><h3 class="small muted" style="margin-bottom:12px">HISTORIQUE</h3><ol class="timeline">${o.history.map((h) => `<li class="${h.status === "annulee" ? "cancel" : ""}"><span>${esc(Store.statusLabel(h.status))}</span><time>${esc(fmtDT(h.at))}</time></li>`).join("")}</ol></div>`;
-    const foot = `<button class="btn" data-action="show-receipt" data-id="${esc(o.id)}">${icon("printer")} Reçu</button>${o.status === "nouvelle" && Store.can("orderAct") ? `<button class="btn btn-ghost-danger" data-action="refuse-order" data-id="${esc(o.id)}">Refuser</button>` : ""}${o.status === "nouvelle" && Store.can("orderAct") ? `<button class="btn btn-ghost-danger" data-action="cancel-order" data-id="${esc(o.id)}">Annuler</button>` : ""}${o.status === "preparation" && Store.can("orderAct") ? `<button class="btn" data-action="adjust-prep" data-id="${esc(o.id)}">Ajuster le délai</button>` : ""}${next && (o.status === "nouvelle" ? Store.can("orderAct") : o.status === "preparation" ? Store.can("orderReady") : Store.can("orderHandover")) ? `<button class="btn-gold" data-action="advance-order" data-id="${esc(o.id)}">${icon("arrowRight")} ${esc(o.status === "nouvelle" ? "Accepter" : Store.statusLabel(next))}</button>` : ""}`;
+    const foot = `<button class="btn" data-action="show-receipt" data-id="${esc(o.id)}">${icon("printer")} Ticket</button>${o.status === "livree" && Store.can("invoices") ? `<button class="btn" data-action="open-invoice" data-id="${esc(o.id)}">${icon("invoice")} Facture</button>` : ""}${o.status === "nouvelle" && Store.can("orderAct") ? `<button class="btn btn-ghost-danger" data-action="refuse-order" data-id="${esc(o.id)}">Refuser</button>` : ""}${o.status === "nouvelle" && Store.can("orderAct") ? `<button class="btn btn-ghost-danger" data-action="cancel-order" data-id="${esc(o.id)}">Annuler</button>` : ""}${o.status === "preparation" && Store.can("orderAct") ? `<button class="btn" data-action="adjust-prep" data-id="${esc(o.id)}">Ajuster le délai</button>` : ""}${next && (o.status === "nouvelle" ? Store.can("orderAct") : o.status === "preparation" ? Store.can("orderReady") : Store.can("orderHandover")) ? `<button class="btn-gold" data-action="advance-order" data-id="${esc(o.id)}">${icon("arrowRight")} ${esc(o.status === "nouvelle" ? "Accepter" : Store.statusLabel(next))}</button>` : ""}`;
     return drawerShell({ title: `Commande ${o.id}`, sub: `${fmtDT(o.createdAt)} · ${ago(o.createdAt)}`, status: statusPill(o.status), body, foot });
   }
 
-  function receiptHTML(o) {
-    const r = S().settings.restaurant; const z = Store.byId(S().zones, o.zoneId);
-    const line = (a, b) => `<div class="r-line"><span>${a}</span><span>${b}</span></div>`;
-    return `<div class="receipt"><h2>${esc(r.name)}</h2><p class="center">${esc(r.address)}<br>${esc(r.phone)}</p><hr>${line("Commande", esc(o.id))}${line("Date", esc(fmtDT(o.createdAt)))}${line("Client", esc(o.customerName))}${line("Mode", o.mode === "livraison" ? `Livraison${z ? " · " + esc(z.name) : ""}` : "À emporter")}${o.address ? `<div>${esc(o.address)}</div>` : ""}<hr>${o.items.map((l) => line(`${l.qty} × ${esc(l.name)}${l.size ? " (" + esc(l.size) + ")" : ""}`, esc(money(l.qty * l.unit)))).join("")}<hr>${line("Sous-total", esc(money(o.subtotal)))}${line("Livraison", o.fee ? esc(money(o.fee)) : "Offerte")}${o.discount ? line("Promo " + esc(o.promo), "− " + esc(money(o.discount))) : ""}${line("<b>TOTAL</b>", `<b>${esc(money(o.total))}</b>`)}${line("Paiement", o.payment === "cash" ? "Espèces" : "Carte")}<hr><p class="center">Merci de votre confiance !</p></div>`;
+  /* ---------- Receipts & invoices ---------- */
+  const LOGO = "assets/emblem-reference.png";
+  function receiptDoc(o) {
+    const z = Store.byId(S().zones, o.zoneId);
+    return {
+      id: o.id, seq: o.seq, createdAt: o.createdAt, mode: o.mode === "livraison" ? "delivery" : "pickup",
+      customerName: o.customerName, phone: o.phone, address: o.address || "", zone: o.zoneName || (z ? z.name : ""),
+      note: o.note || "", promo: o.promo, subtotal: o.subtotal, fee: o.fee, discount: o.discount, total: o.total,
+      payment: o.payment === "cash" ? "cash" : "card", status: o.status,
+      items: o.items.map((l) => ({ qty: l.qty, name: l.name, size: l.size, extras: l.extras, unit: l.unit }))
+    };
+  }
+  const receiptOpts = () => ({ seller: S().settings.restaurant, logo: LOGO });
+
+  /* ---------- Invoices ---------- */
+  function filteredInvoices() {
+    const f = ui.invoices; const q = f.q.trim().toLowerCase();
+    const today = Store.dayStart(Date.now());
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+    return S().orders.filter((o) => {
+      if (o.status !== "livree") return false;
+      if (f.payment !== "all" && o.payment !== f.payment) return false;
+      if (f.range === "today" && o.createdAt < today) return false;
+      if (f.range === "7d" && o.createdAt < today - 6 * 86400000) return false;
+      if (f.range === "month" && o.createdAt < monthStart) return false;
+      if (q && !`${GKReceipt.invoiceNumber(receiptDoc(o))} ${o.id} ${o.customerName} ${o.phone}`.toLowerCase().includes(q)) return false;
+      return true;
+    }).sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  function invoicesResults() {
+    const list = filteredInvoices();
+    const sum = (fn) => list.filter(fn).reduce((s, o) => s + o.total, 0);
+    const kpi = (label, value, sub) => `<div class="card kpi"><div class="kpi-top"><span>${label}</span></div><div class="kpi-value">${value}</div><span class="delta flat">${sub}</span></div>`;
+    const kpis = `<div class="grid grid-kpi">${kpi("Factures", String(list.length), "livrées")}${kpi("Total facturé", `${nf.format(Math.round(sum(() => true)))} <small>MAD</small>`, "toutes taxes comprises")}${kpi("Espèces", `${nf.format(Math.round(sum((o) => o.payment === "cash")))} <small>MAD</small>`, `${list.filter((o) => o.payment === "cash").length} facture(s)`)}${kpi("Carte", `${nf.format(Math.round(sum((o) => o.payment !== "cash")))} <small>MAD</small>`, `${list.filter((o) => o.payment !== "cash").length} facture(s)`)}</div>`;
+    const p = paginate(list, "invoices");
+    if (!p.total) return `${kpis}<div class="card">${emptyState("invoice", "Aucune facture", "Les factures sont créées automatiquement pour chaque commande livrée.")}</div>`;
+    const rows = p.slice.map((o) => `<tr class="clickable" data-action="open-invoice" data-id="${esc(o.id)}"><td class="cell-first" data-label="Facture"><button class="link-btn" data-action="open-invoice" data-id="${esc(o.id)}">${esc(GKReceipt.invoiceNumber(receiptDoc(o)))}</button></td>
+      <td data-label="Date" class="nowrap">${esc(fmtDT(o.createdAt))}</td>
+      <td data-label="Client"><div class="cell-main"><b>${esc(o.customerName)}</b><small>${esc(o.phone)}</small></div></td>
+      <td data-label="Commande">#${esc(o.id)}</td>
+      <td data-label="Paiement">${o.payment === "cash" ? "Espèces" : "Carte"}</td>
+      <td data-label="Total" class="num right"><b>${esc(money(o.total))}</b></td>
+      <td data-label="" class="right nowrap"><button class="btn btn-sm" data-action="print-invoice" data-id="${esc(o.id)}" aria-label="Imprimer la facture ${esc(o.id)}">${icon("printer")} PDF</button></td></tr>`).join("");
+    return `${kpis}<div class="table-wrap"><table class="tbl stack"><thead><tr><th>Facture</th><th>Date</th><th>Client</th><th>Commande</th><th>Paiement</th><th class="right">Total</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${pagerHTML("invoices", p)}`;
+  }
+
+  function invoicesPage() {
+    const f = ui.invoices;
+    const opt = (v, label, cur) => `<option value="${v}" ${cur === v ? "selected" : ""}>${label}</option>`;
+    return `<div class="toolbar">${searchBox("invoices", "q", "N° de facture, client, téléphone…", "Rechercher une facture")}
+      <select class="select" data-filter="invoices.range" aria-label="Période">${opt("today", "Aujourd'hui", f.range)}${opt("7d", "7 derniers jours", f.range)}${opt("month", "Ce mois-ci", f.range)}${opt("all", "Toutes les dates", f.range)}</select>
+      <select class="select" data-filter="invoices.payment" aria-label="Paiement">${opt("all", "Tous les paiements", f.payment)}${opt("cash", "Espèces", f.payment)}${opt("card", "Carte", f.payment)}</select>
+      <button class="btn" data-action="export-invoices">${icon("external")} Exporter CSV</button></div>
+      <div data-results>${invoicesResults()}</div>`;
+  }
+
+  function exportInvoicesCsv() {
+    const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const rows = [["Facture", "Date", "Client", "Téléphone", "Commande", "Mode", "Paiement", "Sous-total", "Livraison", "Remise", "Total"]];
+    filteredInvoices().forEach((o) => rows.push([GKReceipt.invoiceNumber(receiptDoc(o)), new Date(o.createdAt).toISOString().slice(0, 10), o.customerName, o.phone, o.id, o.mode, o.payment, o.subtotal, o.fee, o.discount, o.total]));
+    const blob = new Blob(["\ufeff" + rows.map((r) => r.map(cell).join(";")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `factures-${todayISO()}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  function openInvoiceModal(o) {
+    const doc = receiptDoc(o);
+    openModal({
+      title: GKReceipt.invoiceNumber(doc), wide: true, confirmLabel: "Imprimer / PDF", cancelLabel: "Fermer",
+      body: `<div class="receipt-preview">${GKReceipt.previewInvoice(doc, receiptOpts())}</div><p class="hint" style="margin-top:8px">Astuce : choisissez « Enregistrer au format PDF » dans la fenêtre d'impression.</p><p><button type="button" class="btn btn-sm" data-action="print-ticket" data-id="${esc(o.id)}">${icon("receipt")} Imprimer le ticket</button></p>`,
+      onSubmit: () => { GKReceipt.printInvoice(doc, receiptOpts()); return null; }
+    });
   }
 
   /* ---------- Menu ---------- */
@@ -658,6 +731,7 @@
 
   pages = {
     dashboard: { render: dashboardPage }, commandes: { render: ordersPage, results: ordersResults },
+    factures: { render: invoicesPage, results: invoicesResults },
     menu: { render: menuPage, results: menuResults }, livreurs: { render: couriersPage, results: couriersResults },
     clients: { render: customersPage, results: customersResults }, zones: { render: zonesPage },
     promotions: { render: promosPage }, activite: { render: activityPage, results: activityResults },
@@ -857,8 +931,13 @@
     },
     "show-receipt": (el) => {
       const o = Store.byId(S().orders, el.dataset.id);
-      openModal({ title: `Reçu ${o.id}`, confirmLabel: "Imprimer", cancelLabel: "Fermer", body: `<div class="receipt-preview">${receiptHTML(o)}</div>`, onSubmit: () => { $("#print-area").innerHTML = receiptHTML(o); setTimeout(() => window.print(), 50); } });
+      const doc = receiptDoc(o);
+      openModal({ title: `Ticket ${o.id}`, confirmLabel: "Imprimer", cancelLabel: "Fermer", body: `<div class="receipt-preview">${GKReceipt.previewTicket(doc, receiptOpts())}</div>`, onSubmit: () => { GKReceipt.printTicket(doc, receiptOpts()); return null; } });
     },
+    "open-invoice": (el) => { const o = Store.byId(S().orders, el.dataset.id); if (o) openInvoiceModal(o); },
+    "print-invoice": (el) => { const o = Store.byId(S().orders, el.dataset.id); if (o) GKReceipt.printInvoice(receiptDoc(o), receiptOpts()); },
+    "print-ticket": (el) => { const o = Store.byId(S().orders, el.dataset.id); if (o) GKReceipt.printTicket(receiptDoc(o), receiptOpts()); },
+    "export-invoices": () => exportInvoicesCsv(),
     "new-product": () => openDrawer("product"),
     "edit-product": (el) => openDrawer("product", el.dataset.id),
     "toggle-available": (el) => { result(Store.toggleAvailability(el.dataset.id)); },

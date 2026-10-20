@@ -1,7 +1,7 @@
-const VERSION = "gk-cuisine-v11";
+const VERSION = "gk-cuisine-v12";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./data.js", "./store.js", "./escpos.js", "./app.js", "./manifest.webmanifest",
-  "./assets/emblem-reference.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png",   "../shared/gk-api.js", "../shared/gk-sound.js"
+  "./assets/emblem-reference.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png",   "../shared/gk-api.js", "../shared/gk-sound.js", "../shared/gk-receipt.js"
 ];
 
 self.addEventListener("install", event => {

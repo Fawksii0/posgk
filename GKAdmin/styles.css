@@ -330,12 +330,8 @@ a { color: inherit; text-decoration: none; }
 .toast.error .ui-icon { color: #fff; }
 
 .print-area { display: none; }
-.receipt { width: 300px; margin: 0 auto; color: #000; font: 12px/1.45 "Courier New", monospace; }
-.receipt h2 { margin-bottom: 4px; font-size: 16px; text-align: center; }
-.receipt hr { border: 0; border-top: 1px dashed #000; margin: 8px 0; }
-.receipt .r-line { display: flex; justify-content: space-between; gap: 8px; }
-.receipt .center { text-align: center; }
-.receipt-preview { padding: 16px; border: 1px dashed var(--line); border-radius: 14px; background: #fff; }
+.receipt-preview { padding: 6px; border: 1px dashed var(--line); border-radius: 14px; background: #ecebe7; max-height: 62vh; overflow-y: auto; }
+.modal.wide { width: min(100%, 860px); }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 1180px) {

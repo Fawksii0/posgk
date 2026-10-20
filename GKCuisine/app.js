@@ -59,6 +59,7 @@
     const paymentType = row.payment === "cash" ? "cash" : "card";
     return {
       id: row.id,
+      seq: row.seq,
       status: row.status,
       mode: row.mode,
       items,
@@ -414,15 +415,25 @@
       <button class="btn block ghost" data-action="close-sheet">Annuler</button>`);
   }
 
+  function receiptDoc(order) {
+    return {
+      id: order.id, seq: order.seq, createdAt: order.createdAt, mode: order.mode,
+      customerName: order.customer?.name || "", phone: order.customer?.phone || "",
+      address: order.address?.street || "", zone: order.address?.zone || "", note: order.note,
+      subtotal: order.subtotal, fee: order.fee, discount: order.discount, total: order.total,
+      payment: order.paymentType === "cash" ? "cash" : "card", status: order.status,
+      items: order.items.map(item => ({ qty: item.qty, name: item.name, size: item.size, extras: item.extras, unit: item.price }))
+    };
+  }
+  const receiptOpts = reprint => ({ seller: data.settings.restaurant || {}, logo: "assets/emblem-reference.png", reprint });
+
   function openPreview(order, reprint, reason) {
-    const cols = colsFor(state.prefs.paper);
-    const text = ticketText(order, { cols, reprint });
     ui.sheet = { type: "preview" };
-    printArea.innerHTML = `<pre class="ticket w${state.prefs.paper}">${esc(text)}</pre>`;
-    openSheet(`<h2>Ticket ${esc(order.id)}</h2>${reason ? `<p class="muted small">${esc(reason)}</p>` : ""}
-      <div class="ticket-wrap"><pre class="ticket w${state.prefs.paper}">${esc(text)}</pre></div>
-      <div class="btn-row"><button class="btn" data-action="close-sheet">Fermer</button><button class="btn primary" data-action="browser-print">${icon("printer")}Imprimer</button></div>`);
-    if (state.prefs.autoBrowserPrint) setTimeout(() => window.print(), 300);
+    printArea.innerHTML = "";
+    openSheet(`<h2>Ticket #${esc(order.id)}</h2>${reason ? `<p class="muted small">${esc(reason)}</p>` : ""}
+      <div class="ticket-wrap">${GKReceipt.previewTicket(receiptDoc(order), receiptOpts(reprint))}</div>
+      <div class="btn-row"><button class="btn" data-action="close-sheet">Fermer</button><button class="btn primary" data-action="browser-print" data-id="${esc(order.id)}" data-reprint="${reprint ? 1 : 0}">${icon("printer")}Imprimer</button></div>`);
+    if (state.prefs.autoBrowserPrint) setTimeout(() => GKReceipt.printTicket(receiptDoc(order), receiptOpts(reprint)), 300);
   }
 
   async function printOrder(order, reprint = false) {
@@ -595,7 +606,10 @@
       };
       printOrder(order, false);
     },
-    "browser-print"() { window.print(); },
+    "browser-print"(el) {
+      const order = data.orders.find(item => item.id === el.dataset.id);
+      if (order) GKReceipt.printTicket(receiptDoc(order), receiptOpts(el.dataset.reprint === "1"));
+    },
     "close-sheet"() { closeSheet(); }
   };
 

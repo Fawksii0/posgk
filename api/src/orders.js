@@ -3,7 +3,7 @@ import { all, first, run, stmt, batch, getSetting, setSetting, audit, notify, ne
 
 const STORE = { lat: 33.7895, lng: -7.1597 };
 const ACTIVE = ["preparing", "ready", "enroute"];
-const ITEM_FIELDS = ["id", "customer_name", "customer_phone", "mode", "status", "items", "subtotal", "fee", "discount", "promo", "total", "payment", "zone_id", "zone_name", "address", "address_label", "note", "delivery_code", "eta_min", "prep_minutes", "promised_at", "accepted_at", "ready_at", "picked_up_at", "delivered_at", "courier_id", "dispatch_state", "offered_to", "offer_expires", "dispatch_km", "dispatch_manual", "courier_step", "courier_earning", "cash_settled", "refused_reason", "cancel_reason", "history", "created_at", "updated_at"];
+const ITEM_FIELDS = ["id", "seq", "customer_name", "customer_phone", "mode", "status", "items", "subtotal", "fee", "discount", "promo", "total", "payment", "zone_id", "zone_name", "address", "address_label", "note", "delivery_code", "eta_min", "prep_minutes", "promised_at", "accepted_at", "ready_at", "picked_up_at", "delivered_at", "courier_id", "dispatch_state", "offered_to", "offer_expires", "dispatch_km", "dispatch_manual", "courier_step", "courier_earning", "cash_settled", "refused_reason", "cancel_reason", "history", "created_at", "updated_at"];
 
 export function orderOut(row, { revealCode = false } = {}) {
   if (!row) return null;

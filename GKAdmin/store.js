@@ -18,6 +18,7 @@ const Store = (() => {
   const routeDatasets = {
     dashboard: ["stats", "orders", "couriers", "audit", "menu", "settings"],
     commandes: ["orders", "couriers", "zones"],
+    factures: ["orders", "settings", "zones"],
     menu: ["menu"],
     livreurs: ["couriers", "orders"],
     clients: ["clients", "orders"],
@@ -29,6 +30,7 @@ const Store = (() => {
   };
   const permissions = {
     stats: ["manager", "admin", "owner"],
+    invoices: ["manager", "admin", "owner"],
     users: ["admin", "owner"],
     settings: ["admin", "owner"],
     deleteProduct: ["admin", "owner"],
