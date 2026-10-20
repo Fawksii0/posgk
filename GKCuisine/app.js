@@ -298,16 +298,18 @@
       all: true, active: ["pending", "preparing", "ready", "enroute"].includes(order.status), delivered: order.status === "delivered",
       refused: order.status === "refused", cancelled: order.status === "cancelled", delivery: order.mode === "delivery", pickup: order.mode === "pickup"
     })[ui.filter];
-    const rows = today.filter(match).map(order => `<tr>
-      <td data-label="N°"><b>${esc(order.id)}</b></td><td data-label="Heure">${clock(order.createdAt)}</td><td data-label="Client">${esc(firstName(order))}</td>
-      <td data-label="Mode">${order.mode === "delivery" ? "Livraison" : "À emporter"}</td><td data-label="Statut">${statusPill(order)}${order.refusedReason ? `<div class="small muted">${esc(order.refusedReason)}</div>` : ""}</td>
-      <td data-label="Total"><b>${money(order.total)}</b></td>
-      <td>${isCashier() && order.acceptedAt ? `<button class="btn small-btn" data-action="reprint" data-id="${esc(order.id)}" aria-label="Réimprimer ${esc(order.id)}">${icon("printer")}</button>` : ""}</td></tr>`).join("");
+    const rows = today.filter(match).map(order => `<article class="h-row s-${order.status}">
+      <div class="h-main"><b class="h-no">${esc(order.id)}</b>${statusPill(order)}</div>
+      <div class="h-info"><span>${icon("clock")}${clock(order.createdAt)}</span><span>${icon("user")}${esc(firstName(order))}</span><span class="mode-chip ${order.mode === "pickup" ? "pickup" : ""}">${order.mode === "delivery" ? "Livraison" : "À emporter"}</span></div>
+      ${order.refusedReason ? `<div class="small muted h-reason">${esc(order.refusedReason)}</div>` : ""}
+      <div class="h-end"><b>${money(order.total)}</b>${isCashier() && order.acceptedAt ? `<button class="icon-btn" data-action="reprint" data-id="${esc(order.id)}" aria-label="Réimprimer ${esc(order.id)}">${icon("printer")}</button>` : ""}</div></article>`).join("");
     const revenue = today.filter(order => order.status === "delivered").reduce((sum, order) => sum + order.total, 0);
-    return `<section class="panel"><h2>Historique du jour</h2>
-      <p class="muted">${today.length} commande(s) · chiffre d'affaires encaissé ${money(revenue)}</p>
+    const done = today.filter(order => order.status === "delivered").length;
+    const lost = today.filter(order => ["refused", "cancelled"].includes(order.status)).length;
+    return `<section class="panel wide"><div class="panel-head"><div><h2>Historique du jour</h2><p class="muted">Commandes reçues aujourd'hui</p></div></div>
+      <div class="kpis"><div class="kpi"><span>Commandes</span><b>${today.length}</b></div><div class="kpi ok"><span>Terminées</span><b>${done}</b></div><div class="kpi bad"><span>Refusées / annulées</span><b>${lost}</b></div><div class="kpi gold"><span>Encaissé</span><b>${money(revenue)}</b></div></div>
       <div class="filters" role="group" aria-label="Filtres">${filters.map(([key, label]) => `<button class="chip-btn ${ui.filter === key ? "active" : ""}" data-action="filter" data-filter="${key}" aria-pressed="${ui.filter === key}">${label}</button>`).join("")}</div>
-      ${rows ? `<table class="history"><thead><tr><th>N°</th><th>Heure</th><th>Client</th><th>Mode</th><th>Statut</th><th>Total</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : `<p class="empty">Aucune commande pour ce filtre.</p>`}</section>`;
+      ${rows ? `<div class="h-list">${rows}</div>` : `<p class="empty">Aucune commande pour ce filtre.</p>`}</section>`;
   }
 
   function renderStock() {
