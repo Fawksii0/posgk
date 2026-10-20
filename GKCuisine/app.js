@@ -703,8 +703,11 @@
   setInterval(() => {
     tickDom();
     if (state.session && !state.session.mustChange && !refreshRunning) refreshData();
-    if (state.session && !state.session.mustChange && pendingOrders().length) beep();
   }, 8000);
+  // The ring (about 1.7s) loops without pause until every new order is accepted or refused.
+  setInterval(() => {
+    if (state.session && !state.session.mustChange && pendingOrders().length) beep();
+  }, 2200);
   window.addEventListener("storage", event => {
     if (event.key === STORAGE_KEY) {
       const saved = load();

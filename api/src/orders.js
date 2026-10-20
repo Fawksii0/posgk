@@ -185,7 +185,7 @@ export async function orderCreate(c) {
   }
   const counter = await first(c.env, "INSERT INTO order_counters (branch_id, value) VALUES (?, 1000) ON CONFLICT (branch_id) DO UPDATE SET value = order_counters.value + 1 RETURNING value", c.branchId);
   const seq = Number(counter.value);
-  const id = randomId("o_"), t = now(), prep = Number(await getSetting(c.env, "defaultPrep", 20));
+  const id = "1" + randomDigits(8), t = now(), prep = Number(await getSetting(c.env, "defaultPrep", 20));
   const name = str(body.customer?.name || c.user.name, { max: 60, min: 1, field: "Nom" });
   const phone = body.customer?.phone ? normPhone(body.customer.phone) : str(c.user.phone, { max: 20, min: 1, field: "Téléphone" });
   const note = str(body.note, { max: 300, field: "Note" });
