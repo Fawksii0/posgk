@@ -61,7 +61,7 @@ async function loadMenu() {
 }
 
 function normalizeOrder(row) {
-  const status = row.status === "delivered" ? "completed" : row.status;
+  const status = row.status === "delivered" ? "completed" : ["pending", "preparing", "ready", "enroute"].includes(row.status) ? "active" : row.status;
   const stage = { pending: 0, preparing: 1, ready: 2, enroute: 3, delivered: row.mode === "delivery" ? 4 : 3 }[row.status] ?? 0;
   const zone = zones.find(item => item.id === row.zone_id);
   const createdAt = Number(row.created_at) || Date.parse(row.created_at) || Date.now();
