@@ -244,18 +244,17 @@ export async function ownerLogin(c) {
   const ua = (c.req.headers.get("User-Agent") || "").slice(0, 200);
   const keys = [[`owner:ip:${ip}`, POLICY.owner], ["owner:all", POLICY.ownerAll]];
   const log = (outcome) => run(env, "INSERT INTO owner_audit (at, outcome, ip, user_agent) VALUES (?,?,?,?)", now(), outcome, ip, ua);
-  const left = await lockLeft(env, keys);
+  const door = String(c.body.door ?? "").slice(0, 300);
+  // The door key is a high-entropy secret: whoever holds it is never locked out, while guessers without it still are.
+  const hasKey = !!env.OWNER_DOOR_KEY && await safeEqual(door, env.OWNER_DOOR_KEY);
+  const left = hasKey ? 0 : await lockLeft(env, keys);
   if (left) { await log("locked"); tooMany(left); }
   const email = String(c.body.email || "").trim().toLowerCase().slice(0, 120);
   const password = String(c.body.password ?? "").slice(0, 200);
-  const door = String(c.body.door ?? "").slice(0, 300);
   const user = await first(env, "SELECT * FROM users WHERE email = ? AND role = 'owner'", email);
-  const [passwordOk, doorOk] = await Promise.all([
-    verifySecret(password, user && user.password_hash),
-    safeEqual(door, env.OWNER_DOOR_KEY || crypto.randomUUID())
-  ]);
-  const good = passwordOk && doorOk && !!user && !!user.active && !!env.OWNER_DOOR_KEY;
-  if (!good) { await recordFail(env, keys); await log("fail"); BAD(); }
+  const passwordOk = await verifySecret(password, user && user.password_hash);
+  const good = passwordOk && hasKey && !!user && !!user.active;
+  if (!good) { if (!hasKey) await recordFail(env, keys); await log("fail"); BAD(); }
   await clearFails(env, keys);
   await log("ok");
   return finishLogin(env, user);
