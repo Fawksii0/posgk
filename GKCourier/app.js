@@ -1,4 +1,4 @@
-﻿const ui = { tab: "missions", filter: "today", lastFocus: null, installPrompt: null };
+const ui = { tab: "missions", filter: "today", lastFocus: null, installPrompt: null };
 const $ = id => document.getElementById(id);
 const money = n => `${n} MAD`;
 const NAV = [
@@ -7,11 +7,11 @@ const NAV = [
   { id: "earnings", label: "Gains", icon: "wallet" },
   { id: "profile", label: "Profil", icon: "user" }
 ];
-const STEPS = ["AcceptÃ©", "ArrivÃ©", "RÃ©cupÃ©rÃ©", "En route", "LivrÃ©"];
-const STEP_BUTTONS = { 1: "ArrivÃ© au restaurant", 2: "Commande rÃ©cupÃ©rÃ©e" };
+const STEPS = ["Accepté", "Arrivé", "Récupéré", "En route", "Livré"];
+const STEP_BUTTONS = { 1: "Arrivé au restaurant", 2: "Commande récupérée" };
 const STEP_HINTS = {
   1: "Rendez-vous au restaurant G&K Food.",
-  2: "RÃ©cupÃ©rez la commande au comptoir.",
+  2: "Récupérez la commande au comptoir.",
   4: "Remettez la commande et saisissez le code du client."
 };
 
@@ -53,8 +53,8 @@ const waLink = phone => `https://wa.me/212${phone.replace(/^0/, "")}`;
 const telLink = phone => `tel:${phone.replace(/^0/, "+212")}`;
 const unreadCount = () => state.notifications.filter(n => !n.read).length;
 const paymentBadge = m => m.payment === "cash"
-  ? `<span class="badge">${icon("cash")} EspÃ¨ces ${money(m.total)}</span>`
-  : `<span class="badge ok">${icon("card")} PayÃ© en ligne</span>`;
+  ? `<span class="badge">${icon("cash")} Espèces ${money(m.total)}</span>`
+  : `<span class="badge ok">${icon("card")} Payé en ligne</span>`;
 
 /* ---------- Views ---------- */
 
@@ -86,18 +86,18 @@ function loginView() {
       <h1 id="login-title">Connexion livreur</h1>
       <form id="login-form" novalidate>
         <div class="field">
-          <label for="phone">TÃ©lÃ©phone</label>
+          <label for="phone">Téléphone</label>
           <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="06 12 34 56 78" required />
         </div>
         <div class="field">
           <label for="pin">Code PIN (4 chiffres)</label>
-          <input id="pin" class="pin-input" name="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="current-password" placeholder="â€¢â€¢â€¢â€¢" />
+          <input id="pin" class="pin-input" name="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="current-password" placeholder="••••" />
         </div>
         <p id="login-error" class="form-error" role="alert"></p>
         <button class="gold-button" type="submit">Se connecter ${icon("arrowRight")}</button>
         <p class="muted">Saisissez les identifiants fournis par votre administrateur.</p>
       </form>
-      <p class="admin-note">${icon("shield")} Compte crÃ©Ã© par l'administrateur G&amp;K</p>
+      <p class="admin-note">${icon("shield")} Compte créé par l'administrateur G&amp;K</p>
     </section>`;
 }
 
@@ -106,7 +106,7 @@ function changeSecretView() {
     <section class="login" aria-labelledby="change-secret-title">
       <img class="login-logo" src="./assets/emblem-reference.png" alt="G&K" />
       <div><span class="role-pill">LIVREUR</span></div>
-      <h1 id="change-secret-title">CrÃ©ez votre nouveau PIN</h1>
+      <h1 id="change-secret-title">Créez votre nouveau PIN</h1>
       <p class="muted">Votre administrateur vous a fourni un PIN temporaire. Modifiez-le avant de continuer.</p>
       <form id="change-secret-form" novalidate>
         <div class="field">
@@ -114,30 +114,30 @@ function changeSecretView() {
           <input id="current-pin" name="current" type="password" inputmode="numeric" autocomplete="current-password" maxlength="12" required />
         </div>
         <div class="field">
-          <label for="next-pin">Nouveau PIN (4 Ã  6 chiffres)</label>
+          <label for="next-pin">Nouveau PIN (4 à 6 chiffres)</label>
           <input id="next-pin" name="next" type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" required />
         </div>
         <p id="change-error" class="form-error" role="alert"></p>
         <button class="gold-button" type="submit">Enregistrer le nouveau PIN ${icon("arrowRight")}</button>
       </form>
-      <button class="outline-button" type="button" data-act="logout">Se dÃ©connecter</button>
+      <button class="outline-button" type="button" data-act="logout">Se déconnecter</button>
     </section>`;
 }
 
 function missionCard(m) {
   return `
     <article class="mission">
-      <button class="mission-main" type="button" data-act="detail" data-id="${esc(m.id)}" aria-label="DÃ©tails de la mission ${esc(m.id)}">
+      <button class="mission-main" type="button" data-act="detail" data-id="${esc(m.id)}" aria-label="Détails de la mission ${esc(m.id)}">
         <div class="mission-top"><span class="mission-id">${esc(m.id)}</span>${m.earning !== null ? `<span class="earning">+${money(m.earning)}</span>` : ""}</div>
         <div class="mission-route">
           <div>${icon("store")}<span>G&amp;K Food</span></div>
-          <div>${icon("pin")}<span>${esc(m.customer)}${m.customer && m.address ? " Â· " : ""}${esc(m.address)}${m.zone ? ` <span class="muted">(${esc(m.zone)})</span>` : ""}</span></div>
+          <div>${icon("pin")}<span>${esc(m.customer)}${m.customer && m.address ? " · " : ""}${esc(m.address)}${m.zone ? ` <span class="muted">(${esc(m.zone)})</span>` : ""}</span></div>
         </div>
         <div class="mission-meta">
           ${m.km !== null ? `<span class="badge dark">${icon("navigate")} ${m.km} km</span>` : ""}
           ${paymentBadge(m)}
         </div>
-        <p class="muted" style="font-size:12px">${esc(m.items)}${m.items ? " Â· " : ""}Total ${money(m.total)}</p>
+        <p class="muted" style="font-size:12px">${esc(m.items)}${m.items ? " · " : ""}Total ${money(m.total)}</p>
       </button>
       <div class="mission-foot">${m.offer
         ? `<span class="badge offer-timer" data-expires="${m.expiresAt}" aria-live="off">${offerLeft(m)} s</span>
@@ -152,16 +152,16 @@ const offerLeft = m => Math.max(0, Math.ceil((m.expiresAt - Date.now()) / 1000))
 function missionsView() {
   if (state.active) return activeView();
   const body = !state.online ? `
-      <div class="empty">${icon("bike")}<strong>Vous Ãªtes hors ligne</strong>
+      <div class="empty">${icon("bike")}<strong>Vous êtes hors ligne</strong>
         <p>Passez en ligne pour recevoir des missions de livraison.</p></div>`
     : state.offersLoading && !state.missions.length ? `
-      <div class="empty">${icon("clock")}<strong>Chargement des missionsâ€¦</strong></div>`
+      <div class="empty">${icon("clock")}<strong>Chargement des missions…</strong></div>`
     : state.offersError && !state.missions.length ? `
       <div class="empty">${icon("alert")}<strong>Impossible de charger les missions</strong>
-        <p>${esc(state.offersError)}</p><button class="outline-button" type="button" data-act="refresh">RÃ©essayer</button></div>`
+        <p>${esc(state.offersError)}</p><button class="outline-button" type="button" data-act="refresh">Réessayer</button></div>`
     : !state.missions.length ? `
-      <div class="empty">${icon("clock")}<strong>En attente de missionsâ€¦</strong>
-        <p>Les nouvelles missions apparaÃ®tront ici automatiquement.</p></div>`
+      <div class="empty">${icon("clock")}<strong>En attente de missions…</strong>
+        <p>Les nouvelles missions apparaîtront ici automatiquement.</p></div>`
     : state.missions.map(missionCard).join("");
   return `
     <div class="online-card${state.online ? " on" : ""}">
@@ -170,17 +170,17 @@ function missionsView() {
       <button class="switch" type="button" role="switch" aria-checked="${state.online}" aria-label="Statut en ligne" data-act="toggle-online"${state.actionBusy ? " disabled" : ""}></button>
     </div>
     ${state.online ? `<div class="section-heading"><h2>Missions disponibles</h2><small>${state.missions.length}</small></div>` : ""}
-    ${state.offersError && state.missions.length ? `<p class="form-error" role="alert">${esc(state.offersError)} <button class="outline-button" type="button" data-act="refresh">RÃ©essayer</button></p>` : ""}
+    ${state.offersError && state.missions.length ? `<p class="form-error" role="alert">${esc(state.offersError)} <button class="outline-button" type="button" data-act="refresh">Réessayer</button></p>` : ""}
     ${body}`;
 }
 
 function mapCard(m) {
-  const status = m.step === 1 ? "En attente de votre arrivÃ©e au restaurant"
-    : m.step === 2 ? "ArrivÃ©e au restaurant confirmÃ©e"
-      : "Commande rÃ©cupÃ©rÃ©e Â· en route vers le client";
+  const status = m.step === 1 ? "En attente de votre arrivée au restaurant"
+    : m.step === 2 ? "Arrivée au restaurant confirmée"
+      : "Commande récupérée · en route vers le client";
   return `
-    <div class="tracking-map" role="status" aria-label="Ã‰tat de la mission">
-      <span class="map-label">${icon("bike")} ${esc(status)}${m.km !== null ? ` Â· ${m.km} km` : ""}</span>
+    <div class="tracking-map" role="status" aria-label="État de la mission">
+      <span class="map-label">${icon("bike")} ${esc(status)}${m.km !== null ? ` · ${m.km} km` : ""}</span>
     </div>`;
 }
 
@@ -190,19 +190,19 @@ function activeView() {
     <li class="step${i < m.step ? " done" : i === m.step ? " current" : ""}"${i === m.step ? ' aria-current="step"' : ""}>
       <span class="step-dot">${i < m.step ? icon("check") : i + 1}</span>${label}</li>`).join("");
   const cash = m.payment === "cash"
-    ? `<div class="cash-alert"><span>${icon("cash")} EspÃ¨ces Ã  encaisser</span><strong>${money(m.total)}</strong></div>` : "";
+    ? `<div class="cash-alert"><span>${icon("cash")} Espèces à encaisser</span><strong>${money(m.total)}</strong></div>` : "";
   const waiting = m.step === 2 && m.orderStatus !== "ready";
   const action = m.step < 4
-    ? `<button class="gold-button" type="button" data-act="advance"${waiting || state.actionBusy ? " disabled" : ""}>${waiting ? "En attente de la cuisineâ€¦" : `${STEP_BUTTONS[m.step]} ${icon("arrowRight")}`}</button>`
+    ? `<button class="gold-button" type="button" data-act="advance"${waiting || state.actionBusy ? " disabled" : ""}>${waiting ? "En attente de la cuisine…" : `${STEP_BUTTONS[m.step]} ${icon("arrowRight")}`}</button>`
     : `<form id="deliver-form" class="card" novalidate>
         <h3>Confirmer la livraison</h3>
         <div class="field" style="margin-top:10px">
           <label for="code">Code de livraison du client</label>
-          <input id="code" class="pin-input" name="code" type="text" inputmode="numeric" maxlength="4" autocomplete="one-time-code" placeholder="â€¢â€¢â€¢â€¢" />
+          <input id="code" class="pin-input" name="code" type="text" inputmode="numeric" maxlength="4" autocomplete="one-time-code" placeholder="••••" />
         </div>
-        ${m.payment === "cash" ? `<label class="check-row"><input id="cash-ok" type="checkbox" /> EspÃ¨ces encaissÃ©es (${money(m.total)})</label>` : ""}
+        ${m.payment === "cash" ? `<label class="check-row"><input id="cash-ok" type="checkbox" /> Espèces encaissées (${money(m.total)})</label>` : ""}
         <p id="deliver-error" class="form-error" role="alert"></p>
-        <button class="gold-button" type="submit">${icon("check")} LivrÃ©</button>
+        <button class="gold-button" type="submit">${icon("check")} Livré</button>
       </form>`;
   return `
     <h1 class="screen-title">Mission ${esc(m.id)}</h1>
@@ -213,9 +213,9 @@ function activeView() {
       <div class="kv">
         <div><span>Restaurant</span><span>G&amp;K Food</span></div>
         <div><span>Client</span><span>${esc(m.customer)}</span></div>
-        <div><span>Adresse</span><span>${esc(m.address)}${m.zone ? `<br>${esc(m.zone)}` : ""}${m.km !== null ? ` Â· ${m.km} km` : ""}</span></div>
+        <div><span>Adresse</span><span>${esc(m.address)}${m.zone ? `<br>${esc(m.zone)}` : ""}${m.km !== null ? ` · ${m.km} km` : ""}</span></div>
         <div><span>Articles</span><span>${esc(m.items)}</span></div>
-        <div><span>Paiement</span><span>${m.payment === "cash" ? "EspÃ¨ces" : "PayÃ© en ligne"}</span></div>
+        <div><span>Paiement</span><span>${m.payment === "cash" ? "Espèces" : "Payé en ligne"}</span></div>
       </div>
       ${m.phone ? `<div class="contact-row">
         <a class="outline-button" href="${telLink(m.phone)}" aria-label="Appeler ${esc(m.customer)}">${icon("phone")} Appeler</a>
@@ -240,22 +240,22 @@ function historyView() {
     return `${head}
       <div class="row">
         <span class="row-icon${ok ? "" : " bad"}">${icon(ok ? "check" : "alert")}</span>
-        <span class="row-copy"><strong>${esc(h.id)} Â· ${esc(h.customer)}</strong>
-          <small>${timeFmt.format(h.at)}${h.zone ? ` Â· ${esc(h.zone)}` : ""}</small></span>
-        <span class="row-amount${ok ? "" : " zero"}">${ok ? `+${money(h.earning)}` : "AnnulÃ©e"}</span>
+        <span class="row-copy"><strong>${esc(h.id)} · ${esc(h.customer)}</strong>
+          <small>${timeFmt.format(h.at)}${h.zone ? ` · ${esc(h.zone)}` : ""}</small></span>
+        <span class="row-amount${ok ? "" : " zero"}">${ok ? `+${money(h.earning)}` : "Annulée"}</span>
       </div>`;
   }).join("");
   return `
     <h1 class="screen-title">Historique</h1>
-    <div class="chips" role="group" aria-label="PÃ©riode">
+    <div class="chips" role="group" aria-label="Période">
       ${filters.map(([id, label]) => `<button class="chip" type="button" data-act="filter" data-filter="${id}" aria-pressed="${ui.filter === id}">${label}</button>`).join("")}
     </div>
-    ${state.historyError && list.length ? `<p class="form-error" role="alert">${esc(state.historyError)} <button class="outline-button" type="button" data-act="refresh-history">RÃ©essayer</button></p>` : ""}
+    ${state.historyError && list.length ? `<p class="form-error" role="alert">${esc(state.historyError)} <button class="outline-button" type="button" data-act="refresh-history">Réessayer</button></p>` : ""}
     ${state.historyLoading && !list.length
-      ? `<div class="empty">${icon("clock")}<strong>Chargement de lâ€™historiqueâ€¦</strong></div>`
+      ? `<div class="empty">${icon("clock")}<strong>Chargement de l’historique…</strong></div>`
       : state.historyError && !list.length
-        ? `<div class="empty">${icon("alert")}<strong>Impossible de charger lâ€™historique</strong><p>${esc(state.historyError)}</p><button class="outline-button" type="button" data-act="refresh-history">RÃ©essayer</button></div>`
-        : rows || `<div class="empty">${icon("receipt")}<strong>Aucune mission</strong><p>Rien Ã  afficher pour cette pÃ©riode.</p></div>`}`;
+        ? `<div class="empty">${icon("alert")}<strong>Impossible de charger l’historique</strong><p>${esc(state.historyError)}</p><button class="outline-button" type="button" data-act="refresh-history">Réessayer</button></div>`
+        : rows || `<div class="empty">${icon("receipt")}<strong>Aucune mission</strong><p>Rien à afficher pour cette période.</p></div>`}`;
 }
 
 function chartSvg() {
@@ -275,10 +275,10 @@ function chartSvg() {
 
 function earningsView() {
   if (!state.historyLoaded && state.historyLoading) {
-    return `<h1 class="screen-title">Gains</h1><div class="empty">${icon("clock")}<strong>Chargement des gainsâ€¦</strong></div>`;
+    return `<h1 class="screen-title">Gains</h1><div class="empty">${icon("clock")}<strong>Chargement des gains…</strong></div>`;
   }
   if (!state.historyLoaded && state.historyError) {
-    return `<h1 class="screen-title">Gains</h1><div class="empty">${icon("alert")}<strong>Impossible de charger les gains</strong><p>${esc(state.historyError)}</p><button class="outline-button" type="button" data-act="refresh-history">RÃ©essayer</button></div>`;
+    return `<h1 class="screen-title">Gains</h1><div class="empty">${icon("alert")}<strong>Impossible de charger les gains</strong><p>${esc(state.historyError)}</p><button class="outline-button" type="button" data-act="refresh-history">Réessayer</button></div>`;
   }
   const today = filterHistory("today").filter(h => h.status === "delivered");
   const week = filterHistory("week").filter(h => h.status === "delivered");
@@ -289,22 +289,22 @@ function earningsView() {
       <div class="stat hero"><small>Aujourd'hui</small><strong>${money(sumEarnings(today))}</strong></div>
       <div class="stat"><small>Cette semaine</small><strong>${money(sumEarnings(week))}</strong></div>
       <div class="stat"><small>Livraisons (semaine)</small><strong>${week.length}</strong></div>
-      <div class="stat"><small>EspÃ¨ces Ã  reverser</small><strong>${money(cash)}</strong></div>
+      <div class="stat"><small>Espèces à reverser</small><strong>${money(cash)}</strong></div>
     </div>
     <div class="section-heading"><h2>7 derniers jours</h2><small>MAD</small></div>
     <div class="card">${chartSvg()}</div>
-    ${state.historyLoading ? `<p class="muted">Actualisation des gainsâ€¦</p>` : ""}
+    ${state.historyLoading ? `<p class="muted">Actualisation des gains…</p>` : ""}
     ${state.historyError ? `<p class="form-error">${esc(state.historyError)}</p>` : ""}
-    <p class="fineprint">CalculÃ© Ã  partir des livraisons terminÃ©es enregistrÃ©es sur le serveur.</p>`;
+    <p class="fineprint">Calculé à partir des livraisons terminées enregistrées sur le serveur.</p>`;
 }
 
 function profileView() {
   const s = state.session;
   if (!state.profileLoaded && state.profileLoading) {
-    return `<h1 class="screen-title">Profil</h1><div class="empty">${icon("clock")}<strong>Chargement du profilâ€¦</strong></div>`;
+    return `<h1 class="screen-title">Profil</h1><div class="empty">${icon("clock")}<strong>Chargement du profil…</strong></div>`;
   }
   if (!state.profileLoaded && state.profileError) {
-    return `<h1 class="screen-title">Profil</h1><div class="empty">${icon("alert")}<strong>Impossible de charger le profil</strong><p>${esc(state.profileError)}</p><button class="outline-button" type="button" data-act="refresh-profile">RÃ©essayer</button></div>`;
+    return `<h1 class="screen-title">Profil</h1><div class="empty">${icon("alert")}<strong>Impossible de charger le profil</strong><p>${esc(state.profileError)}</p><button class="outline-button" type="button" data-act="refresh-profile">Réessayer</button></div>`;
   }
   const initials = String(s.name || "").split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join("").toUpperCase();
   return `
@@ -312,18 +312,18 @@ function profileView() {
     <div class="profile-head">
       <span class="avatar" aria-hidden="true">${esc(initials)}</span>
       <div><h2>${esc(s.name || "")}</h2><p>${esc(s.phone || "")}</p>
-        ${state.profile?.vehicle ? `<p>${icon("bike")} VÃ©hicule : ${esc(state.profile.vehicle)}</p>` : ""}</div>
+        ${state.profile?.vehicle ? `<p>${icon("bike")} Véhicule : ${esc(state.profile.vehicle)}</p>` : ""}</div>
     </div>
     <div class="stat-grid" style="margin-top:12px">
       <div class="stat"><small>Statut</small><strong>${state.online ? "En ligne" : "Hors ligne"}</strong></div>
-      <div class="stat"><small>EspÃ¨ces Ã  reverser</small><strong>${money(Number(state.profile?.cashToRemit) || 0)}</strong></div>
+      <div class="stat"><small>Espèces à reverser</small><strong>${money(Number(state.profile?.cashToRemit) || 0)}</strong></div>
     </div>
     <div class="menu-list">
       ${ui.installPrompt ? `<button class="menu-item" type="button" data-act="install"><span class="row-icon">${icon("download")}</span><span class="grow">Installer l'application</span></button>` : ""}
-      <button class="menu-item danger" type="button" data-act="logout"><span class="row-icon">${icon("logout")}</span><span class="grow">Se dÃ©connecter</span></button>
+      <button class="menu-item danger" type="button" data-act="logout"><span class="row-icon">${icon("logout")}</span><span class="grow">Se déconnecter</span></button>
     </div>
-    ${state.profileLoading ? `<p class="muted">Actualisation du profilâ€¦</p>` : ""}
-    ${state.profileError ? `<p class="form-error">${esc(state.profileError)} <button class="outline-button" type="button" data-act="refresh-profile">RÃ©essayer</button></p>` : ""}
+    ${state.profileLoading ? `<p class="muted">Actualisation du profil…</p>` : ""}
+    ${state.profileError ? `<p class="form-error">${esc(state.profileError)} <button class="outline-button" type="button" data-act="refresh-profile">Réessayer</button></p>` : ""}
     <p class="fineprint">G&amp;K Livreur</p>`;
 }
 
@@ -366,14 +366,14 @@ function detailSheet(id) {
   const m = state.missions.find(x => x.id === id);
   if (!m) return;
   openSheet(`Mission ${m.id}`, `
-    <div class="mission-top"><span class="badge">${esc(m.zone)}${m.km !== null ? ` Â· ${m.km} km` : ""}</span>${m.earning !== null ? `<span class="earning">+${money(m.earning)}</span>` : ""}</div>
+    <div class="mission-top"><span class="badge">${esc(m.zone)}${m.km !== null ? ` · ${m.km} km` : ""}</span>${m.earning !== null ? `<span class="earning">+${money(m.earning)}</span>` : ""}</div>
     <div class="kv">
       <div><span>Retrait</span><span>G&amp;K Food</span></div>
       <div><span>Client</span><span>${esc(m.customer)}</span></div>
       <div><span>Livraison</span><span>${esc(m.address)}</span></div>
       <div><span>Articles</span><span>${esc(m.items)}</span></div>
       <div><span>Total commande</span><span>${money(m.total)}</span></div>
-      <div><span>Paiement</span><span>${m.payment === "cash" ? `EspÃ¨ces Ã  encaisser : ${money(m.total)}` : "PayÃ© en ligne"}</span></div>
+      <div><span>Paiement</span><span>${m.payment === "cash" ? `Espèces à encaisser : ${money(m.total)}` : "Payé en ligne"}</span></div>
     </div>
     <button class="gold-button" type="button" data-act="accept" data-id="${esc(m.id)}"${state.actionBusy ? " disabled" : ""}>Accepter la mission</button>`);
 }
@@ -381,7 +381,7 @@ function detailSheet(id) {
 function notifSheet() {
   const items = state.notifications.map(n => `
     <div class="notif${n.read ? "" : " unread"}"><span class="row-icon">${icon("bell")}</span>
-      <div>${esc(n.text)}<small>${esc(dayLabel(n.at))} Â· ${timeFmt.format(n.at)}</small></div></div>`).join("");
+      <div>${esc(n.text)}<small>${esc(dayLabel(n.at))} · ${timeFmt.format(n.at)}</small></div></div>`).join("");
   openSheet("Notifications", items || '<p class="muted">Aucune notification.</p>');
   void runAction(async () => {
     await markNotificationsRead();
@@ -398,7 +398,7 @@ const actions = {
     const online = await goOnline(!state.online);
     if (online) startLocationTracking();
     else stopLocationTracking();
-    toast(online ? "Vous Ãªtes en ligne." : "Vous Ãªtes hors ligne.");
+    toast(online ? "Vous êtes en ligne." : "Vous êtes hors ligne.");
     render();
   },
   detail(el) { detailSheet(el.dataset.id); },
@@ -407,16 +407,16 @@ const actions = {
     closeSheet();
     ui.tab = "missions";
     render();
-    toast("Mission acceptÃ©e. Direction le restaurant !");
+    toast("Mission acceptée. Direction le restaurant !");
   },
   async advance() {
     await advanceMission();
     render();
   },
-  async refuse(el) { await refuseMission(el.dataset.id); render(); toast("Offre refusÃ©e."); },
+  async refuse(el) { await refuseMission(el.dataset.id); render(); toast("Offre refusée."); },
   bell() { notifSheet(); },
   close() { closeSheet(); },
-  async logout() { stopLocationTracking(); await logout(); ui.tab = "missions"; render(); toast("Vous Ãªtes dÃ©connectÃ©."); },
+  async logout() { stopLocationTracking(); await logout(); ui.tab = "missions"; render(); toast("Vous êtes déconnecté."); },
   async refresh() { await refreshOffers(); render(); },
   async "refresh-history"() { await refreshHistory(); render(); },
   async "refresh-profile"() { await refreshProfile(); render(); },
@@ -466,7 +466,7 @@ document.addEventListener("submit", async event => {
     try {
       await changeSecret(form.current.value, form.next.value);
       render();
-      toast("PIN modifiÃ©. Vous pouvez continuer.");
+      toast("PIN modifié. Vous pouvez continuer.");
     } catch (error) {
       const message = $("change-error");
       if (message) message.textContent = error.message || "Impossible de modifier le PIN.";
@@ -482,7 +482,7 @@ document.addEventListener("submit", async event => {
     try {
       await completeMission(form.code.value.trim(), form["cash-ok"]?.checked ?? true);
       render();
-      toast(`Livraison terminÃ©e Â· +${money(earning)}`);
+      toast(`Livraison terminée · +${money(earning)}`);
     } catch (error) {
       $("deliver-error").textContent = error.message || "Impossible de confirmer la livraison.";
     } finally {
@@ -531,7 +531,7 @@ function soundForMissions() {
 function startLocationTracking() {
   if (locationWatch !== null) return;
   if (!navigator.geolocation) {
-    state.locationError = "La gÃ©olocalisation nâ€™est pas disponible dans ce navigateur.";
+    state.locationError = "La géolocalisation n’est pas disponible dans ce navigateur.";
     render();
     return;
   }
@@ -541,10 +541,10 @@ function startLocationTracking() {
     if (Date.now() - lastPositionSent < 15000) return;
     lastPositionSent = Date.now();
     GKApi.patch("/api/courier/position", { lat, lng }, "courier")
-      .catch(error => { state.locationError = error.message || "Position non envoyÃ©e."; render(); });
+      .catch(error => { state.locationError = error.message || "Position non envoyée."; render(); });
   }, error => {
     state.locationError = error.code === error.PERMISSION_DENIED
-      ? "La localisation est refusÃ©e. Autorisez-la pour partager votre position de livraison."
+      ? "La localisation est refusée. Autorisez-la pour partager votre position de livraison."
       : "La localisation est indisponible. Vous pouvez rester en ligne sans partager votre position.";
     render();
   }, { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 });
@@ -563,7 +563,7 @@ async function pollServer() {
   try {
     const errors = await refreshAll();
     if (!errors.length) soundForMissions();
-    if (errors.length) state.actionError = errors[0].message || "Certaines donnÃ©es nâ€™ont pas pu Ãªtre actualisÃ©es.";
+    if (errors.length) state.actionError = errors[0].message || "Certaines données n’ont pas pu être actualisées.";
     else state.actionError = "";
   } finally {
     polling = false;
@@ -582,7 +582,7 @@ window.addEventListener("gk-api-session-expired", event => {
   state.missions = [];
   state.active = null;
   render();
-  toast("Votre session a expirÃ©. Reconnectez-vous.");
+  toast("Votre session a expiré. Reconnectez-vous.");
 });
 
 setInterval(() => {

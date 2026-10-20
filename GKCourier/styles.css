@@ -219,3 +219,51 @@ body[data-bare] .app-header, body[data-bare] .bottom-nav { display: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+
+/* ===== Partner theme (shared look with GKCuisine) ===== */
+:root { --bg: #f2f2f0; --line: #e4e4e0; --shadow: 0 1px 3px rgba(0,0,0,.08); --new: #f5a300; --prep: #2f6fed; --ready: #1f9d57; --dark: #1c1c1a; }
+body { background: #dcdcd8; }
+.app-header { background: var(--dark); color: #fff; backdrop-filter: none; }
+.app-header .role-pill { background: var(--gold); color: var(--dark); }
+.app-header .branch-name { color: #bdbdb6; }
+.app-header .icon-button { background: rgba(255,255,255,.12); border-color: transparent; color: #fff; }
+.app-header .icon-button .dot { border-color: var(--dark); }
+.screen-title { font-size: 26px; font-weight: 800; }
+.card, .mission, .row, .stat, .menu-item, .profile-head { border-radius: 16px; box-shadow: var(--shadow); }
+.mission { border-left: 6px solid var(--new); overflow: hidden; }
+.mission-id { color: var(--muted); font-size: 13px; }
+.mission-id::before { content: "#"; }
+.earning { background: #e3f6ec; color: #146c3f; border-radius: 999px; padding: 2px 12px; font-size: 17px; }
+.gold-button { background: var(--ready); color: #fff; box-shadow: none; min-height: 52px; border-radius: 14px; font-size: 16px; }
+.gold-button:hover { filter: brightness(1.08); }
+.gold-button.compact { min-height: 44px; }
+.outline-button { border-color: var(--line); color: var(--ink); background: #fff; min-height: 52px; border-radius: 14px; border-width: 2px; }
+.outline-button.danger { border-color: #f1c6c1; color: var(--danger); }
+.online-card { border-radius: 18px; border-left: 6px solid #bdbdb6; }
+.online-card.on { background: #e3f6ec; border-left-color: var(--ready); color: #0f5c34; }
+.switch { width: 60px; height: 34px; background: #cfcfc8; }
+.switch::after { top: 4px; left: 4px; width: 26px; height: 26px; }
+.switch[aria-checked="true"] { background: var(--ready); }
+.switch[aria-checked="true"]::after { transform: translateX(26px); }
+.step.done .step-dot, .step.current .step-dot { background: var(--ready); color: #fff; }
+.step.done:not(:first-child)::before, .step.current:not(:first-child)::before { background: var(--ready); }
+.step.current .step-dot { box-shadow: 0 0 0 4px #d6f0e1; }
+.chip { border-radius: 999px; }
+.chip[aria-pressed="true"] { background: var(--dark); border-color: var(--dark); color: #fff; }
+.stat.hero { background: var(--dark); color: #fff; }
+.stat.hero small { color: #bdbdb6; }
+.chart rect { fill: var(--prep); }
+.chart rect.today { fill: var(--ready); }
+.row { border-left: 5px solid var(--ready); }
+.row-icon { background: #e3f6ec; color: #146c3f; }
+.row-icon.bad { background: #fdecec; color: var(--danger); }
+.badge { background: #fff1d6; color: #8a5600; }
+.avatar { background: var(--dark); color: var(--gold); }
+.bottom-nav { background: var(--dark); border-top: 0; }
+.nav-button { color: #9a9a94; }
+.nav-button.active { color: #fff; }
+.nav-button.active::before { background: var(--gold); }
+.cash-alert { background: #fff1d6; border-left: 5px solid var(--new); }
+.field input:focus, .field textarea:focus { border-color: var(--ready); box-shadow: 0 0 0 3px #d6f0e1; }
+.login-logo { box-shadow: none; }

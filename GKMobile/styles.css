@@ -381,3 +381,35 @@ body[data-bare] #app-main { padding-top: max(18px, env(safe-area-inset-top)); }
 .pause-banner { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 12px 14px; border-radius: 14px; color: #7a4d00; background: var(--gold-soft); border: 1px solid #f0d08a; font-size: 13px; font-weight: 700; }
 .note-box { display: grid; gap: 6px; margin-top: 14px; font-size: 13px; font-weight: 700; }
 .note-box textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; font: inherit; font-weight: 400; resize: vertical; }
+
+
+/* ===== Partner theme (shared look with GKCuisine) ===== */
+:root { --bg: #f2f2f0; --line: #e4e4e0; --shadow: 0 1px 3px rgba(0,0,0,.08); --dark: #1c1c1a; --ready: #1f9d57; }
+body { background: #dcdcd8; }
+.app-header { background: var(--dark); color: #fff; backdrop-filter: none; }
+.app-header .location-button small { color: #bdbdb6; }
+.app-header .location-button strong { color: #fff; }
+.app-header .location-icon { color: var(--gold); }
+.app-header .location-chevron { color: #bdbdb6; }
+.app-header .icon-button { background: rgba(255,255,255,.12); border-color: transparent; color: #fff; }
+.app-header .icon-button .dot { border-color: var(--dark); }
+.screen-title { font-size: 26px; font-weight: 800; }
+.gold-button { min-height: 52px; border-radius: 14px; font-size: 15px; box-shadow: none; }
+.outline-button { border-color: var(--line); border-width: 2px; color: var(--ink); background: #fff; border-radius: 14px; min-height: 50px; }
+.category-chip { border-radius: 999px; }
+.category-chip.active { background: var(--dark); border-color: var(--dark); color: #fff; }
+.search-box { border-radius: 999px; }
+.filter-button { background: var(--dark); color: var(--gold); border-radius: 50%; }
+.branch-card, .branch-switcher { border: 0; box-shadow: var(--shadow); border-radius: 16px; }
+.branch-card { border-left: 6px solid var(--gold); }
+.offer-banner { background: var(--dark); color: #fff; border-radius: 18px; }
+.offer-tag { background: var(--gold); color: var(--dark); }
+.offer-copy h2, .offer-copy b { color: #fff; }
+.hero-dot { background: rgba(255,255,255,.35); } .hero-dot.active { background: var(--gold); }
+.dark-button { background: var(--gold); color: var(--dark); }
+.status-pill { border: 0; }
+.bottom-nav { background: var(--dark); border-top: 0; }
+.nav-button { color: #9a9a94; }
+.nav-button.active { color: #fff; }
+.nav-button.active::before { background: var(--gold); }
+.panel-head h2 { font-size: 20px; }
