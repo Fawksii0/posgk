@@ -335,7 +335,7 @@ function renderRestaurantCard() {
   const name = typeof restaurant === "string" ? restaurant : restaurant?.name;
   const hours = typeof state.settings.hours === "string" ? state.settings.hours : "";
   const details = BRANCH_DETAILS[state.selectedBranchId] || {};
-  const address = (typeof restaurant === "object" && restaurant.address) || selectedBranch()?.address || details.address || "";
+  const address = (restaurant && typeof restaurant === "object" && restaurant.address) || selectedBranch()?.address || details.address || "";
   return `<article class="restaurant-card">
     ${details.image
       ? `<div class="mini-map photo"><img src="${details.image}" alt="Façade de ${escapeHtml(name || selectedBranch()?.name || "G&K Food")}" loading="lazy" /></div>`
@@ -384,7 +384,7 @@ function renderCart() {
       <button class="delivery-choice ${state.delivery === "delivery" ? "active" : ""}" type="button" data-delivery="delivery" aria-pressed="${state.delivery === "delivery"}" ${state.settings.deliveryOn === false ? "disabled" : ""}>${icon("bike")}Livraison<small>${zone ? `${zone.etaMin}–${zone.etaMax} min` : "Choisir une adresse"}</small></button>
       <button class="delivery-choice ${state.delivery === "pickup" ? "active" : ""}" type="button" data-delivery="pickup" aria-pressed="${state.delivery === "pickup"}">${icon("store")}À emporter<small>Retrait au restaurant</small></button>
     </div>
-    <div class="address-card"><span class="address-icon">${icon("pin")}</span><div><strong>${state.delivery === "delivery" ? (address ? escapeHtml(address.street) : "Aucune adresse") : escapeHtml((typeof state.settings.restaurant === "object" && state.settings.restaurant?.name) || state.settings.restaurant || "G&K Food")}</strong><small>${state.delivery === "delivery" ? (address ? `${escapeHtml(address.label)} · ${escapeHtml(zone?.name || "")}` : "Ajoutez une adresse de livraison") : "Retrait au restaurant"}</small></div>${state.delivery === "delivery" ? `<button class="text-button" type="button" data-action="addresses">${address ? "Modifier" : "Ajouter"}</button>` : ""}</div>
+    <div class="address-card"><span class="address-icon">${icon("pin")}</span><div><strong>${state.delivery === "delivery" ? (address ? escapeHtml(address.street) : "Aucune adresse") : escapeHtml((state.settings.restaurant && typeof state.settings.restaurant === "object" && state.settings.restaurant.name) || state.settings.restaurant || "G&K Food")}</strong><small>${state.delivery === "delivery" ? (address ? `${escapeHtml(address.label)} · ${escapeHtml(zone?.name || "")}` : "Ajoutez une adresse de livraison") : "Retrait au restaurant"}</small></div>${state.delivery === "delivery" ? `<button class="text-button" type="button" data-action="addresses">${address ? "Modifier" : "Ajouter"}</button>` : ""}</div>
     <div class="address-card"><span class="address-icon">${icon("cash")}</span><div><strong>${escapeHtml(payment.label)}</strong><small>Le paiement par carte n'est pas disponible. Aucun numéro de carte n'est collecté.</small></div></div>
     <form class="promo-box" id="promo-form"><span class="promo-icon" aria-hidden="true">${icon("tag")}</span><input class="promo-input" id="promo-code" type="text" placeholder="Code promo" aria-label="Code promo" ${state.promo ? `value="${escapeHtml(state.promo.code)}"` : ""} /><button class="outline-button" type="submit">${state.promo ? `Appliqué ${icon("check")}` : "Appliquer"}</button></form>
     ${state.promoError ? `<p class="form-error" role="alert">${escapeHtml(state.promoError)}</p>` : ""}
@@ -617,7 +617,7 @@ function renderPanel() {
       body = `${panelHead("Notifications")}<div class="panel-body">${state.notifications.length ? state.notifications.map(note => `<article class="note ${note.read ? "" : "unread"}"><strong>${escapeHtml(note.title)}</strong><p>${escapeHtml(note.text)}</p><small>${formatDate(note.time)}</small></article>`).join("") : `<p class="empty-state">Aucune notification.</p>`}</div>`;
       break;
     case "support":
-      body = `${panelHead("Aide & contact")}<div class="panel-body"><article class="note"><strong>Contactez le restaurant</strong><p>${escapeHtml(typeof state.settings.restaurant === "object" ? state.settings.restaurant.phone || "Les coordonnées ne sont pas renseignées." : "Les coordonnées ne sont pas renseignées.")}</p></article>${state.settings.hours ? `<article class="note"><strong>Horaires</strong><p>${escapeHtml(state.settings.hours)}</p></article>` : ""}</div>`;
+      body = `${panelHead("Aide & contact")}<div class="panel-body"><article class="note"><strong>Contactez le restaurant</strong><p>${escapeHtml(state.settings.restaurant && typeof state.settings.restaurant === "object" ? state.settings.restaurant.phone || "Les coordonnées ne sont pas renseignées." : "Les coordonnées ne sont pas renseignées.")}</p></article>${state.settings.hours ? `<article class="note"><strong>Horaires</strong><p>${escapeHtml(state.settings.hours)}</p></article>` : ""}</div>`;
       break;
   }
   sheet.className = "sheet panel";
