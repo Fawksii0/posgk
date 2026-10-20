@@ -271,7 +271,8 @@ export async function ownerSwitch(c) {
   const target = String(c.body.target || "");
   const role = VIEW_ROLES[target];
   if (!role) fail(400, "invalid", "Vue inconnue.");
-  const branchId = role === "client" ? null : c.branchId;
+  const selectedBranchId = c.branchId || null;
+  const branchId = role === "client" ? null : selectedBranchId;
   if (role !== "client" && !branchId) fail(400, "branch_required", "Choisissez une succursale.");
   const id = role === "client" ? `${OWNER_VIEW_ID_PREFIX}client` : `${OWNER_VIEW_ID_PREFIX}${target}_${branchId}`;
   // The linked profiles are created under admin rights; the owner context is restored afterwards.
@@ -290,7 +291,7 @@ export async function ownerSwitch(c) {
   const token = await issueToken(env, row, 8 * 3600);
   await env.DB.setContext({ actorId: owner.id, actorRole: "owner", branchId: null });
   await run(env, "INSERT INTO owner_audit (at, outcome, ip, user_agent) VALUES (?,?,?,?)", now(), `view:${target}`, c.ip, (c.req.headers.get("User-Agent") || "").slice(0, 200));
-  return { token, user: publicUser(row), branchId: row.branch_id || undefined, mustChange: false };
+  return { token, user: publicUser(row), branchId: selectedBranchId || row.branch_id || undefined, mustChange: false };
 }
 
 /* ---------- secret change ---------- */
@@ -346,3 +347,6 @@ export async function revokeAll(c) {
   await run(c.env, "UPDATE users SET token_version = token_version + 1 WHERE id = ?", c.user.id);
   return { ok: true };
 }
+
+
+
