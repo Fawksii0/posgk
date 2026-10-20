@@ -493,7 +493,11 @@
   }
 
   function exportInvoicesCsv() {
-    const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const cell = (v) => {
+      let s = String(v ?? "");
+      if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+      return `"${s.replace(/"/g, '""')}"`;
+    };
     const rows = [["Facture", "Date", "Client", "Téléphone", "Commande", "Mode", "Paiement", "Sous-total", "Livraison", "Remise", "Total"]];
     filteredInvoices().forEach((o) => rows.push([GKReceipt.invoiceNumber(receiptDoc(o)), new Date(o.createdAt).toISOString().slice(0, 10), o.customerName, o.phone, o.id, o.mode, o.payment, o.subtotal, o.fee, o.discount, o.total]));
     const blob = new Blob(["\ufeff" + rows.map((r) => r.map(cell).join(";")).join("\r\n")], { type: "text/csv;charset=utf-8" });
