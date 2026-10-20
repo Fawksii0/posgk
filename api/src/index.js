@@ -71,6 +71,7 @@ route("POST", "/api/admin/users", admin.userCreate, { body: true });
 route("PUT", "/api/admin/users/(?<id>[^/]+)", admin.userUpdate, { body: true });
 route("DELETE", "/api/admin/users/(?<id>[^/]+)", admin.userDelete);
 route("GET", "/api/admin/couriers", admin.couriersList);
+route("GET", "/api/live/couriers", admin.liveCouriers);
 route("POST", "/api/admin/couriers", admin.courierCreate, { body: true });
 route("PUT", "/api/admin/couriers/(?<id>[^/]+)", admin.courierUpdate, { body: true });
 route("POST", "/api/admin/couriers/(?<id>[^/]+)/reset-pin", admin.courierResetPin, { body: true });

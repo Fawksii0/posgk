@@ -420,3 +420,5 @@ a { color: inherit; text-decoration: none; }
 .login-view { background: var(--dark); }
 .login-card { border-radius: 22px; }
 .login-logo { box-shadow: none; }
+
+.live-slot { height: calc(100vh - 210px); min-height: 420px; }

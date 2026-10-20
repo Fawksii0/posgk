@@ -2,7 +2,7 @@
 import { fail, now, hashSecret, randomId, randomDigits, normPhone, normEmail, str, numv, bool, oneOf, jparse } from "./lib.js";
 import { run, first, all, stmt, batch, getSetting, setSetting, audit, notify, need, can, publicUser, MANAGED_STAFF } from "./core.js";
 import { validateNewSecret, createAuthUser, updateAuthUser, deleteAuthUser } from "./auth.js";
-import { tickDispatch, retryFailedOrders, releaseOfferedTo } from "./orders.js";
+import { tickDispatch, retryFailedOrders, releaseOfferedTo, STORE } from "./orders.js";
 
 /* ---------- serializers ---------- */
 export const itemOut = (r) => ({ id: r.id, categoryId: r.category_id, name: r.name, description: r.description, price: r.price, discount: r.discount, sizes: jparse(r.sizes, []), extras: jparse(r.extras, []), image: r.image_url, available: !!r.available, visible: !!r.visible });
@@ -322,6 +322,22 @@ export async function couriersList(c) {
       ...publicUser(r), vehicle: r.vehicle, online: !!r.online && t - (r.last_seen || 0) < 10 * 60000, busy: busySet.has(r.id),
       lat: r.lat, lng: r.lng, lastSeen: r.last_seen, todayDeliveries: sm.get(r.id)?.today || 0, cashHeld: sm.get(r.id)?.cash || 0
     }))
+  };
+}
+// Live positions for the admin map and the kitchen: only recently seen couriers with a known position.
+export async function liveCouriers(c) {
+  need(c.user, "orders.view");
+  const t = now();
+  const rows = (await courierRows(c.env)).filter((r) => r.lat != null && r.lng != null && r.online && t - (r.last_seen || 0) < 10 * 60000);
+  const active = await all(c.env, "SELECT id, seq, courier_id, status, courier_step, customer_name, zone_name FROM orders WHERE courier_id IS NOT NULL AND dispatch_state = 'assigned' AND status IN ('preparing','ready','enroute')");
+  const byCourier = new Map();
+  for (const o of active) {
+    if (!byCourier.has(o.courier_id)) byCourier.set(o.courier_id, []);
+    byCourier.get(o.courier_id).push({ id: o.id, seq: o.seq, status: o.status, step: o.courier_step, customer: o.customer_name, zone: o.zone_name });
+  }
+  return {
+    store: STORE, now: t,
+    couriers: rows.map((r) => ({ id: r.id, name: r.name, vehicle: r.vehicle, lat: r.lat, lng: r.lng, lastSeen: r.last_seen, orders: byCourier.get(r.id) || [] }))
   };
 }
 export async function courierCreate(c) {

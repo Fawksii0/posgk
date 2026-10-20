@@ -21,6 +21,7 @@ const Store = (() => {
     factures: ["orders", "settings", "zones"],
     menu: ["menu"],
     livreurs: ["couriers", "orders"],
+    carte: [],
     clients: ["clients", "orders"],
     zones: ["zones"],
     promotions: ["promos"],

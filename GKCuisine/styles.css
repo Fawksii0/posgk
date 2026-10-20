@@ -301,3 +301,7 @@ html, body { background: var(--bg); }
 .reason-btn:hover, .reason-btn:focus-visible { border-color: var(--danger); background: #fff5f4; color: var(--danger); }
 
 .ticket-wrap { padding: 4px; max-height: 60vh; overflow-y: auto; }
+
+.sheet.map-sheet { max-width: 720px; width: 100%; }
+.map-box { height: min(60vh, 460px); margin: 10px 0 14px; }
+.dispatch .track-btn { margin-top: 6px; }

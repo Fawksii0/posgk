@@ -538,7 +538,7 @@ function startLocationTracking() {
   locationWatch = navigator.geolocation.watchPosition(position => {
     state.locationError = "";
     const { latitude: lat, longitude: lng } = position.coords;
-    if (Date.now() - lastPositionSent < 15000) return;
+    if (Date.now() - lastPositionSent < 6000) return;
     lastPositionSent = Date.now();
     GKApi.patch("/api/courier/position", { lat, lng }, "courier")
       .catch(error => { state.locationError = error.message || "Position non envoyée."; render(); });

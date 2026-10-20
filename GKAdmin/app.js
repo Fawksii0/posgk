@@ -35,6 +35,7 @@
     factures: { title: "Factures", icon: "invoice", perm: "invoices" },
     menu: { title: "Menu", icon: "utensils" },
     livreurs: { title: "Livreurs", icon: "bike", perm: "couriers" },
+    carte: { title: "Carte live", icon: "map", perm: "couriers" },
     clients: { title: "Clients", icon: "users", perm: "clients" },
     zones: { title: "Zones de livraison", icon: "pin" },
     promotions: { title: "Promotions", icon: "tag", perm: "promos" },
@@ -43,7 +44,7 @@
     reglages: { title: "Réglages", icon: "gear" }
   };
   const NAV_GROUPS = [
-    { label: "Exploitation", routes: ["dashboard", "commandes", "factures", "menu", "livreurs", "clients"] },
+    { label: "Exploitation", routes: ["dashboard", "commandes", "factures", "menu", "livreurs", "carte", "clients"] },
     { label: "Configuration", routes: ["zones", "promotions", "activite"] },
     { label: "Administration", routes: ["utilisateurs", "reglages"] }
   ];
@@ -278,6 +279,7 @@
   function renderView() {
     const meta = ROUTES[ui.route];
     const view = $("#view");
+    if (ui.route !== "carte") dropLiveMap();
     if (meta.perm && !Store.can(meta.perm)) {
       view.innerHTML = `<div class="card">${emptyState("lock", "Accès non autorisé", "Votre rôle ne permet pas de consulter cette page.")}</div>`;
       return;
@@ -286,6 +288,24 @@
     if (status.loading) { view.innerHTML = `<div class="card">${emptyState("clock", "Chargement des données…", "Connexion au serveur G&K.")}</div>`; return; }
     if (status.error) { view.innerHTML = `<div class="card">${emptyState("alert", "Impossible de charger les données", status.error)}<div style="text-align:center;margin:12px"><button class="btn-gold" data-action="retry-page">Réessayer</button></div></div>`; return; }
     view.innerHTML = pages[ui.route].render();
+    if (ui.route === "carte") attachLiveMap();
+  }
+
+  /* ---------- Live map ---------- */
+  let liveMap = null;
+  function dropLiveMap() { if (liveMap) { liveMap.destroy(); liveMap = null; } }
+  function attachLiveMap() {
+    const slot = $("#live-slot");
+    if (!slot) return;
+    if (!liveMap) {
+      try { liveMap = GKMap.mount({ scope: Store.get().scope, list: true, logo: "assets/emblem-reference.png" }); }
+      catch (error) { slot.innerHTML = emptyState("alert", "Carte indisponible", error.message); return; }
+    }
+    slot.appendChild(liveMap.el);
+    liveMap.invalidate();
+  }
+  function mapPage() {
+    return `<div class="page-head"><div><h2>Carte en direct</h2><p>Position des livreurs en ligne, mise à jour toutes les 5 secondes.</p></div></div><div id="live-slot" class="live-slot"></div>`;
   }
 
   function refreshResults() {
@@ -735,7 +755,7 @@
 
   pages = {
     dashboard: { render: dashboardPage }, commandes: { render: ordersPage, results: ordersResults },
-    factures: { render: invoicesPage, results: invoicesResults },
+    factures: { render: invoicesPage, results: invoicesResults }, carte: { render: mapPage },
     menu: { render: menuPage, results: menuResults }, livreurs: { render: couriersPage, results: couriersResults },
     clients: { render: customersPage, results: customersResults }, zones: { render: zonesPage },
     promotions: { render: promosPage }, activite: { render: activityPage, results: activityResults },

@@ -236,7 +236,7 @@
     }
     if (dispatch.state === "assigned" && info) {
       const stepNames = ["", "Accepté", "Au restaurant", "Récupérée", "En route", "Livrée"];
-      return `<div class="dispatch assigned">${icon("bike")}<div><b>${esc(info.courier.name)}</b> ${courierChip}<div class="small">${esc(stepNames[order.courierStep] || "Assigné")}${dispatch.manual ? " · assigné manuellement" : ""}</div></div></div>`;
+      return `<div class="dispatch assigned">${icon("bike")}<div><b>${esc(info.courier.name)}</b> ${courierChip}<div class="small">${esc(stepNames[order.courierStep] || "Assigné")}${dispatch.manual ? " · assigné manuellement" : ""}</div>${order.status === "delivered" ? "" : `<button class="btn small-btn track-btn" data-action="track" data-id="${esc(order.id)}">${icon("pin")}Suivre sur la carte</button>`}</div></div>`;
     }
     if (dispatch.state === "failed" && ["preparing", "ready"].includes(order.status)) {
       const options = Object.values(couriers).filter(c => c.active).map(c => `<option value="${esc(c.courier.id)}">${esc(c.courier.name)} — ${c.online ? (c.busy ? "en mission" : "en ligne") : "hors ligne"}${c.km == null ? "" : `, ${c.km.toFixed(1)} km`}</option>`).join("");
@@ -398,9 +398,24 @@
   /* ---------- sheets and printing ---------- */
 
   function closeSheet() {
+    if (trackMap) { trackMap.destroy(); trackMap = null; }
     ui.sheet = null;
     sheetRoot.innerHTML = "";
     printArea.innerHTML = "";
+  }
+
+  let trackMap = null;
+  function openTrack(order) {
+    ui.sheet = { type: "track", id: order.id };
+    openSheet(`<h2>Livreur · commande #${esc(order.seq || order.id)}</h2><p class="muted small">Position en direct, mise à jour toutes les 5 secondes.</p>
+      <div class="map-box" id="track-slot"></div>
+      <div class="btn-row"><button class="btn" data-action="close-sheet">Fermer</button></div>`);
+    sheetRoot.querySelector(".sheet")?.classList.add("map-sheet");
+    try {
+      trackMap = GKMap.mount({ scope: API_SCOPE, orderId: order.id, logo: "assets/emblem-reference.png" });
+      sheetRoot.querySelector("#track-slot").appendChild(trackMap.el);
+      trackMap.invalidate();
+    } catch (error) { toast(error.message); }
   }
 
   function openSheet(html) {
@@ -520,6 +535,7 @@
     col(el) { ui.col = el.dataset.col; render(); },
     filter(el) { ui.filter = el.dataset.filter; render(); },
     refresh() { data.error = ""; refreshData(); },
+    track(el) { const order = findOrder(el.dataset.id); if (order) openTrack(order); },
     "toggle-sound"() { state.prefs.sound = !state.prefs.sound; save(); render(); },
     "toggle-autoprint"() { if (requireCashier()) { state.prefs.autoBrowserPrint = !state.prefs.autoBrowserPrint; save(); render(); } },
     paper(el) { if (requireCashier()) { state.prefs.paper = Number(el.dataset.paper); save(); render(); } },

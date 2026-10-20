@@ -1,4 +1,4 @@
-const VERSION = "gk-courier-v7";
+const VERSION = "gk-courier-v8";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./data.js", "./store.js", "./app.js", "./manifest.webmanifest",
   "./assets/emblem-reference.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png",
