@@ -311,12 +311,16 @@
   }
 
   function renderStock() {
-    return `<section class="panel"><h2>Stock / Disponibilité</h2><p class="muted">La disponibilité des articles est synchronisée avec le menu côté client.</p>
-      <ul class="stock">${data.menu.map(item => {
+    const groups = new Map();
+    data.menu.forEach(item => { const key = item.category || "Autres"; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(item); });
+    const out = data.menu.filter(item => !item.available).length;
+    const sections = [...groups].map(([category, items]) => `<section class="stock-group"><h3>${esc(category)}<span>${items.filter(item => item.available).length}/${items.length}</span></h3>
+      <div class="stock-grid">${items.map(item => {
         const on = !!item.available;
-        return `<li><div><b>${esc(item.name)}</b><div class="small muted">${esc(item.category)}</div></div>
-          <button class="switch ${on ? "on" : ""}" role="switch" aria-checked="${on}" data-action="stock" data-id="${esc(item.id)}" aria-label="${esc(item.name)} : ${on ? "disponible" : "épuisé"}"><span class="switch-label">${on ? "Disponible" : "Épuisé"}</span><i></i></button></li>`;
-      }).join("") || `<li class="empty">Aucun article de menu disponible.</li>`}</ul></section>`;
+        return `<button class="stock-tile ${on ? "on" : "off"}" role="switch" aria-checked="${on}" data-action="stock" data-id="${esc(item.id)}" aria-label="${esc(item.name)} : ${on ? "disponible" : "épuisé"}"><b>${esc(item.name)}</b><span class="stock-state"><i></i>${on ? "Disponible" : "Épuisé"}</span></button>`;
+      }).join("")}</div></section>`).join("");
+    return `<section class="panel wide"><div class="panel-head"><div><h2>Stock</h2><p class="muted">Touchez un article pour le marquer épuisé. Synchronisé avec le menu client.</p></div><span class="stat ${out ? "warn" : "ok"}">${out ? `${out} épuisé(s)` : "Tout disponible"}</span></div>
+      ${sections || `<p class="empty">Aucun article de menu disponible.</p>`}</section>`;
   }
 
   function switchRow(label, hint, on, action) {
@@ -327,7 +331,7 @@
   function renderSettings() {
     const settings = data.settings;
     const connected = GKPrinter.connected();
-    return `<section class="panel"><h2>Réglages</h2>
+    return `<section class="panel settings"><h2>Réglages</h2>
       <div class="group"><h3>Affectation des livreurs</h3>
         <div class="seg" role="radiogroup" aria-label="Mode d'affectation">
           <button role="radio" aria-checked="${settings.dispatchMode === "rotation"}" class="${settings.dispatchMode === "rotation" ? "active" : ""}" data-action="dispatch-mode" data-mode="rotation">Rotation</button>
