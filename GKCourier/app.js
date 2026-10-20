@@ -513,6 +513,20 @@ window.addEventListener("appinstalled", () => { ui.installPrompt = null; if (sta
 let locationWatch = null;
 let lastPositionSent = 0;
 let polling = false;
+let seenStatus = null;
+
+// Rings for new delivery offers (and again while one is waiting), chimes when an order becomes ready.
+function soundForMissions() {
+  const all = [...state.missions, ...(state.active ? [state.active] : [])];
+  const current = new Map(all.map(mission => [mission.id, mission.orderStatus]));
+  const previous = seenStatus;
+  seenStatus = current;
+  if (!previous) return;
+  const becameReady = all.some(mission => mission.orderStatus === "ready" && previous.has(mission.id) && previous.get(mission.id) !== "ready");
+  const newOffer = state.missions.some(mission => !previous.has(mission.id));
+  if (becameReady) GKSound.play("ready");
+  else if (newOffer || state.missions.length) GKSound.play("order");
+}
 
 function startLocationTracking() {
   if (locationWatch !== null) return;
@@ -548,6 +562,7 @@ async function pollServer() {
   const before = JSON.stringify([state.online, state.profile, state.missions, state.active, state.history, state.notifications, state.offersError, state.historyError, state.profileError, state.actionError]);
   try {
     const errors = await refreshAll();
+    if (!errors.length) soundForMissions();
     if (errors.length) state.actionError = errors[0].message || "Certaines données n’ont pas pu être actualisées.";
     else state.actionError = "";
   } finally {
@@ -572,7 +587,7 @@ window.addEventListener("gk-api-session-expired", event => {
 
 setInterval(() => {
   if (state.session) void pollServer();
-}, 15000);
+}, 6000);
 
 setInterval(() => {
   document.querySelectorAll(".offer-timer").forEach(el => {

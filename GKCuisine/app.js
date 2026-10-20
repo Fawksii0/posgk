@@ -12,7 +12,6 @@
     loading: false, loaded: false, error: "", actionError: ""
   };
   const baseTitle = "G&K Cuisine";
-  let audio = null;
   let knownPending = new Set();
   let renderQueued = false;
   let toastTimer = 0;
@@ -440,25 +439,12 @@
   /* ---------- sound and notifications ---------- */
 
   function unlockAudio() {
-    if (audio || !(window.AudioContext || window.webkitAudioContext)) return;
-    try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch { audio = null; }
+    GKSound.unlock();
   }
 
   function beep() {
-    if (!audio || !state.prefs.sound) return;
-    if (audio.state === "suspended") audio.resume().catch(() => {});
-    [880, 1175].forEach((frequency, index) => {
-      const oscillator = audio.createOscillator();
-      const gain = audio.createGain();
-      const start = audio.currentTime + index * 0.18;
-      oscillator.frequency.value = frequency;
-      gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(0.25, start + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.16);
-      oscillator.connect(gain).connect(audio.destination);
-      oscillator.start(start);
-      oscillator.stop(start + 0.18);
-    });
+    if (!state.prefs.sound) return;
+    GKSound.play("order");
   }
 
   const pendingOrders = () => data.orders.filter(order => order.status === "pending");
