@@ -306,7 +306,7 @@ export async function userDelete(c) {
 
 /* ---------- couriers ---------- */
 async function courierRows(env, id) {
-  const sql = `SELECT u.*, b.name AS branch_name, c.vehicle, c.online, c.lat, c.lng, c.last_seen FROM users u JOIN couriers c ON c.user_id = u.id LEFT JOIN branches b ON b.id = u.branch_id WHERE u.role = 'courier' AND u.id NOT LIKE 'u\\_ov\\_%'${id ? " AND u.id = ?" : ""} ORDER BY u.created_at`;
+  const sql = `SELECT u.*, b.name AS branch_name, c.vehicle, c.online, c.lat, c.lng, c.last_seen FROM users u JOIN couriers c ON c.user_id = u.id LEFT JOIN branches b ON b.id = u.branch_id WHERE u.role = 'courier'${id ? " AND u.id = ?" : " AND u.id NOT LIKE 'u\\_ov\\_%'"} ORDER BY u.created_at`;
   return id ? all(env, sql, id) : all(env, sql);
 }
 export async function couriersList(c) {
