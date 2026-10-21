@@ -235,7 +235,7 @@
       return `<div class="dispatch offering">${icon("bike")}<div><b>Offre envoyée à ${esc(info.courier.name)}</b> ${courierChip}<div class="small">Réponse sous <b data-until="${dispatch.expiresAt}">${countdown(dispatch.expiresAt - Date.now())}</b></div></div></div>`;
     }
     if (dispatch.state === "assigned" && info) {
-      const stepNames = ["", "Accepté", "Au restaurant", "Récupérée", "En route", "Livrée"];
+      const stepNames = ["En route vers le restaurant", "Au restaurant", "En route vers le client", "Livrée"];
       return `<div class="dispatch assigned">${icon("bike")}<div><b>${esc(info.courier.name)}</b> ${courierChip}<div class="small">${esc(stepNames[order.courierStep] || "Assigné")}${dispatch.manual ? " · assigné manuellement" : ""}</div>${order.status === "delivered" ? "" : `<button class="btn small-btn track-btn" data-action="track" data-id="${esc(order.id)}">${icon("pin")}Suivre sur la carte</button>`}</div></div>`;
     }
     if (dispatch.state === "failed" && ["preparing", "ready"].includes(order.status)) {

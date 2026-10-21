@@ -147,6 +147,18 @@ async function chooseBranch(branchId) {
   if (state.user) void refreshOrders();
 }
 
+async function syncNotifications() {
+  if (!state.user || !GKApi.session("client")?.token || state.syncingNotes) return;
+  state.syncingNotes = true;
+  try {
+    const result = await GKApi.get("/api/notifications", "client");
+    const wasOpen = state.panel === "notifications";
+    state.notifications = (result.notifications || []).map(note => ({ id: `s${note.id}`, title: note.title, text: note.text, time: note.at, read: !!note.read || wasOpen }));
+    if (wasOpen) renderPanel();
+    updateChrome();
+  } catch {} finally { state.syncingNotes = false; }
+}
+
 async function refreshOrders() {
   if (!GKApi.session("client")?.token) {
     state.orders = [];
@@ -254,11 +266,12 @@ function renderProductCard(product) {
   </article>`;
 }
 
+const fold = text => String(text).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
 function filteredProducts() {
-  const query = state.query.trim().toLocaleLowerCase();
+  const query = fold(state.query.trim());
   return products.filter(product =>
     (state.category === "All" || (state.category === "Favoris" ? state.favorites.has(product.id) : product.categoryId === state.category)) &&
-    (!query || `${product.name} ${product.description} ${product.category} ${product.cuisine}`.toLocaleLowerCase().includes(query))
+    (!query || fold(`${product.name} ${product.description} ${product.category} ${product.cuisine}`).includes(query))
   );
 }
 
@@ -653,6 +666,7 @@ function openPanel(name) {
     state.notifications.forEach(note => { note.read = true; });
     updateChrome();
     saveState();
+    if (state.user && GKApi.session("client")?.token) void GKApi.post("/api/notifications/read", {}, "client").catch(() => {});
   }
   (sheet.querySelector("input, select, .pick-main, a, .icon-button") || sheet).focus?.();
 }
@@ -1031,7 +1045,9 @@ render();
 void loadBranches().then(() => {
   if (state.selectedBranchId) void loadMenu();
   if (state.user && state.selectedBranchId) void refreshOrders();
+  void syncNotifications();
 });
+setInterval(() => { if (!document.hidden) void syncNotifications(); }, 15000);
 setInterval(() => {
   if (state.view === "orders" && state.trackingId) void pollChatUnread();
 }, 6000);
