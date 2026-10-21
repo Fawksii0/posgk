@@ -1,0 +1,6 @@
+youmi-dist/
+node_modules/
+.env.local
+api/.env.local
+api/supabase/.temp/
+.wrangler/

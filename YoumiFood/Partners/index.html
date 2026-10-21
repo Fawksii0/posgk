@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ff6547">
+  <title>Youmi Partners</title>
+  <link rel="icon" href="assets/youmi-symbol.png">
+  <script>
+    if ("serviceWorker" in navigator && location.protocol !== "file:") {
+      const appPath = new URL(".", location.href).pathname;
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        const stale = registrations.filter((registration) =>
+          [registration.active, registration.waiting, registration.installing].some((worker) =>
+            worker && new URL(worker.scriptURL).pathname.startsWith(appPath)
+          )
+        );
+        return Promise.all(stale.map((registration) => registration.unregister())).then(() => {
+          const controller = navigator.serviceWorker.controller;
+          if (controller && new URL(controller.scriptURL).pathname.startsWith(appPath)) location.reload();
+        });
+      }).catch(() => {});
+      if ("caches" in window) {
+        caches.keys().then((keys) => Promise.all(keys.filter((key) => /^gk-admin-/i.test(key)).map((key) => caches.delete(key)))).catch(() => {});
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="styles.css?v=api-2">
+  <link rel="stylesheet" href="../shared/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="../shared/gk-map.css?v=2">
+  <script src="../shared/vendor/leaflet/leaflet.js" defer></script>
+  <script src="../shared/gk-map.js?v=2" defer></script>
+  <script src="../shared/gk-api.js?v=api-2" defer></script>
+  <script src="../shared/gk-receipt.js?v=1" defer></script>
+  <script src="data.js?v=api-2" defer></script>
+  <script src="store.js?v=api-2" defer></script>
+  <script src="app.js?v=api-2" defer></script>
+</head>
+<body>
+  <div id="login-view" class="login-view" hidden></div>
+
+  <div id="shell" class="shell" hidden>
+    <aside id="sidebar" class="sidebar" aria-label="Navigation principale"></aside>
+    <div id="scrim" class="scrim" data-action="close-nav" hidden></div>
+    <div class="shell-main">
+      <header class="topbar">
+        <button class="icon-button nav-toggle" type="button" data-action="open-nav" aria-label="Ouvrir le menu" aria-controls="sidebar"></button>
+        <h1 id="page-title" class="page-title">Tableau de bord</h1>
+        <label class="search-box" for="global-search">
+          <span id="search-icon" aria-hidden="true"></span>
+          <input id="global-search" type="search" placeholder="Rechercher une commande, un client…" autocomplete="off" aria-label="Recherche globale">
+        </label>
+        <div class="topbar-actions">
+          <label id="branch-switch-wrap" class="branch-switch-wrap" hidden>
+            <span>Restaurant</span>
+            <select id="branch-select" aria-label="Restaurant sélectionné"></select>
+          </label>
+          <div class="pop-wrap">
+            <button id="bell-btn" class="icon-button" type="button" data-action="toggle-bell" aria-label="Notifications" aria-haspopup="true" aria-expanded="false"></button>
+            <div id="bell-pop" class="popover" hidden></div>
+          </div>
+          <div class="pop-wrap">
+            <button id="user-btn" class="user-chip" type="button" data-action="toggle-user" aria-haspopup="true" aria-expanded="false"></button>
+            <div id="user-pop" class="popover" hidden></div>
+          </div>
+        </div>
+      </header>
+      <div id="notice-bar" class="notice-bar"></div>
+      <main id="view" class="view" tabindex="-1"></main>
+    </div>
+  </div>
+
+  <div id="drawer-root"></div>
+  <div id="modal-root"></div>
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+  <div id="print-area" class="print-area" aria-hidden="true"></div>
+</body>
+</html>
