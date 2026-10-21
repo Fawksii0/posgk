@@ -123,6 +123,7 @@ async function refreshHistory() {
 }
 
 let onlineEpoch = 0;
+let togglePending = false;
 
 async function refreshProfile() {
   if (!state.session) return;
@@ -135,7 +136,7 @@ async function refreshProfile() {
     state.profileLoaded = true;
     state.session = response.user || state.session;
     // A toggle made while this request was in flight wins over the stale server value.
-    if (epoch === onlineEpoch) state.online = !!response.online;
+    if (epoch === onlineEpoch && !togglePending) state.online = !!response.online;
   } catch (error) {
     state.profileError = error.message || "Impossible de charger le profil.";
     throw error;
@@ -228,10 +229,12 @@ async function logout() {
 
 async function goOnline(online) {
   onlineEpoch += 1;
+  togglePending = true;
   try {
     const response = await API.patch("/api/courier/online", { online }, SCOPE);
     state.online = !!response.online;
   } finally {
+    togglePending = false;
     onlineEpoch += 1;
   }
   if (!online) state.missions = [];
