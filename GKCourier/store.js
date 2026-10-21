@@ -265,7 +265,7 @@ async function advanceMission() {
 async function completeMission(code, cashCollected) {
   const mission = state.active;
   if (!mission || mission.step !== 4) throw new Error("Mission introuvable.");
-  if (!/^\d{4}$/.test(code)) throw new Error("Saisissez le code à 4 chiffres du client.");
+  if (!/^\d{4,6}$/.test(code)) throw new Error("Saisissez le code de livraison du client.");
   if (mission.payment === "cash" && !cashCollected) throw new Error("Confirmez l’encaissement des espèces.");
   await API.post(`/api/courier/orders/${encodeURIComponent(mission.id)}/delivered`, { code }, SCOPE);
   await refreshOffers();

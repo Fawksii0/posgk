@@ -198,7 +198,7 @@ function activeView() {
         <h3>Confirmer la livraison</h3>
         <div class="field" style="margin-top:10px">
           <label for="code">Code de livraison du client</label>
-          <input id="code" class="pin-input" name="code" type="text" inputmode="numeric" maxlength="4" autocomplete="one-time-code" placeholder="••••" />
+          <input id="code" class="pin-input" name="code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="••••" />
         </div>
         ${m.payment === "cash" ? `<label class="check-row"><input id="cash-ok" type="checkbox" /> Espèces encaissées (${money(m.total)})</label>` : ""}
         <p id="deliver-error" class="form-error" role="alert"></p>

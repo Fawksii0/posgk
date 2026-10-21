@@ -455,7 +455,7 @@ function renderOrderCard(order) {
     actions = "";
   }
   return `<article class="order-card">
-    <div class="order-card-head"><span>Commande #${escapeHtml(order.id)}</span><span class="status-pill ${order.status}">${label}</span></div>
+    <div class="order-card-head"><span>Commande #${escapeHtml(order.seq || order.id)}</span><span class="status-pill ${order.status}">${label}</span></div>
     <div class="order-card-body">${first?.image ? `<img src="${escapeHtml(first.image)}" alt="" />` : ""}<div><h3>${escapeHtml(orderSummary(order))}</h3><p>${formatDate(order.createdAt)} · ${order.mode === "delivery" ? "Livraison" : "À emporter"}</p>${stage}<strong>${formatPrice(order.total)}</strong></div></div>
     <div class="order-actions">${actions}</div>
   </article>`;
@@ -479,7 +479,7 @@ function renderTracking(order) {
     <div class="back-row"><button class="icon-button" type="button" data-back-orders aria-label="Retour aux commandes">${icon("chevronLeft")}</button><h1 class="screen-title" id="tracking-heading">Suivi de commande</h1></div>
     ${state.ordersError ? `<p class="cart-notice" role="alert">${escapeHtml(state.ordersError)}</p>` : ""}
     <article class="tracking-card">
-      <div class="eta-row"><div><small>${done || ended ? "Statut" : "Estimation du restaurant"}</small><strong>${etaText}</strong></div><span class="status-pill ${order.status}">Commande #${escapeHtml(order.id)}</span></div>
+      <div class="eta-row"><div><small>${done || ended ? "Statut" : "Estimation du restaurant"}</small><strong>${etaText}</strong></div><span class="status-pill ${order.status}">Commande #${escapeHtml(order.seq || order.id)}</span></div>${order.status === "active" && order.mode === "delivery" && order.delivery_code ? `<p class="cart-notice">Code de livraison � donner au livreur : <strong>${escapeHtml(order.delivery_code)}</strong></p>` : ""}
       ${order.status === "refused" ? `<p class="cart-notice">Commande refusée par la cuisine. Motif : ${escapeHtml(order.refusedReason || "non précisé")}.</p>` : ""}
       ${ended ? "" : `<ol class="step-list">${steps.map((step, index) => {
         const status = index < order.stage || (done && index === steps.length - 1) ? "done" : index === order.stage ? "current" : "";

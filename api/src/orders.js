@@ -222,7 +222,7 @@ export async function orderCreate(c) {
     (id, seq, client_id, customer_name, customer_phone, mode, status, items, subtotal, fee, discount, promo, total, payment, zone_id, zone_name, address, address_label, note, delivery_code, eta_min, prep_minutes, promised_at, dispatch_state, history, created_at, updated_at)
     VALUES (?,?,?,?,? ,?,'pending',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'none',?,?,?)`,
     id, seq, c.user.id, name, phone, body.mode, JSON.stringify(normalized), subtotal, fee, discount, promo, total,
-    str(body.payment || "cash", { max: 40 }), zoneId, zoneName, address, addressLabel, note, randomDigits(4),
+    str(body.payment || "cash", { max: 40 }), zoneId, zoneName, address, addressLabel, note, String(seq),
     body.mode === "delivery" ? etaMin : prep,
     prep, t + prep * 60000, history, t, t);
   const row = await getOrder(c.env, id);
