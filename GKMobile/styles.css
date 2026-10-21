@@ -421,3 +421,32 @@ body { background: #dcdcd8; }
 .courier-avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: #111; color: #e5a420; font-weight: 800; }
 .courier-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .courier-actions .compact { min-height: 38px; padding: 0 14px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+
+/* Touch, legibility and motion polish (Apple HIG + Emil Kowalski guidance). */
+:root { --ease-out: cubic-bezier(.23, 1, .32, 1); --ease-drawer: cubic-bezier(.32, .72, 0, 1); }
+
+/* Keep the look, grow the hit area to 44px. */
+.icon-button, .favorite-button, .add-product, .quantity-button, .sheet-close { position: relative; }
+.favorite-button::after, .add-product::after, .quantity-button::after { position: absolute; inset: -8px; content: ""; }
+.sheet-close::after, .icon-button::after { position: absolute; inset: -2px; content: ""; }
+.nav-button { min-height: 48px; }
+
+/* Smallest text moves up to a readable size. */
+.fineprint, .location-button small, .branch-switcher small, .branch-switcher-change, .section-heading h2 small,
+.restaurant-description, .restaurant-facts, .product-meta, .rating, .rating small, .delivery-choice small,
+.address-card small, .order-card-head, .order-card-body p, .eta-row small, .courier-copy small, .step-copy small { font-size: 12px; }
+.offer-tag, .discount-badge, .mini-chip, .status-pill { font-size: 11px; }
+.nav-button { font-size: 11px; }
+.eyebrow, .loyalty-card small { text-transform: none; letter-spacing: 0; }
+
+/* Press feedback and eased entrances. */
+.gold-button, .outline-button, .dark-button, .icon-button, .add-product, .favorite-button, .quantity-button { transition: transform .16s var(--ease-out), filter .15s, background-color .15s; }
+.gold-button:active, .outline-button:active, .dark-button:active, .icon-button:active, .add-product:active, .favorite-button:active, .quantity-button:active, .nav-button:active { transform: scale(.96); }
+.toast { transition: opacity .2s var(--ease-out), transform .2s var(--ease-out); }
+.overlay { animation: gk-fade .2s var(--ease-out); }
+.sheet { animation: gk-sheet-in .32s var(--ease-drawer); }
+.sheet.panel { animation: gk-panel-in .32s var(--ease-drawer); }
+@keyframes gk-fade { from { opacity: 0; } }
+@keyframes gk-sheet-in { from { transform: translateY(24px); opacity: 0; } }
+@keyframes gk-panel-in { from { transform: translateY(100%); } }
+@media (prefers-reduced-motion: reduce) { .overlay, .sheet, .sheet.panel { animation: none; } }
