@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap");
+﻿@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap");
 
 :root {
   color-scheme: light;
@@ -271,3 +271,8 @@ body { background: #dcdcd8; }
 .contact-row { grid-template-columns: 1fr 1fr; }
 .contact-row > :first-child { grid-column: 1 / -1; }
 .contact-row .gkc-badge { margin-left: 8px; }
+
+/* Premium gold gradient layer */
+:root { --gold-grad: linear-gradient(135deg, #f7cf62 0%, #e3a81f 55%, #c98d10 100%); }.gold-button, .step.done .step-dot, .step.current .step-dot, .chip[aria-pressed="true"], .nav-badge,
+.app-header .role-pill, .nav-button.active::before { background-image: var(--gold-grad); }
+.gold-button { box-shadow: 0 6px 16px rgba(201, 141, 16, .28); }

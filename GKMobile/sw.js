@@ -1,11 +1,11 @@
-const VERSION = "gk-mobile-v11";
+const VERSION = "gk-mobile-v13";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./data.js", "./store.js", "./app.js", "./manifest.webmanifest",
   "./assets/emblem-reference.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png"
 ];
 
 self.addEventListener("install", event => {
-  event.waitUntil(caches.open(VERSION).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(VERSION).then(cache => cache.addAll(SHELL.map(u => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", event => {
