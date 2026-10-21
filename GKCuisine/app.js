@@ -16,6 +16,9 @@
   let renderQueued = false;
   let toastTimer = 0;
   let refreshRunning = false;
+  let lastSignature = "";
+  let pointerDown = false;
+  let renderAfterPointer = false;
   let bootRefresh = true;
 
   const COLUMNS = [
@@ -161,7 +164,12 @@
       data.error = error.message || "Impossible de charger les données du serveur.";
     } finally {
       refreshRunning = false;
-      render();
+      // Re-rendering on every poll swaps the buttons under the finger and drops taps, so only render on real changes.
+      const signature = JSON.stringify([data.orders, data.couriers, data.settings, data.menu, data.error, data.loaded, data.loading, data.actionError]);
+      if (signature !== lastSignature || !app.firstElementChild) {
+        lastSignature = signature;
+        if (pointerDown) renderAfterPointer = true; else render();
+      }
     }
   }
 
@@ -627,6 +635,14 @@
     },
     "close-sheet"() { closeSheet(); }
   };
+
+  document.addEventListener("pointerdown", () => { pointerDown = true; });
+  const pointerUp = () => {
+    pointerDown = false;
+    if (renderAfterPointer) { renderAfterPointer = false; setTimeout(render, 60); }
+  };
+  document.addEventListener("pointerup", pointerUp);
+  document.addEventListener("pointercancel", pointerUp);
 
   document.addEventListener("click", event => {
     unlockAudio();
