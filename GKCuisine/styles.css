@@ -305,7 +305,3 @@ html, body { background: var(--bg); }
 .sheet.map-sheet { max-width: 720px; width: 100%; }
 .map-box { height: min(60vh, 460px); margin: 10px 0 14px; }
 .dispatch .track-btn { margin-top: 6px; }
-
-/* Premium gold gradient layer */
-:root { --gold-grad: linear-gradient(135deg, #f7cf62 0%, #e3a81f 55%, #c98d10 100%); }.btn.primary, .chip-btn.active, .seg button.active, .top .pill-black, .col-tab.active b { background-image: var(--gold-grad); }
-.btn.primary { box-shadow: 0 6px 16px rgba(201, 141, 16, .28); }
