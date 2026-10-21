@@ -1,4 +1,4 @@
-import { fail, now, randomDigits, randomId, str, numv, jparse, haversineKm, normPhone } from "./lib.js";
+import { fail, now, randomDigits, randomId, str, numv, jparse, haversineKm, normPhone, safeEqual } from "./lib.js";
 import { all, first, run, stmt, batch, getSetting, setSetting, audit, notify, need } from "./core.js";
 import { courierContact } from "./chat.js";
 
@@ -354,7 +354,7 @@ export async function courierStep(c) {
     await notifyOrder(c.env, row, `Commande #${row.seq} en route`, "Votre livreur est en chemin.");
   } else if (c.params.step === "delivered") {
     if (row.status !== "enroute") fail(409, "invalid_status", "La commande n'est pas en route.");
-    if (!(await import("./lib.js")).safeEqual(str(c.body.code, { max: 8 }), row.delivery_code)) fail(400, "invalid_code", "Code de livraison incorrect.");
+    if (!(await safeEqual(str(c.body.code, { max: 8 }), row.delivery_code))) fail(400, "invalid_code", "Code de livraison incorrect.");
     await updateStatus(c.env, row, "delivered", c.user.id, { delivered_at: now(), courier_step: 3, dispatch_state: "done", courier_earning: row.fee || 0 });
     await notifyOrder(c.env, row, `Commande #${row.seq} livrée`, "Bonne dégustation !");
   } else fail(404, "not_found", "Étape inconnue.");

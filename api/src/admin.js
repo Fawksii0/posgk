@@ -107,7 +107,7 @@ export async function categorySave(c) {
 export async function categoryDelete(c) {
   need(c.user, "menu.delete");
   const cur = await first(c.env, "SELECT * FROM menu_categories WHERE id = ?", c.params.id); if (!cur) fail(404, "not_found", "Catégorie introuvable.");
-  if ((await first(c.env, "SELECT COUNT(*) AS n FROM menu_items WHERE category_id = ?", cur.id)).n) fail(409, "in_use", "Cette catégorie contient encore des produits.");
+  if (Number((await first(c.env, "SELECT COUNT(*) AS n FROM menu_items WHERE category_id = ?", cur.id)).n)) fail(409, "in_use", "Cette catégorie contient encore des produits.");
   await run(c.env, "DELETE FROM menu_categories WHERE id = ?", cur.id);
   await audit(c.env, c.user, "Catégorie supprimée", cur.name);
   return { ok: true };

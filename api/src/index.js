@@ -53,6 +53,7 @@ route("GET", "/api/zones", async (c) => ({
   zones: (await all(c.env, 'SELECT id, name, fee, min_order AS "min", eta_min AS "etaMin", eta_max AS "etaMax", free_from AS "freeFrom" FROM zones WHERE enabled = 1 ORDER BY fee, name'))
 }), { public: true });
 route("GET", "/api/admin/zones", admin.zonesList);
+route("POST", "/api/admin/zones", admin.zoneSave, { body: true });
 route("PUT", "/api/admin/zones/(?<id>[^/]+)", admin.zoneSave, { body: true });
 route("DELETE", "/api/admin/zones/(?<id>[^/]+)", admin.zoneDelete);
 route("POST", "/api/promos/validate", admin.promoValidate, { public: true, body: true });
