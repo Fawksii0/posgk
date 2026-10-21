@@ -305,3 +305,14 @@ html, body { background: var(--bg); }
 .sheet.map-sheet { max-width: 720px; width: 100%; }
 .map-box { height: min(60vh, 460px); margin: 10px 0 14px; }
 .dispatch .track-btn { margin-top: 6px; }
+
+/* Press feedback, readable text and eased sheets (Apple HIG + Emil Kowalski guidance). */
+:root { --ease-out: cubic-bezier(.23, 1, .32, 1); }
+.btn, .icon-btn, .tab, .chip-btn, .reason-btn, .stock-tile { transition: transform .16s var(--ease-out), background-color .15s, border-color .15s; }
+.btn:active, .icon-btn:active, .tab:active, .chip-btn:active, .reason-btn:active, .stock-tile:active { transform: scale(.97); }
+.toast { transition: opacity .2s var(--ease-out), transform .2s var(--ease-out); }
+.sheet-backdrop { animation: gk-fade .2s var(--ease-out); }
+.sheet { animation: gk-pop .24s var(--ease-out); }
+@keyframes gk-fade { from { opacity: 0; } }
+@keyframes gk-pop { from { opacity: 0; transform: translateY(14px) scale(.98); } }
+@media (prefers-reduced-motion: reduce) { .sheet-backdrop, .sheet { animation: none; } .btn, .icon-btn, .tab, .chip-btn, .reason-btn, .stock-tile, .toast { transition: none; } }

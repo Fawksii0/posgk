@@ -271,3 +271,13 @@ body { background: #dcdcd8; }
 .contact-row { grid-template-columns: 1fr 1fr; }
 .contact-row > :first-child { grid-column: 1 / -1; }
 .contact-row .gkc-badge { margin-left: 8px; }
+
+/* Readable text, press feedback and eased sheets (Apple HIG + Emil Kowalski guidance). */
+:root { --ease-out: cubic-bezier(.23, 1, .32, 1); --ease-drawer: cubic-bezier(.32, .72, 0, 1); }
+.branch-name, .section-heading small, .fineprint, .row-copy small, .stat small, .notif small, .map-label, .chart text { font-size: 12px; }
+.role-pill, .badge, .nav-button { font-size: 11px; }
+.role-pill { letter-spacing: .02em; }
+.gold-button, .chip, .nav-button { transition: transform .16s var(--ease-out), filter .15s, background-color .15s, color .15s; }
+.gold-button:active, .chip:active, .nav-button:active { transform: scale(.97); }
+.sheet { animation: rise .32s var(--ease-drawer); }
+.toast { transition: opacity .2s var(--ease-out), transform .2s var(--ease-out); }

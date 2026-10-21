@@ -422,3 +422,18 @@ a { color: inherit; text-decoration: none; }
 .login-logo { box-shadow: none; }
 
 .live-slot { height: calc(100vh - 210px); min-height: 420px; }
+
+/* Larger targets, readable text, press feedback and eased dialogs (Apple HIG + Emil Kowalski guidance). */
+:root { --ease-out: cubic-bezier(.23, 1, .32, 1); }
+.btn-sm { min-height: 36px; font-size: 13px; }
+.nav-group, .pop-title, .tbl th, .tbl.stack td::before, .role-badge { text-transform: none; letter-spacing: 0; }
+.sb-brand span, .sb-foot, .user-chip .who small, .branch-switch-wrap, .pop-title, .tbl th, .matrix th, .chart text, .pill, .product-img .disc, .tbl.stack td::before { font-size: 12px; }
+.nav-group, .role-badge, .icon-button .dot { font-size: 11px; }
+.btn, .btn-gold, .btn-dark, .btn-danger, .nav-item { transition: transform .16s var(--ease-out), filter .15s, background-color .15s; }
+.btn:active, .btn-gold:active, .btn-dark:active, .btn-danger:active { transform: scale(.97); }
+.modal-overlay { animation: fade .2s var(--ease-out); }
+.modal { animation: gk-pop .24s var(--ease-out); }
+@keyframes gk-pop { from { opacity: 0; transform: translateY(12px) scale(.98); } }
+.toast { animation-timing-function: var(--ease-out); }
+.sidebar { transition-timing-function: cubic-bezier(.32, .72, 0, 1); }
+@media (prefers-reduced-motion: reduce) { .modal, .modal-overlay, .toast { animation: none; } .btn, .btn-gold, .btn-dark, .btn-danger, .nav-item, .sidebar { transition: none; } }
