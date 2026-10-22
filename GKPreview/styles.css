@@ -234,3 +234,18 @@ body { background: #e9e3d2; }
 .compare th { background: var(--ink); color: #fff; font-weight: 600; }
 .compare td:last-child { background: var(--gold-soft); font-weight: 600; }
 .tabs button { white-space: nowrap; }
+
+/* ---------- ideas tab ---------- */
+.opts { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 4px; }
+.opts span { padding: 10px 14px; border: 1.5px solid var(--line); border-radius: 12px; background: #fff; font: 600 14px "Segoe UI", sans-serif; }
+.opts span.on { border-color: var(--gold-deep); background: var(--gold-soft); }
+.build-price { display: flex; justify-content: space-between; align-items: baseline; margin: 10px 0 0; font-family: var(--serif); font-size: 26px; font-weight: 700; }
+.scoops { display: flex; gap: 10px; margin: 10px 0; }
+.scoop { flex: 1; height: 70px; border-radius: 40px 40px 14px 14px; display: grid; place-items: end center; padding-bottom: 8px; font: 700 11px "Segoe UI", sans-serif; color: #3a2c10; border: 1.5px solid rgba(0,0,0,.08); }
+.flav { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px dashed #e0d6b8; }
+.flav i { width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid rgba(0,0,0,.1); flex: none; }
+.flav b { flex: 1; font-family: var(--serif); font-size: 16px; }
+.stamps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 14px 0; }
+.stamps span { display: grid; place-items: center; aspect-ratio: 1; border: 2px dashed #d8cda9; border-radius: 50%; color: #c2b68f; font: 700 13px "Consolas", monospace; }
+.stamps span.f { border: 2px solid var(--gold-deep); background: var(--gold-soft); color: var(--gold-deep); transform: rotate(-6deg); }
+.stamps span.gift { border-color: var(--ink); color: var(--ink); background: var(--gold); }
