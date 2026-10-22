@@ -48,6 +48,12 @@ function formatItems(items) {
   }).filter(Boolean).join(", ");
 }
 
+function coordsOf(lat, lng) {
+  if (lat === null || lat === undefined || lng === null || lng === undefined || lat === "" || lng === "") return "";
+  const a = Number(lat), b = Number(lng);
+  return Number.isFinite(a) && Number.isFinite(b) && (a || b) ? `${a},${b}` : "";
+}
+
 function missionFromOrder(order) {
   const status = order.status;
   const apiStep = Number(order.courier_step) || 0;
@@ -59,6 +65,10 @@ function missionFromOrder(order) {
     zone: order.zone_name || "",
     address: [order.address_label, order.address].filter(Boolean).join(" · "),
     km: Number.isFinite(Number(order.dispatch_km)) && order.dispatch_km !== null ? Number(order.dispatch_km) : null,
+    rawAddress: String(order.address || order.address_label || "").trim(),
+    coords: coordsOf(order.lat ?? order.latitude ?? order.dest_lat, order.lng ?? order.lon ?? order.longitude ?? order.dest_lng),
+    pickupAddress: String(order.pickup_address || order.restaurant_address || order.branch_address || "").trim(),
+    pickupCoords: coordsOf(order.pickup_lat ?? order.restaurant_lat ?? order.branch_lat, order.pickup_lng ?? order.restaurant_lng ?? order.branch_lng),
     items: formatItems(order.items),
     total: Number(order.total) || 0,
     payment: String(order.payment || "").toLowerCase() === "cash" ? "cash" : "online",

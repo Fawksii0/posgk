@@ -118,6 +118,7 @@
   async function refreshData() {
     if (!state.session || state.session.mustChange || refreshRunning) return;
     refreshRunning = true;
+    let freshIds = [];
     if (!data.loaded) {
       data.loading = true;
       render();
@@ -156,6 +157,7 @@
         if (fresh.length) {
           beep();
           toast(`Nouvelle commande ${fresh.join(", ")}`);
+          freshIds = fresh;
         }
       }
       bootRefresh = false;
@@ -170,6 +172,7 @@
         lastSignature = signature;
         if (pointerDown) renderAfterPointer = true; else render();
       }
+      syncAlert(freshIds);
     }
   }
 
@@ -256,7 +259,15 @@
     return "";
   }
 
+  const ageClass = ms => (ms < 10 * 60000 ? "age-ok" : ms <= 15 * 60000 ? "age-warn" : "age-late");
+  function elapsedText(ts) {
+    const secs = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+    if (secs < 3600) return `${String(Math.floor(secs / 60)).padStart(2, "0")}:${String(secs % 60).padStart(2, "0")}`;
+    return `${Math.floor(secs / 3600)} h ${String(Math.floor((secs % 3600) / 60)).padStart(2, "0")} min`;
+  }
+
   function orderCard(order, couriers) {
+    const timed = ["pending", "preparing", "ready"].includes(order.status);
     const cashier = isCashier();
     const isNew = order.status === "pending";
     const lines = order.items.map(item => `<li><span class="qty">${item.qty}×</span><span class="item-main"><b>${esc(item.name)}</b>${item.size ? ` <span class="muted">${esc(item.size)}</span>` : ""}${(item.extras || []).length ? `<span class="extras">+ ${item.extras.map(esc).join(", ")}</span>` : ""}</span><span class="price">${money(item.price * item.qty)}</span></li>`).join("");
@@ -278,8 +289,8 @@
     } else if (cashier) {
       actions = `<div class="btn-row"><button class="btn" data-action="reprint" data-id="${esc(order.id)}">${icon("printer")}Réimprimer</button></div>`;
     }
-    return `<article class="card ${isNew ? "is-new" : ""} mode-${order.mode}" data-order="${esc(order.id)}">
-      <header class="card-head"><div><span class="order-no">${esc(order.id)}</span> ${statusPill(order)}</div><span class="elapsed" data-since="${order.createdAt}">${minutesSince(order.createdAt)} min</span></header>
+    return `<article class="card ${isNew ? "is-new" : ""} mode-${order.mode} ${timed ? `timed ${ageClass(Date.now() - order.createdAt)}` : ""}" data-order="${esc(order.id)}" ${timed ? `data-age-since="${order.createdAt}"` : ""}>
+      <header class="card-head"><div><span class="order-no">${esc(order.id)}</span> ${statusPill(order)}</div>${timed ? `<span class="elapsed" data-timer="${order.createdAt}" aria-label="Temps écoulé">${elapsedText(order.createdAt)}</span>` : `<span class="elapsed" data-since="${order.createdAt}">${minutesSince(order.createdAt)} min</span>`}</header>
       <div class="card-meta"><span class="who-first">${icon("user")}${esc(firstName(order))}</span><span class="mode-chip ${order.mode}">${icon(order.mode === "delivery" ? "bike" : "store")}${order.mode === "delivery" ? "Livraison" : "À emporter"}</span></div>
       <ul class="lines">${lines}</ul>
       ${order.note ? `<p class="note">${icon("alert")}<span>${esc(order.note)}</span></p>` : ""}
@@ -369,6 +380,7 @@
     renderQueued = false;
     ui.dirty = false;
     if (!state.session) {
+      syncAlert();
       app.innerHTML = renderLogin();
       document.title = baseTitle;
       return;
@@ -633,6 +645,7 @@
       const order = data.orders.find(item => item.id === el.dataset.id);
       if (order) GKReceipt.printTicket(receiptDoc(order), receiptOpts(el.dataset.reprint === "1"));
     },
+    "alert-dismiss"(el) { alertQueue = alertQueue.filter(id => id !== el.dataset.id); syncAlert(); },
     "close-sheet"() { closeSheet(); }
   };
 
@@ -749,10 +762,65 @@
       element.classList.toggle("late", left < 0);
     });
     app.querySelectorAll("[data-since]").forEach(element => { element.textContent = `${minutesSince(Number(element.dataset.since))} min`; });
+    tickTimers();
+  }
+
+  function tickTimers() {
+    app.querySelectorAll("[data-timer]").forEach(element => {
+      const text = elapsedText(Number(element.dataset.timer));
+      if (element.textContent !== text) element.textContent = text;
+    });
+    app.querySelectorAll("[data-age-since]").forEach(card => {
+      const cls = ageClass(Date.now() - Number(card.dataset.ageSince));
+      if (!card.classList.contains(cls)) {
+        card.classList.remove("age-ok", "age-warn", "age-late");
+        card.classList.add(cls);
+      }
+    });
+  }
+
+  /* ---------- full-screen new-order alert (lives outside #app so polling never rebuilds it) ---------- */
+
+  const alertRoot = document.createElement("div");
+  alertRoot.id = "alert-root";
+  document.body.appendChild(alertRoot);
+  let alertQueue = [];
+  let alertShownId = null;
+  let alertShownCount = 0;
+
+  function syncAlert(freshIds = []) {
+    alertQueue = [...alertQueue, ...freshIds.filter(id => !alertQueue.includes(id))]
+      .filter(id => data.orders.some(order => order.id === id && order.status === "pending"));
+    if (!state.session || state.session.mustChange || !alertQueue.length) {
+      if (alertShownId) { alertRoot.innerHTML = ""; alertShownId = null; }
+      return;
+    }
+    const order = findOrder(alertQueue[0]);
+    if (alertShownId === order.id && alertShownCount === alertQueue.length) return;
+    alertShownId = order.id;
+    alertShownCount = alertQueue.length;
+    const cashier = isCashier();
+    const lines = order.items.map(item => `<li><span class="qty">${item.qty}×</span><span><b>${esc(item.name)}</b>${item.size ? ` <span class="muted">${esc(item.size)}</span>` : ""}${(item.extras || []).length ? `<span class="extras">+ ${item.extras.map(esc).join(", ")}</span>` : ""}</span></li>`).join("");
+    const more = alertQueue.length - 1;
+    alertRoot.innerHTML = `<div class="new-alert" role="alertdialog" aria-modal="true" aria-labelledby="na-title">
+      <div class="na-body">
+        <p class="na-kicker">Nouvelle commande</p>
+        <h2 id="na-title" class="na-no">${esc(order.id)}</h2>
+        <p class="na-type">${icon(order.mode === "delivery" ? "bike" : "store")}${order.mode === "delivery" ? "Livraison" : "À emporter"} · ${esc(firstName(order))} · <b class="na-total">${money(order.total)}</b></p>
+        <ul class="na-lines">${lines}</ul>
+        ${order.note ? `<p class="note">${icon("alert")}<span>${esc(order.note)}</span></p>` : ""}
+        ${more ? `<p class="na-more">${more} autre${more > 1 ? "s" : ""} en attente</p>` : ""}
+      </div>
+      <div class="na-actions">${cashier
+        ? `<button class="btn na-accept" data-action="accept" data-id="${esc(order.id)}">${icon("check")}Accepter</button><button class="btn na-refuse" data-action="refuse" data-id="${esc(order.id)}">${icon("close")}Refuser</button>`
+        : `<button class="btn na-accept" data-action="alert-dismiss" data-id="${esc(order.id)}">${icon("check")}Compris</button>`}</div>
+    </div>`;
+    alertRoot.querySelector(".na-accept")?.focus();
   }
 
   GKPrinter.onChange(() => schedule());
 
+  setInterval(tickTimers, 1000);
   setInterval(() => {
     tickDom();
     if (state.session && !state.session.mustChange && !refreshRunning) refreshData();

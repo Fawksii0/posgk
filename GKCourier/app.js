@@ -149,6 +149,16 @@ function missionCard(m) {
 
 const offerLeft = m => Math.max(0, Math.ceil((m.expiresAt - Date.now()) / 1000));
 
+function todayTiles() {
+  const done = filterHistory("today").filter(h => h.status === "delivered");
+  const gains = done.reduce((t, h) => t + (Number(h.earning) || 0), 0);
+  return `
+    <div class="today-tiles" aria-label="Résumé du jour">
+      <div><b>${done.length}</b><small>Courses livrées</small></div>
+      <div><b>${gains} DH</b><small>Gains du jour</small></div>
+    </div>`;
+}
+
 function missionsView() {
   if (state.active) return activeView();
   const body = !state.online ? `
@@ -169,6 +179,7 @@ function missionsView() {
         <small>${state.online ? "Vous recevez des missions" : "Vous ne recevez aucune mission"}</small></div>
       <button class="switch" type="button" role="switch" aria-checked="${state.online}" aria-label="Statut en ligne" data-act="toggle-online"${state.actionBusy ? " disabled" : ""}></button>
     </div>
+    ${todayTiles()}
     ${state.online ? `<div class="section-heading"><h2>Missions disponibles</h2><small>${state.missions.length}</small></div>` : ""}
     ${state.offersError && state.missions.length ? `<p class="form-error" role="alert">${esc(state.offersError)} <button class="outline-button" type="button" data-act="refresh">Réessayer</button></p>` : ""}
     ${body}`;
@@ -194,16 +205,21 @@ function activeView() {
   const waiting = m.step === 2 && m.orderStatus !== "ready";
   const action = m.step < 4
     ? `<button class="gold-button" type="button" data-act="advance"${waiting || state.actionBusy ? " disabled" : ""}>${waiting ? "En attente de la cuisine…" : `${STEP_BUTTONS[m.step]} ${icon("arrowRight")}`}</button>`
-    : `<form id="deliver-form" class="card" novalidate>
-        <h3>Confirmer la livraison</h3>
-        <div class="field" style="margin-top:10px">
-          <label for="code">Code de livraison du client</label>
-          <input id="code" class="pin-input" name="code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="••••" />
+    : `<button class="gold-button" type="submit" form="deliver-form">${icon("check")} Confirmer la livraison</button>`;
+  const deliverForm = m.step === 4 ? `
+      <form id="deliver-form" class="card delivery-code" novalidate>
+        <h3>Code de livraison</h3>
+        <div class="field">
+          <label for="code">Demandez au client le code de sa commande</label>
+          <input id="code" class="pin-input code-input" name="code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="••••" />
         </div>
         ${m.payment === "cash" ? `<label class="check-row"><input id="cash-ok" type="checkbox" /> Espèces encaissées (${money(m.total)})</label>` : ""}
         <p id="deliver-error" class="form-error" role="alert"></p>
-        <button class="gold-button" type="submit">${icon("check")} Livré</button>
-      </form>`;
+      </form>` : "";
+  const toPickup = m.step < 4;
+  const dest = toPickup ? (m.pickupCoords || m.pickupAddress) : (m.coords || m.rawAddress);
+  const mapsBtn = dest
+    ? `<a class="outline-button maps-button" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}" target="_blank" rel="noopener">${icon("navigate")} Ouvrir Maps</a>` : "";
   return `
     <h1 class="screen-title">Mission ${esc(m.id)}</h1>
     <ol class="stepper" aria-label="Progression">${stepper}</ol>
@@ -218,12 +234,14 @@ function activeView() {
         <div><span>Paiement</span><span>${m.payment === "cash" ? "Espèces" : "Payé en ligne"}</span></div>
       </div>
       <div class="contact-row">
+        ${mapsBtn}
         <button class="outline-button" type="button" data-act="open-chat" data-id="${esc(m.id)}" data-name="${esc(m.customer)}">${icon("chat")} Message${chatUnread[m.id] ? `<span class="gkc-badge">${chatUnread[m.id]}</span>` : ""}</button>
         ${m.phone ? `<a class="outline-button" href="${telLink(m.phone)}" aria-label="Appeler ${esc(m.customer)}">${icon("phone")} Appeler</a>
         <a class="outline-button" href="${waLink(m.phone)}" target="_blank" rel="noopener" aria-label="WhatsApp ${esc(m.customer)}">${icon("chat")} WhatsApp</a>` : ""}
       </div>
       ${cash}
     </div>
+    ${deliverForm}
     <div class="sticky-actions">
       ${action}
     </div>`;
@@ -486,7 +504,7 @@ document.addEventListener("submit", async event => {
     }
   } else if (form.id === "deliver-form") {
     const earning = state.active.earning;
-    const submit = form.querySelector("[type=submit]");
+    const submit = document.querySelector('[type=submit][form="deliver-form"]');
     submit.disabled = true;
     try {
       await completeMission(form.code.value.trim(), form["cash-ok"]?.checked ?? true);

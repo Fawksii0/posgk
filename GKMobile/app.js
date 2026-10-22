@@ -1,4 +1,4 @@
-const main = document.querySelector("#app-main");
+﻿const main = document.querySelector("#app-main");
 const overlay = document.querySelector("#overlay");
 const sheet = document.querySelector("#sheet");
 let toastTimer;
@@ -108,7 +108,55 @@ async function loadBranches() {
   } finally {
     state.branchLoading = false;
   }
+  if (!state.selectedBranchId && state.branches.length) {
+    const pick = state.branches.find(branch => /g\s*&\s*k/i.test(branch.name)) || state.branches[0];
+    await chooseBranch(pick.id);
+    return;
+  }
   render();
+}
+
+function lastOrderToReorder() {
+  const order = state.orders.find(item => item.status === "completed" && item.items.length);
+  if (!order) return null;
+  const lines = order.items.map(item => {
+    const product = products.find(entry => entry.id === item.id);
+    if (!product || !product.available) return null;
+    const size = product.sizes.find(entry => entry.name === item.detail) || product.sizes[0];
+    const names = (item.extras || []).map(extra => (typeof extra === "string" ? extra : extra?.name));
+    const extras = product.extras.filter(extra => names.includes(extra.name));
+    return { product, size, extras, quantity: item.quantity };
+  }).filter(Boolean);
+  return lines.length ? { order, lines } : null;
+}
+
+function renderReorder() {
+  const found = lastOrderToReorder();
+  if (!found) return "";
+  const first = found.lines[0].product;
+  const total = found.lines.reduce((sum, line) => sum + lineUnit(line) * line.quantity, 0);
+  return `<button class="reorder-card" type="button" data-reorder="${escapeHtml(found.order.id)}">
+    ${first.image ? `<img src="${escapeHtml(first.image)}" alt="" />` : ""}
+    <span class="reorder-copy"><strong>Commander à nouveau</strong><span>${escapeHtml(orderSummary(found.order))} · ${formatPrice(total)}</span></span>
+    <span class="reorder-go">Ajouter</span>
+  </button>`;
+}
+
+function updateLiveBar() {
+  const bar = document.querySelector("#live-bar");
+  if (!bar) return;
+  const parts = [];
+  const active = state.orders.find(order => order.status === "active");
+  const tracking = state.view === "orders" && state.trackingId;
+  if (active && !tracking) {
+    parts.push(`<button type="button" data-live="track" data-order="${escapeHtml(active.id)}"><span class="live-dot"></span><span class="live-copy"><strong>Commande n° ${escapeHtml(active.seq || active.id)}</strong><small>${escapeHtml(stagesFor(active)[active.stage]?.title || "En cours")}</small></span><span class="live-go">Suivre</span></button>`);
+  }
+  if (state.cart.length && ["home", "menu"].includes(state.view)) {
+    const count = cartCount();
+    parts.push(`<button type="button" data-live="cart"><span class="live-dot"></span><span class="live-copy"><strong>Mon ticket · ${count} article${count > 1 ? "s" : ""}</strong><small>${formatPrice(cartSubtotal())}</small></span><span class="live-go">Voir</span></button>`);
+  }
+  bar.innerHTML = parts.join("");
+  bar.hidden = !parts.length;
 }
 
 function selectedBranch() {
@@ -168,6 +216,7 @@ async function refreshOrders() {
   }
   state.ordersLoading = true;
   state.ordersError = "";
+  const hadReorder = !!lastOrderToReorder();
   if (state.view === "orders") render();
   try {
     const result = await GKApi.get("/api/orders", "client");
@@ -183,6 +232,8 @@ async function refreshOrders() {
     state.ordersLoading = false;
   }
   if (state.view === "orders") render();
+  else if (state.view === "home" && hadReorder !== !!lastOrderToReorder()) render();
+  else updateLiveBar();
 }
 
 let chatUnread = {};
@@ -343,6 +394,7 @@ function renderHome() {
       <span><small>Vous commandez chez</small><strong>${escapeHtml(branch?.name || "G&K")}</strong></span>
       <span class="branch-switcher-change">Changer</span>
     </button>
+    ${renderReorder()}
     ${renderSearch("home-search", "Rechercher un plat, une envie…")}
     ${sectionHead("Explorer les catégories", seeAll)}
     ${renderCategories()}
@@ -479,7 +531,7 @@ function renderTracking(order) {
     <div class="back-row"><button class="icon-button" type="button" data-back-orders aria-label="Retour aux commandes">${icon("chevronLeft")}</button><h1 class="screen-title" id="tracking-heading">Suivi de commande</h1></div>
     ${state.ordersError ? `<p class="cart-notice" role="alert">${escapeHtml(state.ordersError)}</p>` : ""}
     <article class="tracking-card">
-      <div class="eta-row"><div><small>${done || ended ? "Statut" : "Estimation du restaurant"}</small><strong>${etaText}</strong></div><span class="status-pill ${order.status}">Commande #${escapeHtml(order.seq || order.id)}</span></div>${order.status === "active" && order.mode === "delivery" && order.delivery_code ? `<p class="cart-notice">Code de livraison � donner au livreur : <strong>${escapeHtml(order.delivery_code)}</strong></p>` : ""}
+      <div class="eta-row"><div><small>${done || ended ? "Statut" : "Estimation du restaurant"}</small><strong>${etaText}</strong></div><span class="status-pill ${order.status}">Commande #${escapeHtml(order.seq || order.id)}</span></div>${order.status === "active" && order.mode === "delivery" && order.delivery_code ? `<p class="cart-notice">Code de livraison à donner au livreur : <strong>${escapeHtml(order.delivery_code)}</strong></p>` : ""}
       ${order.status === "refused" ? `<p class="cart-notice">Commande refusée par la cuisine. Motif : ${escapeHtml(order.refusedReason || "non précisé")}.</p>` : ""}
       ${ended ? "" : `<ol class="step-list">${steps.map((step, index) => {
         const status = index < order.stage || (done && index === steps.length - 1) ? "done" : index === order.stage ? "current" : "";
@@ -537,6 +589,7 @@ function updateChrome() {
   const count = document.querySelector("#nav-cart-count");
   count.textContent = String(cartCount());
   count.hidden = cartCount() === 0;
+  updateLiveBar();
 }
 
 function render() {
@@ -801,6 +854,14 @@ main.addEventListener("click", event => {
   const closest = selector => event.target.closest(selector);
   let el;
   if ((el = closest("[data-branch]"))) { void chooseBranch(el.dataset.branch); return; }
+  if (closest("[data-reorder]")) {
+    const found = lastOrderToReorder();
+    if (!found) return;
+    found.lines.forEach(line => addToCart(line.product, line.size, line.extras, line.quantity));
+    saveState();
+    showToast("Ajouté à votre panier");
+    return render();
+  }
   if ((el = closest("[data-view]"))) return setView(el.dataset.view);
   if ((el = closest("[data-category]"))) { state.category = el.dataset.category; return render(); }
   if ((el = closest("[data-favorite]"))) {
@@ -1055,7 +1116,18 @@ setInterval(() => {
 setInterval(() => {
   if (state.view === "orders" && state.trackingId) void refreshTrackedOrder();
   else if (state.view === "orders" && state.user) void refreshOrders();
+  else if (!document.hidden && state.user && state.orders.some(order => order.status === "active")) void refreshOrders();
 }, 8000);
+document.querySelector("#live-bar").addEventListener("click", event => {
+  const button = event.target.closest("[data-live]");
+  if (!button) return;
+  if (button.dataset.live === "cart") return setView("cart");
+  state.trackingId = button.dataset.order;
+  goTo("orders", { top: true });
+  state.trackingId = button.dataset.order;
+  render();
+  void refreshTrackedOrder();
+});
 main.addEventListener("input", event => {
   if (event.target.id === "cart-note") { state.cartNote = event.target.value; saveState(); }
   if (event.target.id === "cart-phone") state.orderPhone = event.target.value;

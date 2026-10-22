@@ -1,4 +1,5 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap");
 
 :root {
   color-scheme: light;
@@ -281,3 +282,25 @@ body { background: #dcdcd8; }
 .gold-button:active, .chip:active, .nav-button:active { transform: scale(.97); }
 .sheet { animation: rise .32s var(--ease-drawer); }
 .toast { transition: opacity .2s var(--ease-out), transform .2s var(--ease-out); }
+
+/* ---------- redesign: warm neutrals, serif display, one main action ---------- */
+:root { --ink: #231d12; --muted: #6f6650; --line: #e6dfcc; --bg: #f8f4e9; --gold: #e3a81f; --gold-deep: #a8740a; --gold-soft: #fbf0d3; --serif: "Fraunces", Georgia, serif; }
+body, .app-frame { background: var(--bg); }
+h1, h2, h3, .screen-title, .earning, .row-amount, .mission-id, .today-tiles b { font-family: var(--serif); font-weight: 700; }
+.role-pill { text-transform: none; letter-spacing: 0; }
+.badge, .badge.dark, .nav-button, .step { font-size: 12px; }
+.step-dot { font-family: inherit; }
+.card, .mission, .online-card { box-shadow: none; border: 1px solid var(--line); }
+.gold-button { min-height: 52px; color: var(--ink); box-shadow: none; font-size: 16px; }
+.outline-button { min-height: 48px; border-color: var(--line); color: var(--ink); background: #fff; }
+.today-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+.today-tiles div { padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: #fff; text-align: center; }
+.today-tiles b { display: block; font-size: 24px; color: var(--ink); }
+.today-tiles small { color: var(--muted); font-size: 12px; }
+#app-main:has(.sticky-actions) { padding-bottom: calc(150px + var(--safe-bottom)); }
+.sticky-actions { position: fixed; z-index: 5; bottom: calc(66px + var(--safe-bottom)); left: 50%; width: min(100%, 480px); margin: 0; padding: 10px 20px; border-top: 1px solid var(--line); background: var(--bg); transform: translateX(-50%); }
+.contact-row .maps-button { border-color: var(--gold); color: var(--ink); background: var(--gold-soft); }
+.contact-row > :first-child { grid-column: 1 / -1; }
+.delivery-code .field label { color: var(--muted); font-size: 13px; }
+.pin-input.code-input { min-height: 72px; border: 2px solid var(--line); border-radius: 16px; font-family: var(--serif); font-size: 36px !important; font-weight: 700; letter-spacing: .5em; text-indent: .5em; }
+.pin-input.code-input:focus { border-color: var(--gold); }

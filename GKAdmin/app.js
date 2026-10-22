@@ -30,7 +30,7 @@
   const todayISO = () => new Date().toISOString().slice(0, 10);
 
   const ROUTES = {
-    dashboard: { title: "Tableau de bord", icon: "grid", perm: "stats" },
+    dashboard: { title: "Aujourd'hui", icon: "grid", perm: "stats" },
     commandes: { title: "Commandes", icon: "receipt" },
     factures: { title: "Factures", icon: "invoice", perm: "invoices" },
     menu: { title: "Menu", icon: "utensils" },
@@ -373,25 +373,53 @@
   }
 
   function dashboardPage() {
-    const t = Store.dayStats(0), y = Store.dayStats(1);
-    const couriers = S().couriers.filter((c) => c.active);
-    const online = couriers.filter((c) => ["online", "mission"].includes(Store.courierStatus(c)));
-    const mission = couriers.filter((c) => Store.courierStatus(c) === "mission").length;
-    const kpi = (ic, label, value, foot) => `<div class="card kpi"><div class="kpi-top"><span>${label}</span><span class="kpi-icon">${icon(ic)}</span></div><div class="kpi-value">${value}</div>${foot}</div>`;
-    const recent = [...S().orders].sort((a, b) => b.createdAt - a.createdAt).slice(0, 6);
-    const top = Store.topProducts(5); const topMax = Math.max(1, ...top.map((p) => p.qty));
-    const alerts = Store.alerts();
-    const logs = S().audit.slice(0, 5);
-    return `<div class="grid grid-kpi">
-      ${kpi("cash", "CA du jour", `${nf.format(Math.round(t.revenue))} <small>MAD</small>`, deltaHTML(t.revenue, y.revenue))}
-      ${kpi("receipt", "Commandes", String(t.count), deltaHTML(t.count, y.count))}
-      ${kpi("box", "Panier moyen", `${nf.format(Math.round(t.avg))} <small>MAD</small>`, deltaHTML(t.avg, y.avg))}
-      ${kpi("bike", "Livreurs en ligne", `${online.length}<small> / ${couriers.length}</small>`, `<span class="delta flat">${mission} en mission</span>`)}</div>
-      <div class="grid grid-main">${revenueChart()}${statusDonut()}</div>
-      <div class="grid grid-main"><div class="card"><div class="card-head"><h3>Commandes récentes</h3><a class="link-btn" href="#/commandes">Tout voir</a></div><ul class="list">${recent.map((o) => `<li class="btn-li"><button class="pop-item" data-action="open-order" data-id="${esc(o.id)}"><span class="grow" style="flex:1;min-width:0"><b>${esc(o.id)} · ${esc(o.customerName)}</b><small class="muted" style="display:block">${o.mode === "livraison" ? "Livraison" : "À emporter"} · ${esc(ago(o.createdAt))}</small></span><span class="num"><b>${esc(money(o.total))}</b></span>${statusPill(o.status)}</button></li>`).join("")}</ul></div>
-        <div style="display:grid;gap:16px;align-content:start"><div class="card"><div class="card-head"><h3>Alertes</h3></div>${alerts.length ? alerts.map((a) => `<button class="alert-item ${a.tone}" data-action="goto" data-href="${esc(a.link)}">${icon(a.icon)}<span>${esc(a.text)}</span></button>`).join("") : `<p class="muted">Tout est sous contrôle.</p>`}</div>
-        <div class="card"><div class="card-head"><h3>Top 5 produits</h3><small>7 jours</small></div><ol class="rank">${top.map((p, i) => `<li><span class="n">${i + 1}</span><div><b>${esc(p.name)}</b><div class="bar-track"><div class="bar-fill" style="width:${Math.round((p.qty / topMax) * 100)}%"></div></div></div><span class="muted small">${p.qty} vendus</span></li>`).join("")}</ol></div></div></div>
-      <div class="card"><div class="card-head"><h3>Activité récente</h3><a class="link-btn" href="#/activite">Journal complet</a></div>${logs.map(logItem).join("")}</div>`;
+    const start = Store.dayStart(Date.now());
+    const todayOrders = S().orders.filter((o) => Store.dayStart(o.createdAt) === start);
+    const salesOrders = todayOrders.filter((o) => !["annulee", "refusee"].includes(o.status));
+    const revenue = salesOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
+    const average = salesOrders.length ? revenue / salesOrders.length : 0;
+    const prepTimes = todayOrders.map((o) => {
+      const history = [...(o.history || [])].filter((h) => Number(h.at) > 0).sort((a, b) => Number(a.at) - Number(b.at));
+      const began = history.find((h) => h.status === "preparation");
+      const ready = began && history.find((h) => h.status === "prete" && Number(h.at) >= Number(began.at));
+      const minutes = ready ? (Number(ready.at) - Number(began.at)) / 60000 : 0;
+      return minutes > 0 && minutes <= 240 ? minutes : null;
+    }).filter((minutes) => minutes !== null);
+    const delivered = todayOrders.filter((o) => o.status === "livree").length;
+    const prepValue = prepTimes.length ? `${nf.format(prepTimes.reduce((sum, m) => sum + m, 0) / prepTimes.length)} min` : String(delivered);
+    const hourly = Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      total: salesOrders.filter((o) => new Date(o.createdAt).getHours() === hour).reduce((sum, o) => sum + Number(o.total || 0), 0)
+    }));
+    const maxHour = Math.max(1, ...hourly.map((item) => item.total));
+    const products = new Map();
+    salesOrders.forEach((o) => (o.items || []).forEach((line) => {
+      const name = line.name || "Article";
+      const key = line.productId || name;
+      const current = products.get(key) || { name, qty: 0 };
+      current.qty += Number(line.qty || 0);
+      products.set(key, current);
+    }));
+    const topProducts = [...products.values()].sort((a, b) => b.qty - a.qty).slice(0, 5);
+    const recent = [...todayOrders].sort((a, b) => b.createdAt - a.createdAt).slice(0, 6);
+    const kpi = (label, value, foot = "") => `<div class="today-kpi"><span class="today-kpi-label">${label}</span><strong class="today-kpi-value">${value}</strong>${foot ? `<small>${foot}</small>` : ""}</div>`;
+    const hourBars = hourly.map((item) => `<div class="hour-column"><div class="hour-bar-wrap"><div class="hour-bar ${item.total ? "has-sales" : ""}" style="height:${item.total ? Math.max(4, Math.round((item.total / maxHour) * 100)) : 0}%" title="${String(item.hour).padStart(2, "0")} h \u00b7 ${nf.format(item.total)} DH" aria-label="${String(item.hour).padStart(2, "0")} heures : ${nf.format(item.total)} DH"></div></div><span>${item.hour % 3 === 0 ? `${String(item.hour).padStart(2, "0")} h` : ""}</span></div>`).join("");
+    const recentRows = recent.map((o) => `<tr class="clickable" data-action="open-order" data-id="${esc(o.id)}"><td data-label="N\u00b0"><button class="link-btn" data-action="open-order" data-id="${esc(o.id)}">${esc(o.id)}</button></td><td data-label="Client">${esc(o.customerName || "\u2014")}</td><td data-label="Type">${o.mode === "livraison" ? "Livraison" : "\u00c0 emporter"}</td><td data-label="Total" class="right"><b>${esc(nf.format(Number(o.total || 0)))} DH</b></td><td data-label="Statut">${statusPill(o.status)}</td></tr>`).join("");
+    return `<div class="today-dashboard">
+      <div class="today-intro"><div><p class="today-eyebrow">R\u00e9sum\u00e9 de l'activit\u00e9</p><h2>Aujourd'hui</h2></div><span class="today-date">${esc(new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" }).format(Date.now()))}</span></div>
+      ${todayOrders.length ? "" : `<p class="today-empty-note" role="status">Aucune commande aujourd'hui</p>`}
+      <section class="today-kpis" aria-label="Indicateurs du jour">
+        ${kpi("Ventes du jour", `${nf.format(Math.round(revenue * 100) / 100)} <span>DH</span>`, `${salesOrders.length} commande(s) comptabilis\u00e9e(s)`)}
+        ${kpi("Commandes", String(todayOrders.length), "Commandes re\u00e7ues aujourd'hui")}
+        ${kpi("Panier moyen", `${nf.format(Math.round(average * 100) / 100)} <span>DH</span>`, `${salesOrders.length} commande(s) hors annulations`)}
+        ${kpi(prepTimes.length ? "Temps moyen de pr\u00e9paration" : "Livr\u00e9es", prepValue, prepTimes.length ? `${prepTimes.length} commande(s) avec dur\u00e9e connue` : "Aujourd'hui")}
+      </section>
+      <section class="today-panels">
+        <div class="today-panel"><div class="today-panel-head"><h3>Ventes par heure</h3><span>DH \u00b7 aujourd'hui</span></div><div class="hour-chart" role="img" aria-label="Ventes par heure, en dirhams">${hourBars}</div></div>
+        <div class="today-panel"><div class="today-panel-head"><h3>Les plus vendus</h3><span>Quantit\u00e9s du jour</span></div>${topProducts.length ? `<ol class="today-product-list">${topProducts.map((item, i) => `<li><span class="today-rank">${i + 1}</span><b>${esc(item.name)}</b><span>${nf.format(item.qty)} vendu(s)</span></li>`).join("")}</ol>` : `<p class="today-panel-empty">Aucun article vendu aujourd'hui</p>`}</div>
+      </section>
+      <section class="today-panel today-recent"><div class="today-panel-head"><h3>Commandes r\u00e9centes</h3><a class="link-btn" href="#/commandes">Tout voir</a></div><div class="table-wrap"><table class="tbl today-table"><thead><tr><th>N\u00b0</th><th>Client</th><th>Type</th><th class="right">Total</th><th>Statut</th></tr></thead><tbody>${recentRows || `<tr><td class="today-table-empty" colspan="5">Aucune commande aujourd'hui</td></tr>`}</tbody></table></div></section>
+    </div>`;
   }
 
   const logItem = (a) => `<div class="log-item"><time>${esc(fmtDT(a.at))}</time><div><b>${esc(a.user)}</b> · <span class="muted">${esc(a.action)}</span><div>${esc(a.detail)}</div></div></div>`;

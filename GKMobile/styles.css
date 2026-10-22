@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap");
+﻿@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap");
 
 :root {
   color-scheme: light;
@@ -450,3 +450,28 @@ body { background: #dcdcd8; }
 @keyframes gk-sheet-in { from { transform: translateY(24px); opacity: 0; } }
 @keyframes gk-panel-in { from { transform: translateY(100%); } }
 @media (prefers-reduced-motion: reduce) { .overlay, .sheet, .sheet.panel { animation: none; } }
+
+/* ---------- Redesign: warm paper look, serif titles, live bar ---------- */
+:root { --serif: "Fraunces", Georgia, "Iowan Old Style", serif; --ink: #231d12; --muted: #6f6650; --line: #e6dfcc; --bg: #f8f4e9; --gold-soft: #fbf0d3; }
+body { background: #e9e3d2; }
+.app-header { background: rgba(248, 244, 233, .94); }
+.screen-title, .restaurant-name, .cart-empty h1, .cart-empty h2, .branch-card-copy strong, .product-title, .eta-row strong, .profile-text h2, .order-card-body h3 { font-family: var(--serif); letter-spacing: -.01em; }
+.eta-row strong { font-size: 26px; font-weight: 700; }
+.product-price, .cart-line-price, .order-card-body strong { font-family: var(--serif); font-weight: 700; }
+.offer-banner, .loyalty-card { background: var(--gold); }
+.live-bar { position: fixed; z-index: 7; bottom: calc(72px + var(--safe-bottom)); left: 50%; display: grid; width: min(calc(100% - 20px), 460px); gap: 8px; transform: translateX(-50%); pointer-events: none; }
+.live-bar button { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 14px; border: 0; border-radius: 16px; background: #231d12; color: #fff; text-align: left; cursor: pointer; pointer-events: auto; box-shadow: 0 8px 22px rgba(35, 29, 18, .25); }
+.live-bar button:active { transform: scale(.98); }
+.live-bar .live-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--gold); }
+.live-bar .live-copy { display: grid; min-width: 0; flex: 1; }
+.live-bar .live-copy strong { font-size: 14px; }
+.live-bar .live-copy small { color: #d9d2bd; font-size: 12px; }
+.live-bar .live-go { color: var(--gold-bright); font-size: 14px; font-weight: 700; }
+body[data-bare] .live-bar { display: none; }
+.reorder-card { display: flex; align-items: center; gap: 12px; width: 100%; margin: 4px 0 14px; padding: 12px; border: 0; border-radius: 16px; background: var(--gold-soft); text-align: left; cursor: pointer; }
+.reorder-card img { width: 52px; height: 52px; flex: none; border-radius: 12px; object-fit: cover; }
+.reorder-copy { display: grid; flex: 1; min-width: 0; font-size: 13px; }
+.reorder-copy strong { font-family: var(--serif); font-size: 16px; }
+.reorder-copy span { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.reorder-go { min-height: 38px; padding: 0 14px; border-radius: 11px; background: var(--gold); display: grid; place-items: center; font-weight: 700; font-size: 13px; }
+main { padding-bottom: 150px; }
