@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>G&amp;K - Aperçu de la refonte</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="shell-top">
+  <h1>G&amp;K Food <small>Aperçu de la refonte UI/UX (maquettes, non fonctionnel)</small></h1>
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-t="client">Client</button>
+    <button role="tab" aria-selected="false" data-t="kitchen">Cuisine</button>
+    <button role="tab" aria-selected="false" data-t="courier">Livreur</button>
+    <button role="tab" aria-selected="false" data-t="admin">Admin</button>
+    <button role="tab" aria-selected="false" data-t="landing">Site</button>
+  </div>
+</div>
+
+<!-- ================= CLIENT ================= -->
+<section class="app on" id="client">
+  <header>
+    <h2>Application client</h2>
+    <p>S'ouvre directement sur le menu G&amp;K Food, avec photos des plats, recommander en un geste et une barre de suivi toujours visible.</p>
+    <ul class="change-list"><li>Menu ouvert d'office</li><li>Commander à nouveau</li><li>Barre de suivi en direct</li><li>Photos des plats</li><li>Connexion par téléphone</li></ul>
+  </header>
+  <div class="row">
+    <figure class="item">
+      <div class="phone"><div class="status"><span>9:41</span><span>5G</span></div>
+        <div class="body">
+          <div class="hdr"><div><small class="muted">Livrer à Mohammedia</small><h3>G&amp;K Food</h3></div><div class="ic"></div></div>
+          <div class="search">Rechercher un plat</div>
+          <div class="chips"><span class="on">Tout</span><span>Burgers</span><span>Tacos</span><span>Boissons</span></div>
+          <div class="again"><div class="photo"></div><div><b>Commander à nouveau</b>Tacos poulet + Coca · 68 DH</div><div class="btn gold sm">Ajouter</div></div>
+          <h4>Populaires</h4>
+          <div class="dish"><div class="photo">photo</div><div><b>Tacos poulet</b><small>Sauce fromagère, frites</small><div class="price">42 DH</div></div><div class="add">+</div></div>
+          <div class="dish"><div class="photo">photo</div><div><b>Burger G&amp;K</b><small>Double steak, cheddar</small><div class="price">55 DH</div></div><div class="add">+</div></div>
+          <div class="dish"><div class="photo">photo</div><div><b>Crispy box</b><small>6 pièces, sauce maison</small><div class="price">48 DH</div></div><div class="add">+</div></div>
+        </div>
+        <div class="live"><span class="dot"></span><div><b>Commande n° 1042</b><small>En préparation · 12 min</small></div><span class="go">Suivre</span></div>
+        <div class="nav"><span class="on"><i></i>Menu</span><span><i></i>Panier</span><span><i></i>Commandes</span><span><i></i>Profil</span></div>
+      </div>
+      <figcaption><b>Accueil</b><span>Plus de choix de restaurant au démarrage. Petit sélecteur en haut si besoin.</span></figcaption>
+    </figure>
+
+    <figure class="item">
+      <div class="phone"><div class="status"><span>9:41</span><span>5G</span></div>
+        <div class="body">
+          <div class="photo sheet-hero">photo du plat</div>
+          <h4 style="font-size:20px">Tacos poulet</h4><div class="muted sm">Poulet mariné, sauce fromagère, frites</div>
+          <h4>Taille</h4>
+          <div class="opt"><span>Normal</span><span class="r on"></span></div>
+          <div class="opt"><span>Maxi (+10 DH)</span><span class="r"></span></div>
+          <h4>Supplément</h4>
+          <div class="opt"><span>Fromage (+5 DH)</span><span class="r"></span></div>
+        </div>
+        <div style="padding:10px 16px 18px;display:flex;gap:12px;background:#fff;border-top:1px solid var(--line)"><div class="qty"><i>−</i><b>1</b><i>+</i></div><div class="btn gold" style="flex:1">Ajouter · 42 DH</div></div>
+      </div>
+      <figcaption><b>Fiche plat</b><span>Grande photo, options claires, un seul bouton d'action.</span></figcaption>
+    </figure>
+
+    <figure class="item">
+      <div class="phone"><div class="status"><span>9:41</span><span>5G</span></div>
+        <div class="body">
+          <div class="hdr"><h3>Panier</h3></div>
+          <div class="seg mt"><span class="on">Livraison</span><span>À emporter</span></div>
+          <div class="card mt"><div class="line-row"><span>1 × Tacos poulet</span><b>42 DH</b></div><div class="line-row"><span>1 × Coca</span><b>10 DH</b></div></div>
+          <div class="card mt"><b>Adresse</b><div class="muted sm">12 rue des Orangers, Mohammedia</div></div>
+          <div class="card mt"><b>Paiement</b><div class="muted sm">Espèces à la livraison</div></div>
+          <div class="mt"><div class="line-row"><span>Sous-total</span><span>52 DH</span></div><div class="line-row"><span>Livraison</span><span>10 DH</span></div><div class="line-row tot"><span>Total</span><span>62 DH</span></div></div>
+        </div>
+        <div style="padding:10px 16px 18px;background:#fff;border-top:1px solid var(--line)"><div class="btn gold">Commander · 62 DH</div></div>
+      </div>
+      <figcaption><b>Panier</b><span>Tout sur un seul écran, total toujours visible.</span></figcaption>
+    </figure>
+
+    <figure class="item">
+      <div class="phone"><div class="status"><span>9:41</span><span>5G</span></div>
+        <div class="body">
+          <div class="hdr"><h3>Commande n° 1042</h3></div>
+          <div class="muted sm">Arrivée estimée</div>
+          <div class="big-eta">12 min</div>
+          <div class="bar-prog mt"><i style="width:55%"></i></div>
+          <ul class="steps"><li class="done">Commande reçue</li><li class="done">Acceptée par le restaurant</li><li class="now">En préparation</li><li>En route</li><li>Livrée</li></ul>
+          <div class="codebox"><div><div class="sm muted">Code de livraison</div><b>1042</b></div><span class="pill">À donner au livreur</span></div>
+          <div class="card mt who"><div class="av"></div><div><b>Khona</b><span class="muted sm">Livreur · Message</span></div></div>
+        </div>
+      </div>
+      <figcaption><b>Suivi</b><span>Un grand temps d'arrivée, des étapes simples, code de livraison bien visible.</span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ================= KITCHEN ================= -->
+<section class="app" id="kitchen">
+  <header>
+    <h2>Cuisine</h2>
+    <p>Une nouvelle commande prend tout l'écran avec de gros boutons. Les tickets changent de couleur selon le temps de préparation.</p>
+    <ul class="change-list"><li>Alerte plein écran</li><li>Minuteur par ticket</li><li>Gros boutons Accepter / Refuser</li></ul>
+  </header>
+  <div class="row">
+    <figure class="item">
+      <div class="tablet">
+        <div class="k-head"><b>Cuisine · G&amp;K Food</b><span class="sp pill">Nouvelle commande</span></div>
+        <div class="alert">
+          <div class="big"><span class="pill" style="align-self:flex-start">Livraison · il y a 5 s</span><h3>Commande n° 1043</h3>
+            <div class="tk"><ul><li><b>2 ×</b> Tacos poulet</li><li><b>1 ×</b> Burger G&amp;K, sans oignon</li><li><b>2 ×</b> Coca</li></ul></div>
+            <div class="muted">Note : bien cuit, merci</div></div>
+          <div class="big" style="justify-content:center"><div class="muted">Temps de préparation</div>
+            <div class="prep"><span>Prêt dans</span><span><i>−</i><b>15 min</b><i>+</i></span></div>
+            <div class="btn green">Accepter</div><div class="btn red">Refuser</div></div>
+        </div>
+      </div>
+      <figcaption><b>Nouvelle commande</b><span>Impossible de la rater, un seul geste pour accepter.</span></figcaption>
+    </figure>
+    <figure class="item">
+      <div class="tablet">
+        <div class="k-head"><b>Cuisine · G&amp;K Food</b><span class="sp muted">3 en cours</span></div>
+        <div class="cols">
+          <div class="col"><h5>À accepter <span class="pill">1</span></h5><div class="tick"><span class="t">0:20</span><b>n° 1044</b><br>3 articles · Livraison</div></div>
+          <div class="col"><h5>En préparation <span class="pill">2</span></h5>
+            <div class="tick warn"><span class="t">11:40</span><b>n° 1042</b><br>2 articles · Livraison</div>
+            <div class="tick late"><span class="t">19:05</span><b>n° 1041</b><br>4 articles · À emporter</div></div>
+          <div class="col"><h5>Prêtes <span class="pill green">1</span></h5><div class="tick"><span class="t">0:50</span><b>n° 1040</b><br>Livreur en route</div></div>
+        </div>
+      </div>
+      <figcaption><b>Tableau de commandes</b><span>Vert, orange puis rouge : on voit tout de suite ce qui est en retard.</span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ================= COURIER ================= -->
+<section class="app" id="courier">
+  <header>
+    <h2>Livreur</h2>
+    <p>Un bouton pour ouvrir l'itinéraire dans Maps et un résumé des gains du jour.</p>
+    <ul class="change-list"><li>Bouton Ouvrir Maps</li><li>Gains du jour</li><li>Code de livraison en grand</li></ul>
+  </header>
+  <div class="row">
+    <figure class="item">
+      <div class="phone"><div class="status"><span>9:41</span><span>5G</span></div>
+        <div class="body">
+          <div class="online"><div><b>En ligne</b><small>Prêt à recevoir des courses</small></div><div class="tog"><i></i></div></div>
+          <div class="today"><div><b>7</b><small>Courses</small></div><div><b>70 DH</b><small>Gains</small></div><div><b>4 h</b><small>En ligne</small></div></div>
+          <h4>Course disponible</h4>
+          <div class="card mission"><span class="pill">n° 1043 · 2,4 km</span><h3>Avenue Hassan II</h3><div class="muted sm">3 articles · 62 DH à encaisser</div><div class="btn gold mt">Accepter la course</div></div>
+        </div>
+        <div class="nav"><span class="on"><i></i>Courses</span><span><i></i>Historique</span><span><i></i>Gains</span><span><i></i>Profil</span></div>
+      </div>
+      <figcaption><b>Accueil</b><span>Statut, gains et prochaine course au même endroit.</span></figcaption>
+    </figure>
+    <figure class="item">
+      <div class="phone"><div class="status"><span>9:41</span><span>5G</span></div>
+        <div class="body">
+          <div class="hdr"><h3>Course n° 1043</h3><span class="pill">En route</span></div>
+          <ul class="stops"><li><i></i><div><b>G&amp;K Food</b><div class="muted sm">Retrait · prêt</div></div></li><li><i></i><div><b>Avenue Hassan II</b><div class="muted sm">Client · Sara</div></div></li></ul>
+          <div class="btn dark">Ouvrir Maps</div>
+          <div class="btn line mt">Appeler le client</div>
+          <div class="btn line mt">Message</div>
+          <div class="card mt"><div class="line-row"><span>À encaisser</span><b>62 DH</b></div></div>
+        </div>
+        <div style="padding:10px 16px 18px;background:#fff;border-top:1px solid var(--line)"><div class="btn gold">J'ai récupéré la commande</div></div>
+      </div>
+      <figcaption><b>Course en cours</b><span>Une seule action principale par étape.</span></figcaption>
+    </figure>
+    <figure class="item">
+      <div class="phone"><div class="status"><span>9:41</span><span>5G</span></div>
+        <div class="body">
+          <div class="hdr"><h3>Livraison</h3></div>
+          <p class="muted sm">Demandez au client le code de sa commande.</p>
+          <div class="pin"><span>1</span><span>0</span><span class="on">4</span><span></span></div>
+          <div class="card" style="text-align:center"><span class="muted sm">Espèces à encaisser</span><div style="font-size:30px;font-weight:800">62 DH</div></div>
+        </div>
+        <div style="padding:10px 16px 18px;background:#fff;border-top:1px solid var(--line)"><div class="btn gold">Confirmer la livraison</div></div>
+      </div>
+      <figcaption><b>Confirmation</b><span>Grandes cases pour le code, montant bien lisible.</span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ================= ADMIN ================= -->
+<section class="app" id="admin">
+  <header>
+    <h2>Admin</h2>
+    <p>Un tableau de bord « aujourd'hui en un coup d'œil » avant les menus détaillés.</p>
+    <ul class="change-list"><li>Résumé du jour</li><li>Plats les plus vendus</li><li>Commandes récentes</li></ul>
+  </header>
+  <div class="row">
+    <figure class="item">
+      <div class="desktop"><div class="bar"><i></i><i></i><i></i></div>
+        <div class="adm">
+          <aside><div class="brand"><img src="assets/emblem.png" alt="">G&amp;K Admin</div><a class="on">Aujourd'hui</a><a>Commandes</a><a>Menu</a><a>Zones</a><a>Livreurs</a><a>Équipe</a><a>Factures</a><a>Réglages</a></aside>
+          <main>
+            <h3>Aujourd'hui</h3>
+            <div class="kpis">
+              <div class="card"><small>Ventes</small><b>1 840 DH</b><span class="up">+12 % vs hier</span></div>
+              <div class="card"><small>Commandes</small><b>34</b><span class="up">+4</span></div>
+              <div class="card"><small>Panier moyen</small><b>54 DH</b></div>
+              <div class="card"><small>Temps moyen</small><b>26 min</b></div>
+            </div>
+            <div class="two">
+              <div class="card"><b>Ventes par heure</b><div class="chart"><i style="height:20%"></i><i style="height:35%"></i><i style="height:55%"></i><i class="hi" style="height:100%"></i><i class="hi" style="height:85%"></i><i style="height:60%"></i><i style="height:40%"></i><i style="height:70%"></i><i style="height:30%"></i></div></div>
+              <div class="card"><b>Les plus vendus</b><ul class="top-list"><li><span>Tacos poulet</span><b>18</b></li><li><span>Burger G&amp;K</span><b>12</b></li><li><span>Crispy box</span><b>9</b></li><li><span>Coca</span><b>21</b></li></ul></div>
+            </div>
+            <div class="card mt"><b>Commandes récentes</b>
+              <table class="orders-tbl"><tr><th>N°</th><th>Client</th><th>Type</th><th>Total</th><th>Statut</th></tr>
+                <tr><td>1044</td><td>Sara</td><td>Livraison</td><td>62 DH</td><td><span class="pill">À accepter</span></td></tr>
+                <tr><td>1043</td><td>Youssef</td><td>Livraison</td><td>88 DH</td><td><span class="pill">En préparation</span></td></tr>
+                <tr><td>1042</td><td>Amine</td><td>À emporter</td><td>45 DH</td><td><span class="pill green">Livrée</span></td></tr></table></div>
+          </main>
+        </div>
+      </div>
+      <figcaption><b>Tableau de bord</b><span>Les chiffres du jour d'abord, le reste dans le menu de gauche.</span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ================= LANDING ================= -->
+<section class="app" id="landing">
+  <header>
+    <h2>Site gkfood.store</h2>
+    <p>Toujours simple, avec les infos pratiques : horaires, téléphone et WhatsApp.</p>
+    <ul class="change-list"><li>Horaires</li><li>Téléphone</li><li>Bouton WhatsApp</li><li>Vraies photos</li></ul>
+  </header>
+  <div class="row">
+    <figure class="item">
+      <div class="desktop land"><div class="bar"><i></i><i></i><i></i></div>
+        <div class="l-top"><b><img src="assets/emblem.png" alt="">G&amp;K Food</b><span class="btn gold sm">Commander</span></div>
+        <div class="l-hero"><div><h3>Des plats faits maison, livrés chez vous.</h3><p class="muted">Mohammedia · Ouvert tous les jours</p><div style="display:flex;gap:10px"><span class="btn gold">Commander</span><span class="btn line">WhatsApp</span></div></div><img src="assets/storefront.jpg" alt=""></div>
+        <div class="hours"><div class="card"><b>Horaires</b><div class="muted sm">12h – 23h30, 7j/7</div></div><div class="card"><b>Téléphone</b><div class="muted sm">06 00 00 00 00</div></div><div class="card"><b>Adresse</b><div class="muted sm">Mohammedia, Maroc</div></div></div>
+      </div>
+      <figcaption><b>Page d'accueil</b><span>Les horaires et numéros sont des exemples à remplacer.</span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<script>
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', x === b));
+  document.querySelectorAll('.app').forEach(a => a.classList.toggle('on', a.id === b.dataset.t));
+  scrollTo(0, 0);
+});
+</script>
+</body>
+</html>
