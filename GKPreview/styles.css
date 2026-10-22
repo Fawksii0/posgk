@@ -203,3 +203,34 @@ body { background: #e9e3d2; }
 .principles .card h4 { margin: 0 0 6px; font-size: 17px; font-family: var(--serif); }
 .principles .card p { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
 .principles .card small { color: var(--gold-deep); font-weight: 700; }
+
+/* ---------- concept "Le Ticket" ---------- */
+.paper { --paper: #fffdf6; font-family: var(--serif); }
+.phone.tk { background: #efe8d3; }
+.phone.tk .body { padding: 6px 14px 12px; }
+.slip { position: relative; padding: 18px 16px 20px; background: var(--paper, #fffdf6); border: 1px solid #e3dac0; border-radius: 4px; box-shadow: 0 1px 0 #d9cfae; }
+.slip::after { position: absolute; left: -1px; right: -1px; bottom: -9px; height: 9px; content: ""; background: #fffdf6; border: 1px solid #e3dac0; border-top: 0; clip-path: polygon(0 0, 100% 0, 100% 40%, 95% 100%, 90% 40%, 85% 100%, 80% 40%, 75% 100%, 70% 40%, 65% 100%, 60% 40%, 55% 100%, 50% 40%, 45% 100%, 40% 40%, 35% 100%, 30% 40%, 25% 100%, 20% 40%, 15% 100%, 10% 40%, 5% 100%, 0 40%); }
+.slip h3 { margin: 0; font-family: var(--serif); font-size: 24px; letter-spacing: -.01em; }
+.slip .mono, .mono { font-family: "Consolas", "Courier New", monospace; font-size: 12px; color: var(--muted); }
+.rule { margin: 10px 0; border: 0; border-top: 1.5px dashed #d8cda9; }
+.menu-line { display: flex; align-items: baseline; gap: 6px; padding: 9px 0; }
+.menu-line b { font-family: var(--serif); font-size: 17px; font-weight: 600; }
+.menu-line .dots { flex: 1; border-bottom: 2px dotted #cdbf93; transform: translateY(-4px); }
+.menu-line .p { font-family: var(--serif); font-size: 17px; font-weight: 700; }
+.menu-line + .note { margin: -4px 0 4px; color: var(--muted); font-size: 12.5px; font-family: "Segoe UI", sans-serif; }
+.open-line { display: flex; align-items: center; gap: 8px; font: 600 13px "Segoe UI", sans-serif; }
+.open-line i { width: 9px; height: 9px; border-radius: 50%; background: var(--green); }
+.pick { margin: 10px 0 2px; padding: 10px 12px; border-left: 4px solid var(--gold); background: var(--gold-soft); font: 13px "Segoe UI", sans-serif; }
+.stamp { display: inline-block; padding: 2px 8px; border: 2px solid var(--green); border-radius: 4px; color: var(--green); font: 800 11px "Consolas", monospace; transform: rotate(-4deg); }
+.stamp.gold { border-color: var(--gold-deep); color: var(--gold-deep); }
+.tl { margin: 0; padding: 0; list-style: none; }
+.tl li { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed #e0d6b8; font: 15px "Segoe UI", sans-serif; }
+.tl li.todo { color: #a89f85; }
+.tl li .mono { color: inherit; }
+.range { font-size: 44px; font-weight: 700; letter-spacing: -.02em; line-height: 1; }
+.total-big { display: flex; justify-content: space-between; align-items: baseline; font-size: 26px; font-weight: 700; }
+.compare { width: 100%; max-width: 1100px; margin: 0 auto; border-collapse: collapse; background: #fff; border-radius: 14px; overflow: hidden; font-size: 14px; }
+.compare th, .compare td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.compare th { background: var(--ink); color: #fff; font-weight: 600; }
+.compare td:last-child { background: var(--gold-soft); font-weight: 600; }
+.tabs button { white-space: nowrap; }
