@@ -1,0 +1,12 @@
+{
+  "name": "G&K Serveur",
+  "short_name": "G&K Serveur",
+  "description": "Service en salle G&K Food",
+  "lang": "fr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f5f1",
+  "theme_color": "#e3a81f"
+}

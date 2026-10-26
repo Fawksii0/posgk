@@ -1,0 +1,187 @@
+.live-scene {
+  margin: 12px 0 16px;
+  padding: 14px 12px 12px;
+  overflow: hidden;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #fff8e8 0%, #fff 72%);
+  box-shadow: 0 6px 18px rgba(40, 32, 10, .07);
+  text-align: center;
+}
+.live-scene.compact { margin: 0 0 10px; padding: 10px 8px 8px; border-radius: 16px; }
+.scene-canvas { position: relative; height: 96px; margin: 0 auto 6px; overflow: hidden; }
+.live-scene.compact .scene-canvas { height: 72px; }
+.scene-caption { margin: 0; color: #6f6a5d; font-size: 12px; font-weight: 600; line-height: 1.35; }
+
+.scene-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 58px;
+  height: 58px;
+  border: 3px solid rgba(227, 168, 31, .28);
+  border-top-color: #e3a81f;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+.scene-clock {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 36px;
+  height: 36px;
+  border: 3px solid #1a120c;
+  border-radius: 50%;
+  background: #fff;
+  transform: translate(-50%, -50%);
+}
+.scene-clock::before,
+.scene-clock::after {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: #1a120c;
+  border-radius: 2px;
+  content: "";
+  transform-origin: 50% 90%;
+}
+.scene-clock::before { width: 2px; height: 10px; margin: -10px 0 0 -1px; }
+.scene-clock::after { width: 2px; height: 7px; margin: -7px 0 0 -1px; transform: rotate(90deg); transform-origin: 50% 100%; }
+
+.scene-skillet { position: absolute; left: 50%; bottom: 18px; width: 110px; height: 54px; margin-left: -55px; transform-origin: 50% 80%; }
+.scene-pan {
+  position: absolute;
+  left: 18px;
+  bottom: 10px;
+  width: 64px;
+  height: 14px;
+  border-radius: 0 0 32px 32px;
+  background: #1a120c;
+}
+.scene-handle {
+  position: absolute;
+  left: 80px;
+  bottom: 16px;
+  width: 22px;
+  height: 6px;
+  border-radius: 6px;
+  background: #1a120c;
+}
+.scene-steam {
+  position: absolute;
+  bottom: 28px;
+  width: 7px;
+  height: 26px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(26, 18, 12, 0), rgba(26, 18, 12, .22));
+  transform-origin: 50% 100%;
+}
+.scene-steam.s1 { left: 34px; }
+.scene-steam.s2 { left: 48px; height: 32px; }
+.scene-steam.s3 { left: 62px; }
+.scene-flame {
+  position: absolute;
+  bottom: 0;
+  width: 9px;
+  height: 14px;
+  border-radius: 50% 50% 20% 20%;
+  background: linear-gradient(180deg, #f2bd3a, #e07a12);
+  transform-origin: 50% 100%;
+}
+.scene-flame.f1 { left: 36px; }
+.scene-flame.f2 { left: 48px; height: 18px; }
+.scene-flame.f3 { left: 60px; }
+
+.scene-bag {
+  position: absolute;
+  left: 50%;
+  top: 22px;
+  width: 42px;
+  height: 48px;
+  margin-left: -21px;
+  border-radius: 8px 8px 12px 12px;
+  background: #e3a81f;
+  transform-origin: 50% 100%;
+}
+.scene-bag::before {
+  position: absolute;
+  top: -8px;
+  left: 8px;
+  width: 26px;
+  height: 14px;
+  border: 3px solid #1a120c;
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  content: "";
+}
+.scene-bag::after {
+  position: absolute;
+  top: 16px;
+  left: 8px;
+  right: 8px;
+  height: 4px;
+  border-radius: 4px;
+  background: #1a120c;
+  content: "";
+}
+
+.scene-road { background: linear-gradient(#fbf7ee, #fbf7ee) 0 64px / 100% 4px no-repeat; }
+.scene-dash {
+  position: absolute;
+  left: -24px;
+  right: -24px;
+  top: 62px;
+  height: 3px;
+  background: repeating-linear-gradient(90deg, #e3a81f 0 12px, transparent 12px 22px);
+}
+.scene-scooter {
+  position: absolute;
+  left: 12px;
+  top: 18px;
+  width: 68px;
+  height: 42px;
+}
+.scene-scooter .body {
+  position: absolute;
+  left: 4px;
+  top: 10px;
+  width: 22px;
+  height: 16px;
+  border-radius: 4px;
+  background: #e3a81f;
+  box-shadow: inset 0 0 0 2px #1a120c;
+}
+.scene-scooter .stem {
+  position: absolute;
+  left: 40px;
+  top: 2px;
+  width: 4px;
+  height: 18px;
+  border-radius: 3px;
+  background: #1a120c;
+  transform: rotate(22deg);
+}
+.scene-scooter .stem::after {
+  position: absolute;
+  top: -3px;
+  left: 3px;
+  width: 14px;
+  height: 4px;
+  border-radius: 3px;
+  background: #1a120c;
+  content: "";
+}
+.scene-scooter .wheel {
+  position: absolute;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  border: 3px solid #1a120c;
+  border-radius: 50%;
+  background: #fff;
+}
+.scene-scooter .wheel.w1 { left: 8px; }
+.scene-scooter .wheel.w2 { left: 42px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .live-scene { background: #fff; }
+}

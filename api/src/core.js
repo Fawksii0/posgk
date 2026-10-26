@@ -12,6 +12,7 @@ const FRONT = ["cashier", "manager", "admin", "owner"];
 export const PERMS = {
   "orders.view": ALL_STAFF,
   "orders.act": FRONT, // accept, refuse, adjust prep, cancel, assign, retry dispatch
+  "orders.dinein": ["waiter", "cashier", "manager", "admin", "owner"],
   "orders.ready": ["cashier", "chef", "manager", "admin", "owner"],
   "orders.handover": ["cashier", "waiter", "manager", "admin", "owner"],
   "orders.advance": MGR,

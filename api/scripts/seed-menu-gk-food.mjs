@@ -24,8 +24,6 @@ const MENU = [
   ["Pâtes", "Penne ou tagliatelle.", [
     ["Carbonara", 55], ["Végétarienne", 52], ["Arrabiata", 50], ["Bolognaise", 59],
     ["Poulet champignon", 55], ["Fruits de mer", 65]]],
-  ["Tajines", "", [
-    ["Viande hachée", 52], ["Pil Pil", 59]]],
   ["Burgers", "Servi avec frites.", [
     ["Chicken Burger", 49], ["Cheese Burger", 55], ["Cordon Blue", 59], ["Double Cheese", 72], ["Double Chicken", 65]]],
   ["Plats", "Accompagnement : légumes, pâtes et frites.", [

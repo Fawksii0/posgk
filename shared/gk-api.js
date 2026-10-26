@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const SUPABASE_PROJECT_URL = "https://vclkvecwwhqwbmkcobon.supabase.co";
+  const SUPABASE_PROJECT_URL = "https://oxqfnhnxdnwnftduikkh.supabase.co";
   const API_URL = window.GK_API_URL || (
     window.GK_SUPABASE_URL
       ? `${String(window.GK_SUPABASE_URL).replace(/\/+$/, "")}/functions/v1/gk-api`
@@ -122,7 +122,7 @@
     if (failure) throw failure;
   }
 
-  async function request(path, { method = "GET", body, scope } = {}) {
+  async function request(path, { method = "GET", body, scope, signal } = {}) {
     if (!API_URL) throw new ApiError("Configurez GK_SUPABASE_URL ou GK_API_URL pour connecter cette application au serveur G&K.", 0, "api_url_missing");
     const headers = { Accept: "application/json" };
     if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -135,17 +135,19 @@
     }
     const branchId = getBranch();
     if (branchId) headers["X-GK-Branch"] = branchId;
-    // The database lives in eu-west-1; running the function there avoids a cross-region hop per query.
-    if (/\.supabase\.co\//.test(API_URL)) headers["x-region"] = "eu-west-1";
+    // Pin the Edge Function next to the Paris database (eu-west-3).
+    if (/\.supabase\.co\//.test(API_URL)) headers["x-region"] = "eu-west-3";
 
     let response;
     try {
       response = await fetch(`${API_URL.replace(/\/+$/, "")}${path}`, {
         method,
         headers,
+        ...(signal ? { signal } : {}),
         ...(body === undefined ? {} : { body: JSON.stringify(body) })
       });
     } catch (error) {
+      if (error?.name === "AbortError") throw error;
       throw new ApiError("Impossible de joindre le serveur G&K. Vérifiez votre connexion.", 0, "network_error", { cause: error });
     }
 
@@ -191,7 +193,7 @@
     clearBranch,
     logout,
     request,
-    get: (path, scope) => request(path, { scope }),
+    get: (path, scope, extra) => request(path, { scope, ...(extra || {}) }),
     post: (path, body, scope) => request(path, { method: "POST", body, scope }),
     put: (path, body, scope) => request(path, { method: "PUT", body, scope }),
     patch: (path, body, scope) => request(path, { method: "PATCH", body, scope }),

@@ -14,7 +14,15 @@ const route = (method, path, handler, options = {}) => routes.push({
   ...options
 });
 
-route("GET", "/health", async () => ({ ok: true, service: "gk-api" }), { public: true, branchScoped: false });
+route("GET", "/health", async (c) => {
+  const started = Date.now();
+  try {
+    const branches = await all(c.env, "SELECT id FROM branches WHERE active = 1");
+    return { ok: true, service: "gk-api", database: "up", branches: branches.length, ms: Date.now() - started };
+  } catch {
+    return { ok: false, service: "gk-api", database: "down", ms: Date.now() - started };
+  }
+}, { public: true, branchScoped: false });
 route("GET", "/api/branches", async (c) => ({
   branches: (await all(c.env, "SELECT id, slug, name, cuisine, address, active FROM branches WHERE active = 1 ORDER BY id"))
     .map((branch) => ({ ...branch, active: !!branch.active }))
@@ -74,6 +82,8 @@ route("PUT", "/api/admin/users/(?<id>[^/]+)", admin.userUpdate, { body: true });
 route("DELETE", "/api/admin/users/(?<id>[^/]+)", admin.userDelete);
 route("GET", "/api/admin/couriers", admin.couriersList);
 route("GET", "/api/live/couriers", admin.liveCouriers);
+route("GET", "/api/live/pulse", orders.livePulse);
+route("GET", "/api/live/wait", orders.liveWait);
 route("POST", "/api/admin/couriers", admin.courierCreate, { body: true });
 route("PUT", "/api/admin/couriers/(?<id>[^/]+)", admin.courierUpdate, { body: true });
 route("POST", "/api/admin/couriers/(?<id>[^/]+)/reset-pin", admin.courierResetPin, { body: true });
@@ -96,9 +106,15 @@ route("GET", "/api/orders/(?<id>[^/]+)/messages", chat.messagesList);
 route("POST", "/api/orders/(?<id>[^/]+)/messages", chat.messageSend, { body: true });
 route("GET", "/api/orders", orders.ordersList);
 route("POST", "/api/orders", orders.orderCreate, { body: true });
+route("POST", "/api/dinein/orders", orders.dineinOrderCreate, { public: true, body: true });
+route("GET", "/api/dinein/orders/(?<id>[^/]+)", orders.dineinOrderGet, { public: true });
+route("POST", "/api/dinein/waiter", orders.waiterCallCreate, { public: true, body: true });
+route("GET", "/api/dinein/calls", orders.waiterCallsList);
+route("POST", "/api/dinein/calls/(?<id>[^/]+)/ack", orders.waiterCallAck, { body: true });
 route("GET", "/api/orders/(?<id>[^/]+)", orders.orderGet);
 route("POST", "/api/orders/(?<id>[^/]+)/cancel", orders.orderCancel, { body: true });
 route("POST", "/api/orders/(?<id>[^/]+)/accept", orders.orderAccept, { body: true });
+route("POST", "/api/orders/(?<id>[^/]+)/revise", orders.orderRevise, { body: true });
 route("POST", "/api/orders/(?<id>[^/]+)/refuse", orders.orderRefuse, { body: true });
 route("PATCH", "/api/orders/(?<id>[^/]+)/prep", orders.orderAdjust, { body: true });
 route("POST", "/api/orders/(?<id>[^/]+)/ready", orders.orderReady, { body: true });

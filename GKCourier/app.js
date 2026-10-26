@@ -155,7 +155,7 @@ function todayTiles() {
   return `
     <div class="today-tiles" aria-label="Résumé du jour">
       <div><b>${done.length}</b><small>Courses livrées</small></div>
-      <div><b>${gains} DH</b><small>Gains du jour</small></div>
+      <div><b>${money(gains)}</b><small>Gains du jour</small></div>
     </div>`;
 }
 
@@ -189,7 +189,13 @@ function mapCard(m) {
   const status = m.step === 1 ? "En attente de votre arrivée au restaurant"
     : m.step === 2 ? "Arrivée au restaurant confirmée"
       : "Commande récupérée · en route vers le client";
+  const scene = window.gkMotionLive?.liveSceneHtml;
+  const waitingKitchen = m.step === 2 && m.orderStatus !== "ready";
+  const motion = scene
+    ? (waitingKitchen ? scene("cook", "La cuisine termine la commande") : scene("ride", m.step >= 3 ? "En route vers le client" : "En route vers le restaurant"))
+    : "";
   return `
+    ${motion}
     <div class="tracking-map" role="status" aria-label="État de la mission">
       <span class="map-label">${icon("bike")} ${esc(status)}${m.km !== null ? ` · ${m.km} km` : ""}</span>
     </div>`;
@@ -356,6 +362,8 @@ function render() {
     : state.session
       ? `${state.actionError ? `<p class="form-error" role="alert">${esc(state.actionError)}</p>` : ""}${state.locationError ? `<p class="form-error" role="status">${esc(state.locationError)}</p>` : ""}${views[ui.tab]()}`
       : loginView();
+  $("app-main").classList.toggle("has-sticky", Boolean(state.session && !state.mustChange && ui.tab === "missions" && state.active));
+  window.gkMotionLive?.playLiveScenes($("app-main"));
 }
 
 /* ---------- Sheets ---------- */

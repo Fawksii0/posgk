@@ -58,6 +58,8 @@ const startOfDay = ts => { const date = new Date(ts); date.setHours(0, 0, 0, 0);
 const isToday = ts => ts >= startOfDay(Date.now());
 const firstName = order => String(order.customer?.name || "Client").split(" ")[0];
 const money = amount => `${Math.round(Number(amount) || 0)} MAD`;
+const modeLabel = order => order.mode === "delivery" ? "Livraison" : order.mode === "dinein" ? `Sur place${order.tableNo ? ` · Table ${order.tableNo}` : ""}` : "À emporter";
+const modeIcon = order => order.mode === "delivery" ? "bike" : "store";
 const clock = ts => new Date(ts).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
 function minutesSince(ts) {
@@ -71,6 +73,7 @@ function countdown(ms) {
 }
 
 function columnOf(order) {
+  if (order.mode === "dinein") return null;
   if (order.status === "pending") return "new";
   if (order.status === "preparing") return "prep";
   if (order.status === "ready") return "ready";

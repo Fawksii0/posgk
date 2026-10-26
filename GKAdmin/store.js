@@ -343,7 +343,7 @@ const Store = (() => {
   const cancelOrder = (id, reason, note) => mutate("post", `/api/orders/${encodeURIComponent(id)}/cancel`, { reason: note ? `${reason} — ${note}` : reason }, ["orders", "stats", "audit"]);
 
   const productBody = (d) => ({
-    categoryId: d.categoryId || d.category || null, name: d.name, description: d.description || "", price: d.price,
+    categoryId: d.categoryId || d.category || null, name: d.name, description: d.description || "", price: d.price, dinePrice: d.dinePrice,
     discount: d.discount || 0, sizes: d.sizes || [], extras: d.extras || [], image: d.image || "",
     available: !!d.available, visible: !!d.visible
   });

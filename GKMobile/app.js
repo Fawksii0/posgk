@@ -6,6 +6,34 @@ let installPrompt = null;
 
 const PHONE_RE = /^(\+212|0)[5-7]\d{8}$/;
 const BARE_VIEWS = ["auth"];
+const LOCAL_DISH_FOLDERS = {
+  salades: "salades",
+  sandwichs: "sandwichs",
+  tacos: "tacos",
+  pasticcio: "pasticcio",
+  pates: "pates",
+  tajines: "tajines",
+  burgers: "burgers",
+  plats: "plats",
+  pizzas: "pizza",
+  desserts: "desserts",
+  boissons: "boissons",
+  jus: "jus"
+};
+
+function slugKey(text) {
+  return String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function localDishImage(item, category) {
+  const folder = LOCAL_DISH_FOLDERS[slugKey(category?.name)];
+  const name = slugKey(item.name);
+  return folder && name ? `./assets/menu/${folder}/${name}.png?v=37` : "";
+}
+
+function cutoutClass(src) {
+  return src && src.includes("/assets/menu/") ? " cutout" : "";
+}
 
 function normalizeProduct(item, categoryMap) {
   const category = categoryMap.get(item.categoryId);
@@ -16,7 +44,7 @@ function normalizeProduct(item, categoryMap) {
     price: Number(item.price) || 0,
     sizes: Array.isArray(item.sizes) ? item.sizes.map(size => ({ ...size, delta: Number(size.delta) || 0 })) : [],
     extras: Array.isArray(item.extras) ? item.extras.map(extra => ({ ...extra, price: Number(extra.price) || 0 })) : [],
-    image: item.image || "",
+    image: item.image || localDishImage(item, category) || "",
     discount: item.discount || "",
     available: !!item.available
   };
@@ -41,13 +69,15 @@ async function loadMenu() {
       GKApi.get("/api/menu"),
       GKApi.get("/api/zones")
     ]);
-    const categoryMap = new Map((menu.categories || []).map(category => [category.id, category]));
+    const hiddenCategory = slug => slugKey(slug) === "tajines";
+    const visibleCategories = (menu.categories || []).filter(category => !hiddenCategory(category.name));
+    const categoryMap = new Map(visibleCategories.map(category => [category.id, category]));
     categories = [
       { id: "All", label: "Tout", icon: "sparkles" },
-      ...(menu.categories || []).map(category => ({ id: category.id, label: category.name, icon: "utensils" })),
+      ...visibleCategories.map(category => ({ id: category.id, label: category.name, icon: "utensils" })),
       { id: "Favoris", label: "Favoris", icon: "heart" }
     ];
-    products = (menu.items || []).filter(item => item.visible).map(item => normalizeProduct(item, categoryMap));
+    products = (menu.items || []).filter(item => item.visible && categoryMap.has(item.categoryId)).map(item => normalizeProduct(item, categoryMap));
     zones = zonesResponse.zones ?? menu.zones ?? [];
     state.settings = menu.settings || {};
     state.cart = hydrateCart(state.cart);
@@ -101,33 +131,43 @@ async function loadBranches() {
       GKApi.clearBranch();
       state.selectedBranchId = "";
     }
-    if (state.user && !state.selectedBranchId) state.view = "branches";
+    if (!state.selectedBranchId) state.view = "branches";
   } catch (error) {
     state.branchError = error.message || "Impossible de charger les restaurants.";
-    if (state.user && !state.selectedBranchId) state.view = "branches";
+    if (!state.selectedBranchId) state.view = "branches";
   } finally {
     state.branchLoading = false;
-  }
-  if (!state.selectedBranchId && state.branches.length) {
-    const pick = state.branches.find(branch => /g\s*&\s*k/i.test(branch.name)) || state.branches[0];
-    await chooseBranch(pick.id);
-    return;
   }
   render();
 }
 
-function lastOrderToReorder() {
-  const order = state.orders.find(item => item.status === "completed" && item.items.length);
-  if (!order) return null;
-  const lines = order.items.map(item => {
+function lastOrderToReorder(orderId) {
+  const completed = state.orders
+    .filter(item => item.status === "completed" && item.items?.length)
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const order = orderId ? completed.find(item => item.id === orderId) : completed[0];
+  if (!order || !products.length) return null;
+  const skipped = [];
+  const lines = [];
+  for (const item of order.items) {
     const product = products.find(entry => entry.id === item.id);
-    if (!product || !product.available) return null;
-    const size = product.sizes.find(entry => entry.name === item.detail) || product.sizes[0];
-    const names = (item.extras || []).map(extra => (typeof extra === "string" ? extra : extra?.name));
+    if (!product || !product.available) {
+      skipped.push(item.name || item.id);
+      continue;
+    }
+    const wanted = item.detail || "";
+    const size = wanted
+      ? product.sizes.find(entry => entry.name === wanted)
+      : (product.sizes[0] || { name: "", delta: 0 });
+    if (!size) {
+      skipped.push(item.name || item.id);
+      continue;
+    }
+    const names = (item.extras || []).map(extra => (typeof extra === "string" ? extra : extra?.name)).filter(Boolean);
     const extras = product.extras.filter(extra => names.includes(extra.name));
-    return { product, size, extras, quantity: item.quantity };
-  }).filter(Boolean);
-  return lines.length ? { order, lines } : null;
+    lines.push({ product, size, extras, quantity: Math.max(1, Number(item.quantity) || 1) });
+  }
+  return lines.length ? { order, lines, skipped } : null;
 }
 
 function renderReorder() {
@@ -135,28 +175,95 @@ function renderReorder() {
   if (!found) return "";
   const first = found.lines[0].product;
   const total = found.lines.reduce((sum, line) => sum + lineUnit(line) * line.quantity, 0);
-  return `<button class="reorder-card" type="button" data-reorder="${escapeHtml(found.order.id)}">
-    ${first.image ? `<img src="${escapeHtml(first.image)}" alt="" />` : ""}
+  return `<button class="reorder-chip" type="button" data-reorder="${escapeHtml(found.order.id)}">
+    ${first.image ? `<img src="${escapeHtml(first.image)}" alt="" />` : `<span class="reorder-chip-dot" aria-hidden="true"></span>`}
     <span class="reorder-copy"><strong>Commander à nouveau</strong><span>${escapeHtml(orderSummary(found.order))} · ${formatPrice(total)}</span></span>
     <span class="reorder-go">Ajouter</span>
   </button>`;
 }
 
+const TOP_SELLER_FALLBACK = ["margarita", "peperone", "chicken-burger", "thon", "poulet"];
+
+function featuredProduct() {
+  const available = products.filter(item => item.available);
+  if (!available.length) return null;
+  const counts = new Map();
+  for (const order of state.orders || []) {
+    for (const item of order.items || []) {
+      const id = item.id;
+      if (!id) continue;
+      counts.set(id, (counts.get(id) || 0) + (Number(item.quantity) || 1));
+    }
+  }
+  const fromOrders = available
+    .map(item => ({ item, n: counts.get(item.id) || 0 }))
+    .sort((a, b) => b.n - a.n)[0];
+  if (fromOrders?.n) return fromOrders.item;
+  for (const slug of TOP_SELLER_FALLBACK) {
+    const hit = available.find(item => slugKey(item.name) === slug);
+    if (hit) return hit;
+  }
+  return available.find(item => slugKey(item.categoryName) === "pizzas") || available.find(item => item.image) || available[0];
+}
+
+function renderFeatured() {
+  const product = featuredProduct();
+  if (!product) return "";
+  return `<button class="top-seller" type="button" data-product="${escapeHtml(product.id)}" aria-label="Top seller, voir ${escapeHtml(product.name)}">
+    <span class="top-seller-copy">
+      <span class="top-seller-badge">Top seller</span>
+      <strong>${escapeHtml(product.name)}</strong>
+      <em>${escapeHtml(product.categoryName || "")}</em>
+      <span class="top-seller-price">${formatPrice(product.price)}</span>
+    </span>
+    <span class="top-seller-photo">
+      ${product.image
+        ? `<img class="${cutoutClass(product.image).trim()}" src="${escapeHtml(product.image)}" alt="" />`
+        : `<span aria-hidden="true">${icon("utensils")}</span>`}
+    </span>
+  </button>`;
+}
+
+function renderHomeTile(product) {
+  const soldOut = !product.available;
+  const price = Math.round(Number(product.price) || 0);
+  return `<article class="home-tile">
+    <button class="home-food" type="button" data-product="${escapeHtml(product.id)}" aria-label="Voir ${escapeHtml(product.name)}${soldOut ? " (indisponible)" : ""}">
+      <span class="home-blob">${product.image ? `<img class="${cutoutClass(product.image).trim()}" src="${escapeHtml(product.image)}" alt="" />` : `<span aria-hidden="true">${icon("utensils")}</span>`}</span>
+      <span class="home-food-copy"><strong>${escapeHtml(product.name)}</strong><em>${escapeHtml(product.categoryName || "")}</em></span>
+    </button>
+    <button class="home-add" type="button" data-product="${escapeHtml(product.id)}" ${soldOut ? "disabled" : ""} aria-label="${soldOut ? `${escapeHtml(product.name)} indisponible` : `Personnaliser et ajouter ${escapeHtml(product.name)}, ${price} DH`}">${soldOut ? "—" : `${price} DH`}</button>
+  </article>`;
+}
+
 function updateLiveBar() {
   const bar = document.querySelector("#live-bar");
   if (!bar) return;
-  const parts = [];
-  const active = state.orders.find(order => order.status === "active");
   const tracking = state.view === "orders" && state.trackingId;
+  const active = [...state.orders]
+    .filter(order => order.status === "active")
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
+  let html = "";
   if (active && !tracking) {
-    parts.push(`<button type="button" data-live="track" data-order="${escapeHtml(active.id)}"><span class="live-dot"></span><span class="live-copy"><strong>Commande n° ${escapeHtml(active.seq || active.id)}</strong><small>${escapeHtml(stagesFor(active)[active.stage]?.title || "En cours")}</small></span><span class="live-go">Suivre</span></button>`);
-  }
-  if (state.cart.length && ["home", "menu"].includes(state.view)) {
+    html = `<button type="button" data-live="track" data-order="${escapeHtml(active.id)}"><span class="live-dot"></span><span class="live-copy"><strong>Commande n° ${escapeHtml(active.seq || active.id)}</strong><small>${escapeHtml(stagesFor(active)[active.stage]?.title || "En cours")}</small></span><span class="live-go">Suivre</span></button>`;
+  } else if (state.cart.length && ["home", "menu"].includes(state.view)) {
     const count = cartCount();
-    parts.push(`<button type="button" data-live="cart"><span class="live-dot"></span><span class="live-copy"><strong>Mon ticket · ${count} article${count > 1 ? "s" : ""}</strong><small>${formatPrice(cartSubtotal())}</small></span><span class="live-go">Voir</span></button>`);
+    html = `<button type="button" data-live="cart"><span class="live-dot"></span><span class="live-copy"><strong>Mon ticket · ${count} article${count > 1 ? "s" : ""}</strong><small>${formatPrice(cartSubtotal())}</small></span><span class="live-go">Voir</span></button>`;
   }
-  bar.innerHTML = parts.join("");
-  bar.hidden = !parts.length;
+  bar.innerHTML = html;
+  bar.hidden = !html;
+  bar.onclick = onLiveBarClick;
+  document.body.classList.toggle("has-live-bar", Boolean(html));
+}
+
+function onLiveBarClick(event) {
+  const button = event.target.closest("[data-live]");
+  if (!button) return;
+  event.preventDefault();
+  if (button.dataset.live === "cart") return setView("cart");
+  state.trackingId = button.dataset.order;
+  goTo("orders", { top: true });
+  void refreshTrackedOrder();
 }
 
 function selectedBranch() {
@@ -166,10 +273,25 @@ function selectedBranch() {
 const BRANCH_DETAILS = {
   "gk-food": {
     image: "./assets/gk-food-storefront.jpg",
-    address: "Bd de la Paix, Bouznika",
-    maps: "https://www.google.com/maps/search/?api=1&query=33.7868384,-7.163375"
+    address: "LOT OTHMAN (PIKMAR), BOUZNIKA.",
+    maps: "https://www.google.com/maps/search/?api=1&query=LOT%20OTHMAN%20PIKMAR%20BOUZNIKA"
+  },
+  "gk-shawarma-crispy": {
+    image: "./assets/gk-shawarma-storefront.jpg",
+    photoClass: "shawarma",
+    address: "BD DE L'AVENIR, QUARTIER GHITA, BOUZNIKA.",
+    maps: "https://www.google.com/maps/search/?api=1&query=BD%20DE%20L%27AVENIR%20QUARTIER%20GHITA%20BOUZNIKA"
   }
 };
+
+function detailsFor(branch) {
+  const id = typeof branch === "string" ? branch : branch?.id || state.selectedBranchId;
+  if (BRANCH_DETAILS[id]) return BRANCH_DETAILS[id];
+  const name = String((typeof branch === "object" && branch?.name) || selectedBranch()?.name || "").toLowerCase();
+  if (name.includes("shawarma")) return BRANCH_DETAILS["gk-shawarma-crispy"];
+  if (name.includes("food")) return BRANCH_DETAILS["gk-food"];
+  return {};
+}
 
 async function chooseBranch(branchId) {
   const branch = state.branches.find(item => item.id === branchId);
@@ -283,6 +405,7 @@ function showToast(message) {
   const toast = document.querySelector("#toast");
   toast.textContent = message;
   toast.classList.add("visible");
+  window.gkMotion?.toastIn(toast);
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove("visible"), 2600);
 }
@@ -305,7 +428,7 @@ function renderProductCard(product) {
   const soldOut = !product.available;
   return `<article class="product-card ${soldOut ? "is-soldout" : ""}">
     <div class="product-media">
-      <button class="product-image-button" type="button" data-product="${escapeHtml(product.id)}" aria-label="Voir ${escapeHtml(product.name)}${soldOut ? " (indisponible)" : ""}">${product.image ? `<img class="product-image" src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" loading="lazy" />` : `<span class="product-image-placeholder" aria-hidden="true">${icon("utensils")}</span>`}</button>
+      <button class="product-image-button" type="button" data-product="${escapeHtml(product.id)}" aria-label="Voir ${escapeHtml(product.name)}${soldOut ? " (indisponible)" : ""}">${product.image ? `<img class="product-image${cutoutClass(product.image)}" src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" loading="lazy" />` : `<span class="product-image-placeholder" aria-hidden="true">${icon("utensils")}</span>`}</button>
       ${soldOut ? `<span class="soldout-badge">Épuisé</span>` : product.discount ? `<span class="discount-badge">${escapeHtml(product.discount)}</span>` : ""}
       <button class="favorite-button ${favorite ? "is-favorite" : ""}" type="button" data-favorite="${escapeHtml(product.id)}" aria-label="${favorite ? "Retirer des" : "Ajouter aux"} favoris" aria-pressed="${favorite}">${icon("heart", { filled: favorite })}</button>
     </div>
@@ -355,17 +478,26 @@ function renderAuth() {
   </section>`;
 }
 
-function renderBranches() {
-  const branchCards = state.branches.map(branch => `
-    <button class="branch-card" type="button" data-branch="${escapeHtml(branch.id)}">
-      <span class="branch-card-icon">${icon("store")}</span>
-      <span class="branch-card-copy">
+function renderHouseCard(branch) {
+  const details = detailsFor(branch);
+  const address = details.address || branch.address || "";
+  return `<button class="house-card" type="button" data-branch="${escapeHtml(branch.id)}">
+    ${details.image
+      ? `<span class="house-photo${details.photoClass ? ` ${details.photoClass}` : ""}"><img src="${escapeHtml(details.image)}" alt="" /></span>`
+      : `<span class="house-photo house-photo-empty" aria-hidden="true">${icon("store")}</span>`}
+    <span class="house-row">
+      <span class="restaurant-logo"><img src="./assets/emblem-reference.png" alt="" /></span>
+      <span class="house-copy">
         <strong>${escapeHtml(branch.name)}</strong>
-        <span>${escapeHtml(branch.cuisine || "")}</span>
-        ${branch.address ? `<small>${escapeHtml(branch.address)}</small>` : ""}
+        ${address ? `<small>${escapeHtml(address)}</small>` : `<span>${escapeHtml(branch.cuisine || "")}</span>`}
       </span>
       <span class="branch-card-arrow" aria-hidden="true">${icon("chevronRight")}</span>
-    </button>`).join("");
+    </span>
+  </button>`;
+}
+
+function renderBranches() {
+  const branchCards = state.branches.map(renderHouseCard).join("");
   return `<section class="branch-picker" aria-labelledby="branch-heading">
     <span class="eyebrow">G&amp;K · Choisissez votre restaurant</span>
     <h1 class="screen-title" id="branch-heading">Où souhaitez-vous commander ?</h1>
@@ -388,20 +520,25 @@ function renderHome() {
   if (state.menuStatus === "loading") return `<section><h1 class="screen-title">Accueil</h1><p class="empty-state">Chargement du menu…</p></section>`;
   if (state.menuStatus === "error") return `<section><h1 class="screen-title">Accueil</h1><p class="cart-notice" role="alert">${escapeHtml(state.menuError)}</p><button class="gold-button" type="button" data-action="reload-menu">Réessayer</button></section>`;
   const branch = selectedBranch();
-  return `<section aria-label="Accueil">
+  const homeItems = filteredProducts();
+  const compact = state.category === "All" && !state.query;
+  const preview = compact ? homeItems.slice(0, 4) : homeItems;
+  const menuTitle = state.query ? "Résultats" : state.category === "All" ? "Menu" : escapeHtml(categories.find(c => c.id === state.category)?.label || "Menu");
+  return `<section class="home-stage" aria-label="Accueil">
     <button class="branch-switcher" type="button" data-action="choose-branch">
       <span class="branch-switcher-icon">${icon("store")}</span>
       <span><small>Vous commandez chez</small><strong>${escapeHtml(branch?.name || "G&K")}</strong></span>
       <span class="branch-switcher-change">Changer</span>
     </button>
+    ${sectionHead("Notre maison")}
+    ${renderRestaurantCard()}
+    ${renderFeatured()}
     ${renderReorder()}
     ${renderSearch("home-search", "Rechercher un plat, une envie…")}
     ${sectionHead("Explorer les catégories", seeAll)}
     ${renderCategories()}
-    ${sectionHead(state.query ? "Résultats" : "Menu", seeAll)}
-    ${renderProductGrid(filteredProducts().slice(0, 4))}
-    ${sectionHead("Notre maison")}
-    ${renderRestaurantCard()}
+    ${sectionHead(`${menuTitle}${compact ? "" : ` <small>${preview.length} plats</small>`}`, seeAll)}
+    ${compact && preview.length ? `<div class="home-rail">${preview.map(renderHomeTile).join("")}</div>` : renderProductGrid(preview)}
   </section>`;
 }
 
@@ -423,11 +560,11 @@ function renderRestaurantCard() {
   const restaurant = state.settings.restaurant;
   const name = typeof restaurant === "string" ? restaurant : restaurant?.name;
   const hours = typeof state.settings.hours === "string" ? state.settings.hours : "";
-  const details = BRANCH_DETAILS[state.selectedBranchId] || {};
-  const address = (restaurant && typeof restaurant === "object" && restaurant.address) || selectedBranch()?.address || details.address || "";
+  const details = detailsFor(selectedBranch() || state.selectedBranchId);
+  const address = details.address || (restaurant && typeof restaurant === "object" && restaurant.address) || selectedBranch()?.address || "";
   return `<article class="restaurant-card">
     ${details.image
-      ? `<div class="mini-map photo"><img src="${details.image}" alt="Façade de ${escapeHtml(name || selectedBranch()?.name || "G&K Food")}" loading="lazy" /></div>`
+      ? `<div class="mini-map photo${details.photoClass ? ` ${details.photoClass}` : ""}"><img src="${details.image}" alt="Façade de ${escapeHtml(name || selectedBranch()?.name || "G&K Food")}" loading="lazy" /></div>`
       : `<div class="mini-map" role="img" aria-label="Restaurant G&K"><span class="map-pin restaurant">${icon("store")}</span></div>`}
     <div class="restaurant-info">
       <div class="restaurant-logo"><img src="./assets/emblem-reference.png" alt="" /></div>
@@ -439,6 +576,32 @@ function renderRestaurantCard() {
 }
 
 /* ---------- Cart ---------- */
+
+function accountPhone() {
+  return String(state.user?.phone || "").replace(/[\s.-]/g, "");
+}
+
+function checkoutPhone() {
+  if (state.phoneOverride || !accountPhone()) return String(state.orderPhone || "").replace(/[\s.-]/g, "");
+  return accountPhone();
+}
+
+function formatPhoneDisplay(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (digits.length === 10) return `${digits.slice(0, 2)} ${digits.slice(2, 4)} ${digits.slice(4, 6)} ${digits.slice(6, 8)} ${digits.slice(8, 10)}`;
+  return phone || "";
+}
+
+function renderCartPhone() {
+  const account = accountPhone();
+  if (!state.user) {
+    return `<div class="address-card"><span class="address-icon">${icon("phone")}</span><div><strong>Téléphone de contact</strong><small>Connectez-vous pour utiliser le numéro du compte, ou un autre.</small></div><button class="text-button" type="button" data-action="login">Connexion</button></div>`;
+  }
+  if (!state.phoneOverride && account) {
+    return `<div class="address-card"><span class="address-icon">${icon("phone")}</span><div><strong>${escapeHtml(formatPhoneDisplay(account))}</strong><small>Numéro du compte</small></div><button class="text-button" type="button" data-action="phone-other">Autre numéro</button></div>`;
+  }
+  return `<div class="address-card phone-card"><span class="address-icon">${icon("phone")}</span><div><strong>Autre numéro</strong><input id="cart-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="06 12 34 56 78" aria-label="Numéro de contact" value="${escapeHtml(state.orderPhone || "")}" /><small>${account ? "Pour cette commande seulement" : "Pour vous joindre à la livraison"}</small></div>${account ? `<button class="text-button" type="button" data-action="phone-account">Compte</button>` : ""}</div>`;
+}
 
 function renderCart() {
   if (state.menuStatus === "loading") return `<section><h1 class="screen-title">Mon panier</h1><p class="empty-state">Chargement du menu…</p></section>`;
@@ -455,12 +618,12 @@ function renderCart() {
   const freeHint = state.delivery === "delivery" && address && subtotal < freeFrom
     ? `Plus que ${formatPrice(freeFrom - subtotal)} pour la livraison offerte.` : "";
   const eta = state.delivery === "delivery" && zone ? [zone.etaMin, zone.etaMax] : null;
-  const feeLabel = state.delivery !== "delivery" ? "Gratuit" : !address || !zone ? "À calculer" : deliveryFee() ? formatPrice(deliveryFee()) : "Offerte";
+  const feeLabel = !address || !zone ? "À calculer" : deliveryFee() ? formatPrice(deliveryFee()) : "Offerte";
   const payment = currentPayment();
   return `<section aria-labelledby="cart-heading">
     <h1 class="screen-title" id="cart-heading">Mon panier</h1>
     <div class="cart-list">${state.cart.map((line, index) => `<article class="cart-line">
-      <img class="cart-line-image" src="${line.product.image}" alt="" />
+      ${line.product.image ? `<img class="cart-line-image${cutoutClass(line.product.image)}" src="${escapeHtml(line.product.image)}" alt="" />` : `<span class="cart-line-image product-image-placeholder" aria-hidden="true">${icon("utensils")}</span>`}
       <div class="cart-line-body">
         <h2 class="cart-line-name">${escapeHtml(line.product.name)}</h2>
         <p class="cart-line-price">${formatPrice(lineUnit(line))}</p>
@@ -474,14 +637,14 @@ function renderCart() {
       <button class="delivery-choice ${state.delivery === "pickup" ? "active" : ""}" type="button" data-delivery="pickup" aria-pressed="${state.delivery === "pickup"}">${icon("store")}À emporter<small>Retrait au restaurant</small></button>
     </div>
     <div class="address-card"><span class="address-icon">${icon("pin")}</span><div><strong>${state.delivery === "delivery" ? (address ? escapeHtml(address.street) : "Aucune adresse") : escapeHtml((state.settings.restaurant && typeof state.settings.restaurant === "object" && state.settings.restaurant.name) || state.settings.restaurant || "G&K Food")}</strong><small>${state.delivery === "delivery" ? (address ? `${escapeHtml(address.label)} · ${escapeHtml(zone?.name || "")}` : "Ajoutez une adresse de livraison") : "Retrait au restaurant"}</small></div>${state.delivery === "delivery" ? `<button class="text-button" type="button" data-action="addresses">${address ? "Modifier" : "Ajouter"}</button>` : ""}</div>
+    ${renderCartPhone()}
     <div class="address-card"><span class="address-icon">${icon("cash")}</span><div><strong>${escapeHtml(payment.label)}</strong><small>Le paiement par carte n'est pas disponible. Aucun numéro de carte n'est collecté.</small></div></div>
     <form class="promo-box" id="promo-form"><span class="promo-icon" aria-hidden="true">${icon("tag")}</span><input class="promo-input" id="promo-code" type="text" placeholder="Code promo" aria-label="Code promo" ${state.promo ? `value="${escapeHtml(state.promo.code)}"` : ""} /><button class="outline-button" type="submit">${state.promo ? `Appliqué ${icon("check")}` : "Appliquer"}</button></form>
     ${state.promoError ? `<p class="form-error" role="alert">${escapeHtml(state.promoError)}</p>` : ""}
     ${state.promoMessage ? `<p class="cart-notice soft">${escapeHtml(state.promoMessage)}</p>` : ""}
     ${state.orderError ? `<p class="cart-notice" role="alert">${escapeHtml(state.orderError)}</p>` : ""}
     <label class="note-box"><span>Note pour la cuisine <small>· optionnel</small></span><textarea id="cart-note" rows="2" maxlength="140" placeholder="Ex. sans oignons, bien cuit…">${escapeHtml(state.cartNote || "")}</textarea></label>
-    ${state.user && !state.user.phone ? `<label class="note-box"><span>Téléphone pour la livraison</span><input id="cart-phone" type="tel" autocomplete="tel" placeholder="06 12 34 56 78" value="${escapeHtml(state.orderPhone || "")}" /></label>` : ""}
-    <div class="bill-card"><div class="bill-row"><span>Sous-total</span><span>${formatPrice(subtotal)}</span></div><div class="bill-row"><span>Frais de ${state.delivery === "delivery" ? "livraison" : "préparation"}</span><span>${feeLabel}</span></div>${state.promo ? `<div class="bill-row promo"><span>${escapeHtml(state.promo.code)}</span><span>-${formatPrice(state.promo.discount)}</span></div>` : ""}<div class="bill-row total"><span>Total</span><strong>${formatPrice(cartTotal())}</strong></div></div>
+    <div class="bill-card"><div class="bill-row"><span>Sous-total</span><span>${formatPrice(subtotal)}</span></div>${state.delivery === "delivery" ? `<div class="bill-row"><span>Frais de livraison</span><span>${feeLabel}</span></div>` : ""}${state.promo ? `<div class="bill-row promo"><span>${escapeHtml(state.promo.code)}</span><span>-${formatPrice(state.promo.discount)}</span></div>` : ""}<div class="bill-row total"><span>Total</span><strong>${formatPrice(cartTotal())}</strong></div></div>
     ${issue ? `<p class="cart-notice">${escapeHtml(issue)}</p>` : freeHint ? `<p class="cart-notice soft">${freeHint}</p>` : ""}
     <button class="gold-button full-width" type="button" data-action="checkout" ${state.orderSubmitting ? "disabled" : ""}>${state.orderSubmitting ? "Envoi en cours…" : state.user ? "Passer la commande" : "Se connecter pour commander"} · ${formatPrice(cartTotal())}</button>
     ${eta ? `<p class="fineprint">Délai de livraison estimé : ${eta[0]}–${eta[1]} min</p>` : ""}
@@ -522,6 +685,16 @@ function trackingEta(order) {
   return "En cours";
 }
 
+function trackingScene(order) {
+  const html = window.gkMotionLive?.liveSceneHtml;
+  if (!html || order.status !== "active") return "";
+  if (order.stage === 0) return html("wait", "La cuisine va confirmer votre commande");
+  if (order.stage === 1) return html("cook", "Le chef prépare vos plats");
+  if (order.stage === 2) return html("ready", order.mode === "pickup" ? "Votre commande vous attend au comptoir" : "En attente du livreur");
+  if (order.stage === 3) return html("ride", "Votre livreur est en route");
+  return "";
+}
+
 function renderTracking(order) {
   const steps = stagesFor(order);
   const done = order.status === "completed";
@@ -531,7 +704,9 @@ function renderTracking(order) {
     <div class="back-row"><button class="icon-button" type="button" data-back-orders aria-label="Retour aux commandes">${icon("chevronLeft")}</button><h1 class="screen-title" id="tracking-heading">Suivi de commande</h1></div>
     ${state.ordersError ? `<p class="cart-notice" role="alert">${escapeHtml(state.ordersError)}</p>` : ""}
     <article class="tracking-card">
-      <div class="eta-row"><div><small>${done || ended ? "Statut" : "Estimation du restaurant"}</small><strong>${etaText}</strong></div><span class="status-pill ${order.status}">Commande #${escapeHtml(order.seq || order.id)}</span></div>${order.status === "active" && order.mode === "delivery" && order.delivery_code ? `<p class="cart-notice">Code de livraison à donner au livreur : <strong>${escapeHtml(order.delivery_code)}</strong></p>` : ""}
+      <div class="eta-row"><div><small>${done || ended ? "Statut" : "Estimation du restaurant"}</small><strong>${etaText}</strong></div><span class="status-pill ${order.status}">Commande #${escapeHtml(order.seq || order.id)}</span></div>
+      ${trackingScene(order)}
+      ${order.status === "active" && order.mode === "delivery" && order.delivery_code ? `<p class="cart-notice">Code de livraison à donner au livreur : <strong>${escapeHtml(order.delivery_code)}</strong></p>` : ""}
       ${order.status === "refused" ? `<p class="cart-notice">Commande refusée par la cuisine. Motif : ${escapeHtml(order.refusedReason || "non précisé")}.</p>` : ""}
       ${ended ? "" : `<ol class="step-list">${steps.map((step, index) => {
         const status = index < order.stage || (done && index === steps.length - 1) ? "done" : index === order.stage ? "current" : "";
@@ -599,13 +774,16 @@ function render() {
     ? `<div class="pause-banner" role="alert">${icon("clock")}<span>${PAUSE_MESSAGE}</span></div>` : "";
   main.innerHTML = banner + views[state.view]();
   document.querySelectorAll(".nav-button").forEach(button => {
-    const active = button.dataset.view === state.view;
+    const active = button.dataset.view === state.view || (button.dataset.view === "home" && state.view === "branches");
     button.classList.toggle("active", active);
     if (active) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
   });
   updateChrome();
   saveState();
+  const filter = document.querySelector(".category-chip.active")?.textContent || "";
+  window.gkMotion?.enterView(main, `${state.view}:${state.category}:${filter}:${state.query}`);
+  window.gkMotionLive?.playLiveScenes(main);
 }
 
 function goTo(view, { top = true } = {}) {
@@ -637,8 +815,8 @@ function renderSheet() {
   const { product, size, extras, quantity } = state.detail;
   const favorite = state.favorites.has(product.id);
   sheet.innerHTML = `<div class="sheet-scroll">
-    <div class="sheet-hero">${product.image ? `<img class="sheet-image" src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" />` : `<div class="sheet-image product-image-placeholder" aria-hidden="true">${icon("utensils")}</div>`}
-      <button class="sheet-close" type="button" data-action="close-sheet" aria-label="Fermer">${icon("chevronLeft")}</button>
+    <div class="sheet-hero">${product.image ? `<img class="sheet-image${cutoutClass(product.image)}" src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" />` : `<div class="sheet-image product-image-placeholder" aria-hidden="true">${icon("utensils")}</div>`}
+      <button class="sheet-close" type="button" data-action="close-sheet" aria-label="Fermer">${icon("close")}</button>
       <button class="favorite-button ${favorite ? "is-favorite" : ""}" type="button" data-detail-favorite aria-label="${favorite ? "Retirer des" : "Ajouter aux"} favoris" aria-pressed="${favorite}">${icon("heart", { filled: favorite })}</button></div>
     <div class="sheet-body">
       <div class="sheet-meta">${product.discount ? `<span class="discount-badge static">${escapeHtml(product.discount)}</span>` : ""}<span>${escapeHtml(product.categoryName)}</span></div>
@@ -653,14 +831,20 @@ function renderSheet() {
 function showOverlay() {
   overlay.hidden = false;
   document.body.style.overflow = "hidden";
+  window.gkMotion?.overlayIn(overlay, sheet);
 }
 
 function closeOverlay() {
-  overlay.hidden = true;
-  document.body.style.overflow = "";
-  state.detail = null;
-  state.panel = null;
-  sheet.className = "sheet";
+  const finish = () => {
+    overlay.hidden = true;
+    document.body.style.overflow = "";
+    state.detail = null;
+    state.panel = null;
+    sheet.className = "sheet";
+  };
+  const run = window.gkMotion?.overlayOut?.(overlay, sheet);
+  if (run && typeof run.then === "function") run.then(finish, finish);
+  else finish();
 }
 
 function openProduct(productId) {
@@ -786,8 +970,9 @@ function startCheckout() {
   }
   const issue = checkoutIssue();
   if (issue) return showToast(issue);
-  if (!state.user.phone && !PHONE_RE.test(String(state.orderPhone || "").replace(/[\s.-]/g, ""))) {
+  if (!PHONE_RE.test(checkoutPhone())) {
     state.orderError = "Saisissez un numéro de téléphone valide (06 12 34 56 78) pour être joint à la livraison.";
+    state.phoneOverride = true;
     return render();
   }
   placeOrder();
@@ -813,7 +998,7 @@ function placeOrder() {
   };
   if (delivery) payload.address = { zone: address.zone, street: address.street, label: address.label };
   if (state.promo?.code) payload.promo = state.promo.code;
-  if (!state.user.phone) payload.customer = { phone: String(state.orderPhone).replace(/[\s.-]/g, "") };
+  payload.customer = { phone: checkoutPhone() };
   GKApi.post("/api/orders", payload, "client").then(result => {
     state.orderSubmitting = false;
     const order = normalizeOrder(result.order);
@@ -854,12 +1039,14 @@ main.addEventListener("click", event => {
   const closest = selector => event.target.closest(selector);
   let el;
   if ((el = closest("[data-branch]"))) { void chooseBranch(el.dataset.branch); return; }
-  if (closest("[data-reorder]")) {
-    const found = lastOrderToReorder();
+  if ((el = closest("[data-reorder]"))) {
+    const found = lastOrderToReorder(el.dataset.reorder);
     if (!found) return;
     found.lines.forEach(line => addToCart(line.product, line.size, line.extras, line.quantity));
     saveState();
-    showToast("Ajouté à votre panier");
+    showToast(found.skipped.length
+      ? `Ajouté au panier · ${found.skipped.length} article(s) indisponible(s)`
+      : "Ajouté à votre panier");
     return render();
   }
   if ((el = closest("[data-view]"))) return setView(el.dataset.view);
@@ -906,6 +1093,15 @@ main.addEventListener("click", event => {
   const action = el.dataset.action;
   if (panelActions.includes(action)) return openPanel(action);
   switch (action) {
+    case "phone-other":
+      state.phoneOverride = true;
+      render();
+      document.querySelector("#cart-phone")?.focus();
+      return;
+    case "phone-account":
+      state.phoneOverride = false;
+      state.orderError = "";
+      return render();
     case "checkout": return startCheckout();
     case "reload-menu": return void loadMenu();
     case "reload-branches": return void loadBranches();
@@ -961,8 +1157,8 @@ main.addEventListener("click", event => {
       if (installPrompt) { installPrompt.prompt(); installPrompt = null; render(); }
       return;
     default:
-      if (action === "directions" && BRANCH_DETAILS[state.selectedBranchId]?.maps) {
-        window.open(BRANCH_DETAILS[state.selectedBranchId].maps, "_blank", "noopener");
+      if (action === "directions" && detailsFor(state.selectedBranchId)?.maps) {
+        window.open(detailsFor(state.selectedBranchId).maps, "_blank", "noopener");
         return;
       }
       if (actionMessages[action]) showToast(actionMessages[action]);
@@ -977,7 +1173,7 @@ window.addEventListener("gk-api-session-expired", event => {
   state.orders = [];
   state.trackingId = null;
   state.ordersError = "Votre session a expiré. Reconnectez-vous pour consulter vos commandes.";
-  state.view = "home";
+  state.view = "branches";
   render();
   showToast("Votre session a expiré. Veuillez vous reconnecter.");
 });
@@ -1118,16 +1314,6 @@ setInterval(() => {
   else if (state.view === "orders" && state.user) void refreshOrders();
   else if (!document.hidden && state.user && state.orders.some(order => order.status === "active")) void refreshOrders();
 }, 8000);
-document.querySelector("#live-bar").addEventListener("click", event => {
-  const button = event.target.closest("[data-live]");
-  if (!button) return;
-  if (button.dataset.live === "cart") return setView("cart");
-  state.trackingId = button.dataset.order;
-  goTo("orders", { top: true });
-  state.trackingId = button.dataset.order;
-  render();
-  void refreshTrackedOrder();
-});
 main.addEventListener("input", event => {
   if (event.target.id === "cart-note") { state.cartNote = event.target.value; saveState(); }
   if (event.target.id === "cart-phone") state.orderPhone = event.target.value;

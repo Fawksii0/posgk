@@ -31,3 +31,4 @@ dist-ssr
 !.env.example
 
 gk-dist
+GKMobile/assets/_devpack/

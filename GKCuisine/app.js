@@ -20,6 +20,9 @@
   let pointerDown = false;
   let renderAfterPointer = false;
   let bootRefresh = true;
+  let lastAnnouncedRev = "";
+  let pulseFresh = [];
+  let watchAbort = null;
 
   const COLUMNS = [
     { key: "new", label: "Nouvelles", icon: "bell" },
@@ -36,7 +39,10 @@
 
   const defaultPrep = () => Number(data.settings.defaultPrep) || 20;
   const findOrder = id => data.orders.find(order => order.id === id);
-  const statusPill = order => `<span class="pill s-${order.status}">${esc(STATUS_LABELS[order.status] || order.status)}</span>`;
+  const statusPill = order => {
+    const label = order.mode === "dinein" && order.status === "delivered" ? "Servie" : (STATUS_LABELS[order.status] || order.status);
+    return `<span class="pill s-${order.status}">${esc(label)}</span>`;
+  };
 
   function toast(message) {
     toastEl.textContent = message;
@@ -67,6 +73,7 @@
       mode: row.mode,
       items,
       customer: { name: row.customer_name || "", phone: row.customer_phone || "" },
+      tableNo: Number(row.table_no) || 0,
       address: { street: row.address || "", zone: row.zone_name || row.zone_id || "", label: row.address_label || "" },
       note: row.note || "",
       subtotal: Number(row.subtotal) || 0,
@@ -135,7 +142,7 @@
       const results = await Promise.all(requests);
       const orders = results[0].orders || [];
       const oldPending = knownPending;
-      data.orders = orders.map(normalizeOrder);
+      data.orders = orders.map(normalizeOrder).filter(order => order.mode !== "dinein");
       data.settings = { ...data.settings, ...results[1] };
       if (isCashier()) {
         data.categories = results[2].categories || [];
@@ -155,11 +162,14 @@
       if (!bootRefresh) {
         const fresh = [...knownPending].filter(id => !oldPending.has(id));
         if (fresh.length) {
-          beep();
-          toast(`Nouvelle commande ${fresh.join(", ")}`);
+          if (!pulseFresh.length) {
+            beep();
+            toast(`Nouvelle commande ${fresh.join(", ")}`);
+          }
           freshIds = fresh;
         }
       }
+      pulseFresh = [];
       bootRefresh = false;
     } catch (error) {
       data.loading = false;
@@ -174,6 +184,47 @@
       }
       syncAlert(freshIds);
     }
+  }
+
+  function applyKitchenSnap(snap) {
+    const pendingIds = snap.pendingIds || [];
+    if (bootRefresh || snap.rev === lastAnnouncedRev) return snap.rev || "";
+    const fresh = pendingIds.filter(id => !knownPending.has(id));
+    lastAnnouncedRev = snap.rev;
+    if (fresh.length) {
+      pulseFresh = fresh;
+      beep();
+      toast(`Nouvelle commande ${fresh.join(", ")}`);
+      void refreshData();
+    } else if (pendingIds.length !== knownPending.size || pendingIds.some(id => !knownPending.has(id))) {
+      void refreshData();
+    }
+    return snap.rev || "";
+  }
+
+  function stopWatch() {
+    watchAbort?.abort();
+    watchAbort = null;
+  }
+
+  function startWatch() {
+    stopWatch();
+    if (!state.session || state.session.mustChange) return;
+    const abort = new AbortController();
+    watchAbort = abort;
+    void (async () => {
+      let rev = "";
+      while (!abort.signal.aborted && state.session && !state.session.mustChange) {
+        try {
+          const snap = await api.get(`/api/live/wait?kind=kitchen&rev=${encodeURIComponent(rev)}`, API_SCOPE, { signal: abort.signal });
+          if (abort.signal.aborted) return;
+          rev = applyKitchenSnap(snap) || rev;
+        } catch (error) {
+          if (abort.signal.aborted || error?.name === "AbortError") return;
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+      }
+    })();
   }
 
   /* ---------- rendering ---------- */
@@ -283,15 +334,15 @@
       actions = `${cashier ? `<div class="prep-row"><span class="small muted">Temps total</span>${stepper(order.id, order.prepMin, "live")}</div>` : ""}
         <div class="btn-row">${cashier ? `<button class="btn" data-action="reprint" data-id="${esc(order.id)}">${icon("printer")}Réimprimer</button>` : ""}<button class="btn primary" data-action="ready" data-id="${esc(order.id)}">${icon("check")}Prête</button></div>`;
     } else if (order.status === "ready") {
-      const pickup = order.mode === "pickup";
+      const servedHere = order.mode === "pickup";
       actions = `<div class="btn-row">${cashier ? `<button class="btn" data-action="reprint" data-id="${esc(order.id)}">${icon("printer")}Réimprimer</button>` : ""}
-        ${pickup ? (cashier ? `<button class="btn primary" data-action="handover" data-id="${esc(order.id)}">${icon("check")}Remise au client</button>` : `<span class="small muted">À remettre au client</span>`) : `<span class="small muted">En attente du livreur</span>`}</div>`;
+        ${servedHere ? (cashier ? `<button class="btn primary" data-action="handover" data-id="${esc(order.id)}">${icon("check")}Remise au client</button>` : `<span class="small muted">À remettre au client</span>`) : `<span class="small muted">En attente du livreur</span>`}</div>`;
     } else if (cashier) {
       actions = `<div class="btn-row"><button class="btn" data-action="reprint" data-id="${esc(order.id)}">${icon("printer")}Réimprimer</button></div>`;
     }
     return `<article class="card ${isNew ? "is-new" : ""} mode-${order.mode} ${timed ? `timed ${ageClass(Date.now() - order.createdAt)}` : ""}" data-order="${esc(order.id)}" ${timed ? `data-age-since="${order.createdAt}"` : ""}>
       <header class="card-head"><div><span class="order-no">${esc(order.id)}</span> ${statusPill(order)}</div>${timed ? `<span class="elapsed" data-timer="${order.createdAt}" aria-label="Temps écoulé">${elapsedText(order.createdAt)}</span>` : `<span class="elapsed" data-since="${order.createdAt}">${minutesSince(order.createdAt)} min</span>`}</header>
-      <div class="card-meta"><span class="who-first">${icon("user")}${esc(firstName(order))}</span><span class="mode-chip ${order.mode}">${icon(order.mode === "delivery" ? "bike" : "store")}${order.mode === "delivery" ? "Livraison" : "À emporter"}</span></div>
+      <div class="card-meta"><span class="who-first">${icon("user")}${esc(firstName(order))}</span><span class="mode-chip ${order.mode}">${icon(modeIcon(order))}${modeLabel(order)}</span></div>
       <ul class="lines">${lines}</ul>
       ${order.note ? `<p class="note">${icon("alert")}<span>${esc(order.note)}</span></p>` : ""}
       <div class="card-total"><span class="pay">${icon(order.paymentType === "cash" ? "cash" : "card")}${esc(order.payment)}</span><b>${money(order.total)}</b></div>
@@ -306,9 +357,15 @@
     const couriers = courierMap();
     const strip = `<div class="courier-strip" aria-label="Livreurs">${Object.values(couriers).map(c => `<span class="chip ${c.online ? (c.busy ? "warn" : "ok") : "off"}">${icon("bike")}<span>${esc(c.courier.name.split(" ")[0])} · ${c.online ? (c.busy ? "en mission" : "libre") : "hors ligne"}${c.km == null ? "" : ` · ${c.km.toFixed(1)} km`}</span></span>`).join("")}</div>`;
     const tabs = `<div class="col-tabs" role="tablist">${COLUMNS.map(c => `<button role="tab" class="col-tab ${ui.col === c.key ? "active" : ""}" data-action="col" data-col="${c.key}" aria-selected="${ui.col === c.key}">${c.label}<b>${groups[c.key].length}</b></button>`).join("")}</div>`;
-    const cols = COLUMNS.map(c => `<section class="col col-${c.key} ${ui.col === c.key ? "is-current" : ""}" aria-label="${c.label}">
+    const scene = window.gkMotionLive?.liveSceneHtml;
+    const cols = COLUMNS.map(c => {
+      const cook = c.key === "prep" && groups.prep.length && scene ? scene("cook", "La cuisine prépare ces commandes", true) : "";
+      const ride = c.key === "out" && groups.out.some(order => order.status === "enroute") && scene ? scene("ride", "Livreurs en route", true) : "";
+      const cards = groups[c.key].length ? groups[c.key].map(order => orderCard(order, couriers)).join("") : "";
+      return `<section class="col col-${c.key} ${ui.col === c.key ? "is-current" : ""}" aria-label="${c.label}">
       <h2>${icon(c.icon)}${c.label}<b>${groups[c.key].length}</b></h2>
-      <div class="col-body">${groups[c.key].length ? groups[c.key].map(order => orderCard(order, couriers)).join("") : `<div class="empty-state"><span class="empty-ico">${icon(c.icon)}</span><strong>Aucune commande</strong><small>${EMPTY_HINTS[c.key] || ""}</small></div>`}</div></section>`).join("");
+      <div class="col-body">${cook}${ride}${cards || `<div class="empty-state"><span class="empty-ico">${icon(c.icon)}</span><strong>Aucune commande</strong><small>${EMPTY_HINTS[c.key] || ""}</small></div>`}</div></section>`;
+    }).join("");
     return `${strip}${tabs}<div class="board">${cols}</div>`;
   }
 
@@ -321,7 +378,7 @@
     })[ui.filter];
     const rows = today.filter(match).map(order => `<article class="h-row s-${order.status}">
       <div class="h-main"><b class="h-no">${esc(order.id)}</b>${statusPill(order)}</div>
-      <div class="h-info"><span>${icon("clock")}${clock(order.createdAt)}</span><span>${icon("user")}${esc(firstName(order))}</span><span class="mode-chip ${order.mode === "pickup" ? "pickup" : ""}">${order.mode === "delivery" ? "Livraison" : "À emporter"}</span></div>
+      <div class="h-info"><span>${icon("clock")}${clock(order.createdAt)}</span><span>${icon("user")}${esc(firstName(order))}</span><span class="mode-chip ${order.mode}">${modeLabel(order)}</span></div>
       ${order.refusedReason ? `<div class="small muted h-reason">${esc(order.refusedReason)}</div>` : ""}
       <div class="h-end"><b>${money(order.total)}</b>${isCashier() && order.acceptedAt ? `<button class="icon-btn" data-action="reprint" data-id="${esc(order.id)}" aria-label="Réimprimer ${esc(order.id)}">${icon("printer")}</button>` : ""}</div></article>`).join("");
     const revenue = today.filter(order => order.status === "delivered").reduce((sum, order) => sum + order.total, 0);
@@ -400,6 +457,7 @@
     app.innerHTML = `${renderHeader()}<main class="main view-${ui.view}">${banners}${body}</main>`;
     app.querySelectorAll(".col-body").forEach((element, index) => { if (previousScroll[index]) element.scrollTop = previousScroll[index]; });
     updateBadge();
+    window.gkMotionLive?.playLiveScenes(app);
   }
 
   function schedule() {
@@ -501,6 +559,8 @@
   }
 
   const pendingOrders = () => data.orders.filter(order => order.status === "pending");
+  let alertQueue = [];
+  const silencedIds = new Set();
 
   function updateBadge() {
     const count = state.session && !state.session.mustChange ? pendingOrders().length : 0;
@@ -532,6 +592,7 @@
 
   const actions = {
     async logout() {
+      stopWatch();
       let logoutError = null;
       try {
         await api.logout(API_SCOPE);
@@ -541,6 +602,10 @@
         try { logout(); } catch (error) { logoutError = logoutError || error; }
       }
       closeSheet();
+      silencedIds.clear();
+      alertQueue = [];
+      alertShownId = null;
+      alertRoot.innerHTML = "";
       data.orders = [];
       data.menu = [];
       data.couriers = [];
@@ -594,10 +659,17 @@
       await runAction(() => api.post(`/api/orders/${encodeURIComponent(el.dataset.id)}/refuse`, { reason: el.dataset.reason }, API_SCOPE), () => closeSheet());
     },
     async ready(el) {
-      await runAction(() => api.post(`/api/orders/${encodeURIComponent(el.dataset.id)}/ready`, {}, API_SCOPE), () => { ui.col = "ready"; });
+      await runAction(() => api.post(`/api/orders/${encodeURIComponent(el.dataset.id)}/ready`, {}, API_SCOPE), () => {
+        const order = findOrder(el.dataset.id);
+        ui.col = "ready";
+      });
     },
     handover(el) {
-      if (requireCashier()) runAction(() => api.post(`/api/orders/${encodeURIComponent(el.dataset.id)}/handover`, {}, API_SCOPE));
+      if (!requireCashier()) return;
+      const order = findOrder(el.dataset.id);
+      runAction(() => api.post(`/api/orders/${encodeURIComponent(el.dataset.id)}/handover`, {}, API_SCOPE), () => {
+        if (order?.mode === "pickup") ui.col = "out";
+      });
     },
     reprint(el) { const order = findOrder(el.dataset.id); if (order) printOrder(order, true); },
     assign(el) {
@@ -645,7 +717,11 @@
       const order = data.orders.find(item => item.id === el.dataset.id);
       if (order) GKReceipt.printTicket(receiptDoc(order), receiptOpts(el.dataset.reprint === "1"));
     },
-    "alert-dismiss"(el) { alertQueue = alertQueue.filter(id => id !== el.dataset.id); syncAlert(); },
+    "alert-dismiss"(el) {
+      if (el.dataset.id) silencedIds.add(el.dataset.id);
+      alertQueue = alertQueue.filter(id => id !== el.dataset.id);
+      syncAlert();
+    },
     "close-sheet"() { closeSheet(); }
   };
 
@@ -703,6 +779,7 @@
         data.actionError = "";
         render();
         await refreshData();
+        startWatch();
       } catch (error) {
         errorEl.textContent = error.message || "Impossible de modifier le mot de passe.";
         button.disabled = false;
@@ -734,6 +811,7 @@
       render();
       if (state.session.mustChange) return;
       await refreshData();
+      startWatch();
     } catch (error) {
       errorEl.textContent = error.message || "Connexion impossible.";
       button.disabled = false;
@@ -746,7 +824,12 @@
 
   document.addEventListener("gk-api-session-expired", event => {
     if (event.detail?.scope !== API_SCOPE) return;
+    stopWatch();
     state.session = null;
+    silencedIds.clear();
+    alertQueue = [];
+    alertShownId = null;
+    alertRoot.innerHTML = "";
     data.orders = [];
     data.loaded = false;
     data.error = "";
@@ -762,7 +845,6 @@
       element.classList.toggle("late", left < 0);
     });
     app.querySelectorAll("[data-since]").forEach(element => { element.textContent = `${minutesSince(Number(element.dataset.since))} min`; });
-    tickTimers();
   }
 
   function tickTimers() {
@@ -784,29 +866,41 @@
   const alertRoot = document.createElement("div");
   alertRoot.id = "alert-root";
   document.body.appendChild(alertRoot);
-  let alertQueue = [];
   let alertShownId = null;
   let alertShownCount = 0;
 
+  function ringingPending() {
+    return pendingOrders().filter(order => isCashier() || !silencedIds.has(order.id));
+  }
+
   function syncAlert(freshIds = []) {
     alertQueue = [...alertQueue, ...freshIds.filter(id => !alertQueue.includes(id))]
-      .filter(id => data.orders.some(order => order.id === id && order.status === "pending"));
+      .filter(id => data.orders.some(order => order.id === id && order.status === "pending"))
+      .filter(id => isCashier() || !silencedIds.has(id));
     if (!state.session || state.session.mustChange || !alertQueue.length) {
       if (alertShownId) { alertRoot.innerHTML = ""; alertShownId = null; }
       return;
     }
-    const order = findOrder(alertQueue[0]);
+    let order = findOrder(alertQueue[0]);
+    while (alertQueue.length && !order) {
+      alertQueue.shift();
+      order = findOrder(alertQueue[0]);
+    }
+    if (!order) {
+      if (alertShownId) { alertRoot.innerHTML = ""; alertShownId = null; }
+      return;
+    }
     if (alertShownId === order.id && alertShownCount === alertQueue.length) return;
     alertShownId = order.id;
     alertShownCount = alertQueue.length;
     const cashier = isCashier();
-    const lines = order.items.map(item => `<li><span class="qty">${item.qty}×</span><span><b>${esc(item.name)}</b>${item.size ? ` <span class="muted">${esc(item.size)}</span>` : ""}${(item.extras || []).length ? `<span class="extras">+ ${item.extras.map(esc).join(", ")}</span>` : ""}</span></li>`).join("");
+    const lines = (order.items || []).map(item => `<li><span class="qty">${item.qty}×</span><span><b>${esc(item.name)}</b>${item.size ? ` <span class="muted">${esc(item.size)}</span>` : ""}${(item.extras || []).length ? `<span class="extras">+ ${item.extras.map(esc).join(", ")}</span>` : ""}</span></li>`).join("");
     const more = alertQueue.length - 1;
     alertRoot.innerHTML = `<div class="new-alert" role="alertdialog" aria-modal="true" aria-labelledby="na-title">
       <div class="na-body">
         <p class="na-kicker">Nouvelle commande</p>
         <h2 id="na-title" class="na-no">${esc(order.id)}</h2>
-        <p class="na-type">${icon(order.mode === "delivery" ? "bike" : "store")}${order.mode === "delivery" ? "Livraison" : "À emporter"} · ${esc(firstName(order))} · <b class="na-total">${money(order.total)}</b></p>
+        <p class="na-type">${icon(modeIcon(order))}${modeLabel(order)} · ${esc(firstName(order))} · <b class="na-total">${money(order.total)}</b></p>
         <ul class="na-lines">${lines}</ul>
         ${order.note ? `<p class="note">${icon("alert")}<span>${esc(order.note)}</span></p>` : ""}
         ${more ? `<p class="na-more">${more} autre${more > 1 ? "s" : ""} en attente</p>` : ""}
@@ -821,13 +915,16 @@
   GKPrinter.onChange(() => schedule());
 
   setInterval(tickTimers, 1000);
+  setInterval(tickDom, 1000);
   setInterval(() => {
-    tickDom();
     if (state.session && !state.session.mustChange && !refreshRunning) refreshData();
-  }, 5000);
+  }, 15000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && state.session && !state.session.mustChange) startWatch();
+  });
   // The ring (about 1.7s) loops without pause until every new order is accepted or refused.
   setInterval(() => {
-    if (state.session && !state.session.mustChange && pendingOrders().length) beep();
+    if (state.session && !state.session.mustChange && ringingPending().length) beep();
   }, 2200);
   window.addEventListener("storage", event => {
     if (event.key === STORAGE_KEY) {
@@ -838,7 +935,10 @@
   });
 
   render();
-  if (state.session && !state.session.mustChange) refreshData();
+  if (state.session && !state.session.mustChange) {
+    void refreshData();
+    startWatch();
+  }
   GKPrinter.reconnect(state.prefs.lastPrinter);
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
     navigator.serviceWorker.register("sw.js").catch(() => {});

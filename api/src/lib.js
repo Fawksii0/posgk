@@ -91,11 +91,25 @@ const SECURITY_HEADERS = {
   "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
 };
 
+export function originAllowed(env, origin) {
+  if (!origin) return false;
+  const allowed = String(env.ALLOWED_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (allowed.includes(origin)) return true;
+  try {
+    const url = new URL(origin);
+    const host = url.hostname;
+    if (url.protocol === "https:" && (host === "gkfood.store" || host.endsWith(".gkfood.store"))) return true;
+    if (url.protocol === "http:" && (host === "localhost" || host === "127.0.0.1") && (url.port === "8800" || url.port === "")) return true;
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 export function corsHeaders(env, req) {
   const origin = req.headers.get("Origin");
-  const allowed = String(env.ALLOWED_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
   const h = { Vary: "Origin" };
-  if (origin && allowed.includes(origin)) {
+  if (originAllowed(env, origin)) {
     h["Access-Control-Allow-Origin"] = origin;
     h["Access-Control-Allow-Methods"] = "GET,POST,PUT,PATCH,DELETE,OPTIONS";
     h["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-GK-Branch, x-region";

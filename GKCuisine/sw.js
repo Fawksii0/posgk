@@ -1,7 +1,7 @@
-const VERSION = "gk-cuisine-v22";
+const VERSION = "gk-cuisine-v32";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./data.js", "./store.js", "./escpos.js", "./app.js", "./manifest.webmanifest",
-  "./assets/emblem-reference.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png",   "../shared/gk-api.js", "../shared/gk-sound.js", "../shared/gk-receipt.js", "../shared/gk-map.js", "../shared/gk-map.css", "../shared/vendor/leaflet/leaflet.js", "../shared/vendor/leaflet/leaflet.css"
+  "./assets/emblem-reference.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png",   "../shared/gk-api.js", "../shared/gk-sound.js", "../shared/gk-receipt.js", "../shared/gk-map.js", "../shared/gk-map.css", "../shared/gk-live-scene.css", "../shared/gk-motion-live.js", "../shared/vendor/leaflet/leaflet.js", "../shared/vendor/leaflet/leaflet.css"
 ];
 
 self.addEventListener("install", event => {

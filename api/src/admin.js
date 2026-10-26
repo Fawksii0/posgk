@@ -5,16 +5,16 @@ import { validateNewSecret, createAuthUser, updateAuthUser, deleteAuthUser } fro
 import { tickDispatch, retryFailedOrders, releaseOfferedTo, STORE } from "./orders.js";
 
 /* ---------- serializers ---------- */
-export const itemOut = (r) => ({ id: r.id, categoryId: r.category_id, name: r.name, description: r.description, price: r.price, discount: r.discount, sizes: jparse(r.sizes, []), extras: jparse(r.extras, []), image: r.image_url, available: !!r.available, visible: !!r.visible });
+export const itemOut = (r) => ({ id: r.id, categoryId: r.category_id, name: r.name, description: r.description, price: r.price, dinePrice: r.dine_price == null ? r.price : r.dine_price, discount: r.discount, sizes: jparse(r.sizes, []), extras: jparse(r.extras, []), image: r.image_url, available: !!r.available, visible: !!r.visible });
 export const zoneOut = (r) => ({ id: r.id, name: r.name, fee: r.fee, min: r.min_order, etaMin: r.eta_min, etaMax: r.eta_max, freeFrom: r.free_from, enabled: !!r.enabled });
 const promoOut = (r) => ({ id: r.id, code: r.code, type: r.type, value: r.value, min: r.min_order, expiry: r.expiry, active: !!r.active, uses: r.uses });
 const catOut = (r) => ({ id: r.id, name: r.name, position: r.position });
 
-const PUBLIC_SETTINGS = ["paused", "deliveryOn", "restaurant", "hours", "freeDelivery"];
+const PUBLIC_SETTINGS = ["paused", "deliveryOn", "restaurant", "hours", "freeDelivery", "tableCount"];
 const HIDDEN_SETTINGS = ["rotationPointer"];
 
 export async function publicMenu(c) {
-  const defaults = { paused: false, deliveryOn: true, freeDelivery: 150 };
+  const defaults = { paused: false, deliveryOn: true, freeDelivery: 150, tableCount: 24 };
   const [cats, items, zones, rows] = await Promise.all([
     all(c.env, "SELECT * FROM menu_categories ORDER BY position, name"),
     all(c.env, "SELECT * FROM menu_items WHERE visible = 1 ORDER BY created_at"),
@@ -25,6 +25,7 @@ export async function publicMenu(c) {
   const settings = {};
   for (const k of PUBLIC_SETTINGS) settings[k] = stored.has(k) ? jparse(stored.get(k), defaults[k] ?? null) : (defaults[k] ?? null);
   settings.paused = !!settings.paused; settings.deliveryOn = !!settings.deliveryOn;
+  settings.tableCount = Number(settings.tableCount) || 24;
   return { categories: cats.map(catOut), items: items.map(itemOut), zones: zones.map(zoneOut), settings };
 }
 
@@ -39,6 +40,7 @@ function readItem(b) {
     name: str(b.name, { max: 60, min: 1, field: "Nom" }),
     description: str(b.description, { max: 240, field: "Description" }),
     price: numv(b.price, { min: 0, max: 10000, field: "Prix" }),
+    dinePrice: numv(b.dinePrice ?? b.dine_price, { min: 0, max: 10000, def: null, field: "Prix sur place" }),
     discount: numv(b.discount, { min: 0, max: 90, int: true, def: 0, field: "Remise" }),
     sizes: sizes.map((s) => ({ name: str(s?.name, { max: 30, min: 1, field: "Taille" }), delta: numv(s?.delta, { min: -1000, max: 1000, def: 0, field: "Supplément" }) })),
     extras: extras.map((s) => ({ name: str(s?.name, { max: 30, min: 1, field: "Supplément" }), price: numv(s?.price, { min: 0, max: 1000, def: 0, field: "Prix du supplément" }) })),
@@ -58,8 +60,9 @@ export async function itemCreate(c) {
   need(c.user, "menu.write");
   const v = readItem(c.body); const catId = c.body.categoryId || null; await categoryExists(c.env, catId);
   const id = randomId("p_"), t = now();
-  await run(c.env, "INSERT INTO menu_items (id, category_id, name, description, price, discount, sizes, extras, image_url, available, visible, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-    id, catId, v.name, v.description, v.price, v.discount, JSON.stringify(v.sizes), JSON.stringify(v.extras), v.image, v.available, v.visible, t, t);
+  const dinePrice = v.dinePrice == null ? v.price : v.dinePrice;
+  await run(c.env, "INSERT INTO menu_items (id, category_id, name, description, price, dine_price, discount, sizes, extras, image_url, available, visible, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    id, catId, v.name, v.description, v.price, dinePrice, v.discount, JSON.stringify(v.sizes), JSON.stringify(v.extras), v.image, v.available, v.visible, t, t);
   await audit(c.env, c.user, "Produit créé", v.name);
   return itemOut(await first(c.env, "SELECT * FROM menu_items WHERE id = ?", id));
 }
@@ -67,8 +70,9 @@ export async function itemUpdate(c) {
   need(c.user, "menu.write");
   const cur = await first(c.env, "SELECT * FROM menu_items WHERE id = ?", c.params.id); if (!cur) fail(404, "not_found", "Produit introuvable.");
   const v = readItem(c.body); const catId = c.body.categoryId || null; await categoryExists(c.env, catId);
-  await run(c.env, "UPDATE menu_items SET category_id=?, name=?, description=?, price=?, discount=?, sizes=?, extras=?, image_url=?, available=?, visible=?, updated_at=? WHERE id=?",
-    catId, v.name, v.description, v.price, v.discount, JSON.stringify(v.sizes), JSON.stringify(v.extras), v.image, v.available, v.visible, now(), cur.id);
+  const dinePrice = v.dinePrice == null ? v.price : v.dinePrice;
+  await run(c.env, "UPDATE menu_items SET category_id=?, name=?, description=?, price=?, dine_price=?, discount=?, sizes=?, extras=?, image_url=?, available=?, visible=?, updated_at=? WHERE id=?",
+    catId, v.name, v.description, v.price, dinePrice, v.discount, JSON.stringify(v.sizes), JSON.stringify(v.extras), v.image, v.available, v.visible, now(), cur.id);
   await audit(c.env, c.user, "Produit modifié", v.name);
   return itemOut(await first(c.env, "SELECT * FROM menu_items WHERE id = ?", cur.id));
 }
@@ -203,6 +207,7 @@ export async function settingsGet(c) {
   for (const r of rows) if (!HIDDEN_SETTINGS.includes(r.key)) out[r.key] = jparse(r.value, null);
   out.paused = !!out.paused; out.deliveryOn = out.deliveryOn === undefined ? true : !!out.deliveryOn;
   if (out.freeDelivery === undefined) out.freeDelivery = 150;
+  if (out.tableCount === undefined) out.tableCount = 24;
   if (out.defaultPrep === undefined) out.defaultPrep = 20;
   if (out.dispatchMode === undefined) out.dispatchMode = "rotation";
   return out;
@@ -219,6 +224,7 @@ async function applySettings(c, body, keys) {
       case "dispatchMode": val = oneOf(v, ["rotation", "proximity"], "Mode"); break;
       case "defaultPrep": val = numv(v, { min: 5, max: 90, int: true, field: "Préparation" }); break;
       case "freeDelivery": val = numv(v, { max: 100000, field: "Seuil" }); break;
+      case "tableCount": val = numv(v, { min: 1, max: 80, int: true, field: "Tables" }); break;
       case "restaurant": val = { name: str(v?.name, { max: 60, min: 1, field: "Nom" }), phone: str(v?.phone, { max: 30 }), email: str(v?.email, { max: 120 }), address: str(v?.address, { max: 160 }) }; break;
       case "hours": {
         val = {};
@@ -458,7 +464,7 @@ export async function meUpdate(c) {
 /* ---------- notifications ---------- */
 export async function notificationsList(c) {
   const u = c.user;
-  const [audience, userId] = u.role === "client" ? ["client", u.id] : u.role === "courier" ? ["courier", u.id] : ["staff", null];
+  const [audience, userId] = u.role === "client" ? ["client", u.id] : u.role === "courier" ? ["courier", u.id] : u.role === "waiter" ? ["waiter", null] : ["staff", null];
   const rows = userId
     ? await all(c.env, "SELECT * FROM notifications WHERE audience = ? AND user_id = ? ORDER BY id DESC LIMIT 50", audience, userId)
     : await all(c.env, "SELECT * FROM notifications WHERE audience = ? AND user_id IS NULL ORDER BY id DESC LIMIT 50", audience);
@@ -466,7 +472,7 @@ export async function notificationsList(c) {
 }
 export async function notificationsRead(c) {
   const u = c.user;
-  const [audience, userId] = u.role === "client" ? ["client", u.id] : u.role === "courier" ? ["courier", u.id] : ["staff", null];
+  const [audience, userId] = u.role === "client" ? ["client", u.id] : u.role === "courier" ? ["courier", u.id] : u.role === "waiter" ? ["waiter", null] : ["staff", null];
   if (userId) await run(c.env, "UPDATE notifications SET read = 1 WHERE audience = ? AND user_id = ?", audience, userId);
   else await run(c.env, "UPDATE notifications SET read = 1 WHERE audience = ? AND user_id IS NULL", audience);
   return { ok: true };

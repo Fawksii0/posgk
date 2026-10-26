@@ -1,6 +1,6 @@
-const VERSION = "gk-mobile-v17";
+const VERSION = "gk-mobile-v41";
 const SHELL = [
-  "./", "./index.html", "./styles.css", "./data.js", "./store.js", "./app.js", "./manifest.webmanifest",
+  "./", "./index.html", "./styles.css", "./data.js", "./store.js", "./app.js", "./motion-ui.js", "./manifest.webmanifest",
   "./assets/emblem-reference.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png"
 ];
 

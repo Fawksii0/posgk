@@ -26,3 +26,29 @@ enable_confirmations = false
 
 [functions.gk-api]
 verify_jwt = false
+
+# Hosted Paris project (oxqfnhnxdnwnftduikkh). Local [auth] stays on localhost.
+[remotes.paris]
+project_id = "oxqfnhnxdnwnftduikkh"
+
+[remotes.paris.auth]
+enabled = true
+site_url = "https://app.gkfood.store"
+additional_redirect_urls = [
+  "https://app.gkfood.store",
+  "https://admin.gkfood.store",
+  "https://kitchen.gkfood.store",
+  "https://courier.gkfood.store",
+  "https://status.gkfood.store",
+  "https://gkfood.store",
+  "http://localhost:8800",
+  "http://127.0.0.1:8800"
+]
+
+[remotes.paris.auth.sms]
+enable_signup = false
+
+[remotes.paris.auth.email]
+enable_signup = true
+enable_confirmations = false
+double_confirm_changes = false

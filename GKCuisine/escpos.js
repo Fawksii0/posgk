@@ -17,7 +17,7 @@ const ESCPOS = {
   cut: [0x1d, 0x56, 0x42, 0x03]
 };
 
-const MODE_LABELS = { delivery: "LIVRAISON", pickup: "A EMPORTER" };
+const MODE_LABELS = { delivery: "LIVRAISON", pickup: "A EMPORTER", dinein: "SUR PLACE" };
 const SPECIALS = { "œ": "oe", "Œ": "OE", "æ": "ae", "×": "x", "″": '"', "·": "-", "–": "-", "—": "-", "’": "'", "‘": "'", "“": '"', "”": '"', "…": "...", "•": "*", "€": "EUR" };
 
 // ASCII-safe transliteration: every printer code page agrees on 0x20-0x7E.

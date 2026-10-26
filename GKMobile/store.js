@@ -48,7 +48,7 @@ const state = {
   ...defaultData(),
   favorites: new Set(),
   cart: [],
-  view: "home",
+  view: "branches",
   category: "All",
   query: "",
   trackingId: null,
@@ -57,7 +57,9 @@ const state = {
   authMode: "login",
   authStep: "form",
   pendingUser: null,
-  afterAuth: "home"
+  afterAuth: "home",
+  orderPhone: "",
+  phoneOverride: false
 };
 
 function hydrateCart(raw) {

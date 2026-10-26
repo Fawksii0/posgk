@@ -16,7 +16,7 @@ const GKReceipt = (() => {
   const timeFmt = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
   const absUrl = url => { try { return new URL(url, location.href).href; } catch { return url || ""; } };
 
-  const MODE = { delivery: "Livraison", pickup: "À emporter" };
+  const MODE = { delivery: "Livraison", pickup: "À emporter", dinein: "Sur place" };
   const optionsOf = item => [item.size, ...(item.extras || [])].filter(Boolean).map(esc).join(" · ");
   const invoiceNumber = doc => `FAC-${new Date(doc.createdAt).getFullYear()}-${String(doc.seq || String(doc.id).slice(-6)).padStart(5, "0")}`;
 

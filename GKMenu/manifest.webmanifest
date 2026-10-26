@@ -1,0 +1,12 @@
+{
+  "name": "G&K Menu",
+  "short_name": "G&K Menu",
+  "description": "Menu sur place G&K Food",
+  "lang": "fr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f5f1",
+  "theme_color": "#e3a81f"
+}

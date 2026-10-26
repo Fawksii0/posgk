@@ -1,0 +1,14 @@
+{
+  "name": "gkfood-status",
+  "compatibility_date": "2026-10-25",
+  "assets": {
+    "directory": ".",
+    "not_found_handling": "none"
+  },
+  "routes": [
+    {
+      "pattern": "status.gkfood.store",
+      "custom_domain": true
+    }
+  ]
+}

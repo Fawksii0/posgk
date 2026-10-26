@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { can } from "../src/core.js";
 import { webcrypto } from "node:crypto";
 import app from "../src/index.js";
 import { signToken } from "../src/lib.js";
@@ -48,6 +49,25 @@ async function signedInRequest(user, url, branchId) {
   const response = await app.fetch(new Request(`https://api.test${url}`, { headers }), env);
   return { response, env };
 }
+
+test("GET /health reports the API and a live branch query", async () => {
+  const env = { ALLOWED_ORIGINS: "", DB: mockDb() };
+  const response = await app.fetch(new Request("https://api.test/health"), env);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.service, "gk-api");
+  assert.equal(body.database, "up");
+  assert.equal(body.branches, 2);
+});
+
+test("CORS allows the public status origin on gkfood.store", async () => {
+  const env = { ALLOWED_ORIGINS: "", DB: mockDb() };
+  const response = await app.fetch(new Request("https://api.test/health", {
+    headers: { Origin: "https://status.gkfood.store" }
+  }), env);
+  assert.equal(response.headers.get("Access-Control-Allow-Origin"), "https://status.gkfood.store");
+});
 
 test("GET /api/branches returns only the requested branch fields", async () => {
   const env = { ALLOWED_ORIGINS: "", DB: mockDb() };
@@ -149,4 +169,37 @@ test("Supabase refresh returns the access token, rotated refresh token and branc
   assert.equal(body.refreshToken, "rotated-refresh");
   assert.equal(body.user.branchId, "gk-food");
   assert.equal(body.user.branchName, "G&K Food");
+});
+
+test("waiters act on dine-in tickets; chefs stay on kitchen orders", () => {
+  assert.equal(can({ role: "waiter" }, "orders.dinein"), true);
+  assert.equal(can({ role: "waiter" }, "orders.act"), false);
+  assert.equal(can({ role: "chef" }, "orders.dinein"), false);
+  assert.equal(can({ role: "cashier" }, "orders.dinein"), true);
+});
+
+test("public dine-in order lookup requires the table number and stays on that branch", async () => {
+  const order = {
+    id: "112345678", seq: 1042, mode: "dinein", status: "preparing", table_no: 4,
+    items: "[]", history: "[]", prep_minutes: 15, promised_at: Date.now() + 15 * 60000,
+    accepted_at: Date.now(), created_at: Date.now(), updated_at: Date.now(), branch_id: "gk-food"
+  };
+  const db = mockDb();
+  const baseFirst = db.prepare.bind(db);
+  db.prepare = (sql) => {
+    const query = baseFirst(sql);
+    const original = query.first.bind(query);
+    query.first = async () => {
+      if (sql.includes("FROM orders WHERE id = ?")) return order;
+      return original();
+    };
+    return query;
+  };
+  const env = { ALLOWED_ORIGINS: "http://localhost:8800", DB: db };
+  const headers = { "X-GK-Branch": "gk-food" };
+  const ok = await app.fetch(new Request("https://api.test/api/dinein/orders/112345678?table=4", { headers }), env);
+  assert.equal(ok.status, 200);
+  assert.equal((await ok.json()).order.status, "preparing");
+  const wrongTable = await app.fetch(new Request("https://api.test/api/dinein/orders/112345678?table=9", { headers }), env);
+  assert.equal(wrongTable.status, 404);
 });

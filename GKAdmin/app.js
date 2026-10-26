@@ -376,6 +376,7 @@
     const start = Store.dayStart(Date.now());
     const todayOrders = S().orders.filter((o) => Store.dayStart(o.createdAt) === start);
     const salesOrders = todayOrders.filter((o) => !["annulee", "refusee"].includes(o.status));
+    const y = Store.dayStats(1);
     const revenue = salesOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
     const average = salesOrders.length ? revenue / salesOrders.length : 0;
     const prepTimes = todayOrders.map((o) => {
@@ -385,8 +386,11 @@
       const minutes = ready ? (Number(ready.at) - Number(began.at)) / 60000 : 0;
       return minutes > 0 && minutes <= 240 ? minutes : null;
     }).filter((minutes) => minutes !== null);
+    const avgPrep = prepTimes.length ? prepTimes.reduce((sum, m) => sum + m, 0) / prepTimes.length : null;
     const delivered = todayOrders.filter((o) => o.status === "livree").length;
-    const prepValue = prepTimes.length ? `${nf.format(prepTimes.reduce((sum, m) => sum + m, 0) / prepTimes.length)} min` : String(delivered);
+    const couriers = S().couriers.filter((c) => c.active);
+    const online = couriers.filter((c) => ["online", "mission"].includes(Store.courierStatus(c)));
+    const mission = couriers.filter((c) => Store.courierStatus(c) === "mission").length;
     const hourly = Array.from({ length: 24 }, (_, hour) => ({
       hour,
       total: salesOrders.filter((o) => new Date(o.createdAt).getHours() === hour).reduce((sum, o) => sum + Number(o.total || 0), 0)
@@ -400,25 +404,39 @@
       current.qty += Number(line.qty || 0);
       products.set(key, current);
     }));
-    const topProducts = [...products.values()].sort((a, b) => b.qty - a.qty).slice(0, 5);
+    const topToday = [...products.values()].sort((a, b) => b.qty - a.qty).slice(0, 5);
+    const weekTop = Store.topProducts(5);
     const recent = [...todayOrders].sort((a, b) => b.createdAt - a.createdAt).slice(0, 6);
+    const alerts = Store.alerts();
+    const logs = (S().audit || []).slice(0, 5);
     const kpi = (label, value, foot = "") => `<div class="today-kpi"><span class="today-kpi-label">${label}</span><strong class="today-kpi-value">${value}</strong>${foot ? `<small>${foot}</small>` : ""}</div>`;
-    const hourBars = hourly.map((item) => `<div class="hour-column"><div class="hour-bar-wrap"><div class="hour-bar ${item.total ? "has-sales" : ""}" style="height:${item.total ? Math.max(4, Math.round((item.total / maxHour) * 100)) : 0}%" title="${String(item.hour).padStart(2, "0")} h \u00b7 ${nf.format(item.total)} DH" aria-label="${String(item.hour).padStart(2, "0")} heures : ${nf.format(item.total)} DH"></div></div><span>${item.hour % 3 === 0 ? `${String(item.hour).padStart(2, "0")} h` : ""}</span></div>`).join("");
-    const recentRows = recent.map((o) => `<tr class="clickable" data-action="open-order" data-id="${esc(o.id)}"><td data-label="N\u00b0"><button class="link-btn" data-action="open-order" data-id="${esc(o.id)}">${esc(o.id)}</button></td><td data-label="Client">${esc(o.customerName || "\u2014")}</td><td data-label="Type">${o.mode === "livraison" ? "Livraison" : "\u00c0 emporter"}</td><td data-label="Total" class="right"><b>${esc(nf.format(Number(o.total || 0)))} DH</b></td><td data-label="Statut">${statusPill(o.status)}</td></tr>`).join("");
+    const hourBars = hourly.map((item) => `<div class="hour-column"><div class="hour-bar-wrap"><div class="hour-bar ${item.total ? "has-sales" : ""}" style="height:${item.total ? Math.max(4, Math.round((item.total / maxHour) * 100)) : 0}%" title="${String(item.hour).padStart(2, "0")} h · ${nf.format(item.total)} DH" aria-label="${String(item.hour).padStart(2, "0")} heures : ${nf.format(item.total)} DH"></div></div><span>${item.hour % 3 === 0 ? `${String(item.hour).padStart(2, "0")} h` : ""}</span></div>`).join("");
+    const recentRows = recent.map((o) => `<tr class="clickable" data-action="open-order" data-id="${esc(o.id)}"><td data-label="N°"><button class="link-btn" data-action="open-order" data-id="${esc(o.id)}">${esc(o.id)}</button></td><td data-label="Client">${esc(o.customerName || "—")}</td><td data-label="Type">${o.mode === "livraison" ? "Livraison" : "À emporter"}</td><td data-label="Total" class="right"><b>${esc(nf.format(Number(o.total || 0)))} DH</b></td><td data-label="Statut">${statusPill(o.status)}</td></tr>`).join("");
+    const productList = (items, empty) => items.length
+      ? `<ol class="today-product-list">${items.map((item, i) => `<li><span class="today-rank">${i + 1}</span><b>${esc(item.name)}</b><span>${nf.format(item.qty)} vendu(s)</span></li>`).join("")}</ol>`
+      : `<p class="today-panel-empty">${empty}</p>`;
     return `<div class="today-dashboard">
-      <div class="today-intro"><div><p class="today-eyebrow">R\u00e9sum\u00e9 de l'activit\u00e9</p><h2>Aujourd'hui</h2></div><span class="today-date">${esc(new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" }).format(Date.now()))}</span></div>
+      <div class="today-intro"><div><p class="today-eyebrow">Résumé de l'activité</p><h2>Aujourd'hui</h2></div><span class="today-date">${esc(new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" }).format(Date.now()))}</span></div>
       ${todayOrders.length ? "" : `<p class="today-empty-note" role="status">Aucune commande aujourd'hui</p>`}
       <section class="today-kpis" aria-label="Indicateurs du jour">
-        ${kpi("Ventes du jour", `${nf.format(Math.round(revenue * 100) / 100)} <span>DH</span>`, `${salesOrders.length} commande(s) comptabilis\u00e9e(s)`)}
-        ${kpi("Commandes", String(todayOrders.length), "Commandes re\u00e7ues aujourd'hui")}
-        ${kpi("Panier moyen", `${nf.format(Math.round(average * 100) / 100)} <span>DH</span>`, `${salesOrders.length} commande(s) hors annulations`)}
-        ${kpi(prepTimes.length ? "Temps moyen de pr\u00e9paration" : "Livr\u00e9es", prepValue, prepTimes.length ? `${prepTimes.length} commande(s) avec dur\u00e9e connue` : "Aujourd'hui")}
+        ${kpi("Ventes du jour", `${nf.format(Math.round(revenue * 100) / 100)} <span>DH</span>`, deltaHTML(revenue, y.revenue))}
+        ${kpi("Commandes", String(todayOrders.length), deltaHTML(todayOrders.length, y.count))}
+        ${kpi("Panier moyen", `${nf.format(Math.round(average * 100) / 100)} <span>DH</span>`, `${salesOrders.length} hors annulations`)}
+        ${kpi("Temps moyen de préparation", avgPrep == null ? "—" : `${nf.format(Math.round(avgPrep * 10) / 10)} min`, avgPrep == null ? "Durée inconnue pour l'instant" : `${prepTimes.length} commande(s) chronométrée(s)`)}
+        ${kpi("Livrées", String(delivered), "Aujourd'hui")}
+        ${kpi("Livreurs en ligne", `${online.length}<span> / ${couriers.length}</span>`, `${mission} en mission`)}
       </section>
       <section class="today-panels">
-        <div class="today-panel"><div class="today-panel-head"><h3>Ventes par heure</h3><span>DH \u00b7 aujourd'hui</span></div><div class="hour-chart" role="img" aria-label="Ventes par heure, en dirhams">${hourBars}</div></div>
-        <div class="today-panel"><div class="today-panel-head"><h3>Les plus vendus</h3><span>Quantit\u00e9s du jour</span></div>${topProducts.length ? `<ol class="today-product-list">${topProducts.map((item, i) => `<li><span class="today-rank">${i + 1}</span><b>${esc(item.name)}</b><span>${nf.format(item.qty)} vendu(s)</span></li>`).join("")}</ol>` : `<p class="today-panel-empty">Aucun article vendu aujourd'hui</p>`}</div>
+        <div class="today-panel"><div class="today-panel-head"><h3>Ventes par heure</h3><span>DH · aujourd'hui</span></div><div class="hour-chart" role="img" aria-label="Ventes par heure, en dirhams">${hourBars}</div></div>
+        <div class="today-panel"><div class="today-panel-head"><h3>Les plus vendus</h3><span>Quantités du jour</span></div>${productList(topToday, "Aucun article vendu aujourd'hui")}</div>
       </section>
-      <section class="today-panel today-recent"><div class="today-panel-head"><h3>Commandes r\u00e9centes</h3><a class="link-btn" href="#/commandes">Tout voir</a></div><div class="table-wrap"><table class="tbl today-table"><thead><tr><th>N\u00b0</th><th>Client</th><th>Type</th><th class="right">Total</th><th>Statut</th></tr></thead><tbody>${recentRows || `<tr><td class="today-table-empty" colspan="5">Aucune commande aujourd'hui</td></tr>`}</tbody></table></div></section>
+      <div class="grid grid-main">${revenueChart()}${statusDonut()}</div>
+      <section class="today-panels">
+        <div class="today-panel"><div class="today-panel-head"><h3>Alertes</h3></div>${alerts.length ? alerts.map((a) => `<button class="alert-item ${a.tone}" data-action="goto" data-href="${esc(a.link)}">${icon(a.icon)}<span>${esc(a.text)}</span></button>`).join("") : `<p class="today-panel-empty">Tout est sous contrôle.</p>`}</div>
+        <div class="today-panel"><div class="today-panel-head"><h3>Top 5 produits</h3><span>7 jours</span></div>${productList(weekTop, "Pas encore de ventes sur 7 jours")}</div>
+      </section>
+      <section class="today-panel today-recent"><div class="today-panel-head"><h3>Commandes récentes</h3><a class="link-btn" href="#/commandes">Tout voir</a></div><div class="table-wrap"><table class="tbl today-table"><thead><tr><th>N°</th><th>Client</th><th>Type</th><th class="right">Total</th><th>Statut</th></tr></thead><tbody>${recentRows || `<tr><td class="today-table-empty" colspan="5">Aucune commande aujourd'hui</td></tr>`}</tbody></table></div></section>
+      <section class="today-panel"><div class="today-panel-head"><h3>Activité récente</h3><a class="link-btn" href="#/activite">Journal complet</a></div>${logs.length ? logs.map(logItem).join("") : `<p class="today-panel-empty">Aucune activité récente.</p>`}</section>
     </div>`;
   }
 
@@ -601,10 +619,11 @@
   const extraRow = (s = { name: "", price: "" }) => `<div class="repeat-row" data-row="extra"><input class="input" name="extra-name" value="${esc(s.name)}" placeholder="Supplément (ex. Cheddar)" aria-label="Nom du supplément"><input class="input" name="extra-price" type="number" step="0.5" min="0" value="${esc(s.price)}" placeholder="MAD" aria-label="Prix du supplément"><button type="button" class="icon-button" data-action="remove-row" aria-label="Retirer le supplément">${icon("close")}</button></div>`;
 
   function productDrawer(d) {
-    const p = d.id ? Store.byId(S().products, d.id) : { name: "", category: S().categories[0] ? S().categories[0].id : "", price: "", discount: 0, description: "", image: "", sizes: [], extras: [], visible: true, available: true };
+    const p = d.id ? Store.byId(S().products, d.id) : { name: "", category: S().categories[0] ? S().categories[0].id : "", price: "", dinePrice: "", discount: 0, description: "", image: "", sizes: [], extras: [], visible: true, available: true };
     if (!p) return "";
     const body = `${field("name", "Nom du produit", input("name", p.name, "text", 'maxlength="60"'))}
-      <div class="row2">${field("category", "Catégorie", `<select id="f-category" name="category">${S().categories.map((c) => `<option value="${esc(c.id)}" ${c.id === p.category ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select>`)}${field("price", "Prix (MAD)", input("price", p.price, "number", 'step="0.5" min="0" inputmode="decimal"'))}</div>
+      <div class="row2">${field("category", "Catégorie", `<select id="f-category" name="category">${S().categories.map((c) => `<option value="${esc(c.id)}" ${c.id === p.category ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select>`)}${field("price", "Prix app (MAD)", input("price", p.price, "number", 'step="0.5" min="0" inputmode="decimal"'))}</div>
+      ${field("dinePrice", "Prix sur place (MAD)", input("dinePrice", p.dinePrice ?? p.price, "number", 'step="0.5" min="0" inputmode="decimal"'))}
       <div class="row2">${field("discount", "Remise (%)", input("discount", p.discount, "number", 'step="1" min="0" max="90"'))}<div class="field"><span class="label">Statut</span><label style="display:flex;gap:8px;align-items:center;min-height:42px"><input type="checkbox" name="visible" ${p.visible ? "checked" : ""}> Visible dans l'application</label></div></div>
       ${field("description", "Description", `<textarea id="f-description" name="description" maxlength="240">${esc(p.description)}</textarea>`)}
       ${field("image", "URL de l'image", input("image", p.image, "url", 'placeholder="https://…"'))}
@@ -765,8 +784,7 @@
         <form class="card" data-form="operations" novalidate><div class="card-head"><h3>Préparation et dispatch</h3></div>${field("dispatchMode", "Affectation des livreurs", `<select name="dispatchMode" id="f-dispatchMode" ${canOperate ? "" : "disabled"}><option value="rotation" ${s.dispatchMode === "rotation" ? "selected" : ""}>Rotation</option><option value="proximity" ${s.dispatchMode === "proximity" ? "selected" : ""}>Proximité</option></select>`)}${field("defaultPrep", "Préparation par défaut (minutes)", input("defaultPrep", s.defaultPrep, "number", `min="5" max="90" step="1" ${canOperate ? "" : "disabled"}`))}${canOperate ? `<button class="btn-gold" type="submit">Enregistrer</button>` : ""}</form>
         ${canWrite ? `<form class="card" data-form="free-delivery" novalidate><div class="card-head"><h3>Livraison</h3></div>${field("freeDelivery", "Seuil global de livraison offerte (MAD)", input("freeDelivery", s.freeDelivery, "number", 'min="0" step="1"'))}<button class="btn-gold" type="submit">Enregistrer</button></form>` : `<div></div>`}
       </div>
-      <form class="card" data-form="hours" novalidate style="margin-bottom:16px"><div class="card-head"><h3>Horaires d'ouverture</h3></div>${DAYS.map((d) => { const h = s.hours[d.id]; return `<div class="field" data-field="${d.id}"><div style="display:grid;grid-template-columns:minmax(80px,1fr) auto auto auto;gap:8px;align-items:center"><b>${d.label}</b><label class="small" style="display:flex;gap:5px;align-items:center"><input type="checkbox" name="closed-${d.id}" ${h.closed ? "checked" : ""} ${canWrite ? "" : "disabled"}> Fermé</label><input class="input" style="min-height:38px;width:100px" type="time" name="open-${d.id}" value="${esc(h.open)}" aria-label="${d.label} ouverture" ${canWrite ? "" : "disabled"}><input class="input" style="min-height:38px;width:100px" type="time" name="close-${d.id}" value="${esc(h.close)}" aria-label="${d.label} fermeture" ${canWrite ? "" : "disabled"}></div></div>`; }).join("")}${canWrite ? `<button class="btn-gold" type="submit">Enregistrer les horaires</button>` : ""}</form>
-      </div>`;
+      <form class="card" data-form="hours" novalidate style="margin-bottom:16px"><div class="card-head"><h3>Horaires d'ouverture</h3></div>${DAYS.map((d) => { const h = s.hours[d.id]; return `<div class="field" data-field="${d.id}"><div style="display:grid;grid-template-columns:minmax(80px,1fr) auto auto auto;gap:8px;align-items:center"><b>${d.label}</b><label class="small" style="display:flex;gap:5px;align-items:center"><input type="checkbox" name="closed-${d.id}" ${h.closed ? "checked" : ""} ${canWrite ? "" : "disabled"}> Fermé</label><input class="input" style="min-height:38px;width:100px" type="time" name="open-${d.id}" value="${esc(h.open)}" aria-label="${d.label} ouverture" ${canWrite ? "" : "disabled"}><input class="input" style="min-height:38px;width:100px" type="time" name="close-${d.id}" value="${esc(h.close)}" aria-label="${d.label} fermeture" ${canWrite ? "" : "disabled"}></div></div>`; }).join("")}${canWrite ? `<button class="btn-gold" type="submit">Enregistrer les horaires</button>` : ""}</form>`;
   }
 
   /* ---------- Activity ---------- */
@@ -834,7 +852,7 @@
   function readProduct(form) {
     const rows = (kind) => [...form.querySelectorAll(`[data-row="${kind}"]`)].map((r) => ({ name: r.querySelector("input").value.trim(), v: r.querySelectorAll("input")[1].value })).filter((r) => r.name || String(r.v).trim());
     return {
-      name: form.name.value, category: form.category.value, price: num(form.price.value), description: form.description.value, image: form.image.value.trim(),
+      name: form.name.value, category: form.category.value, price: num(form.price.value), dinePrice: String(form.dinePrice?.value || "").trim() === "" ? num(form.price.value) : num(form.dinePrice.value), description: form.description.value, image: form.image.value.trim(),
       discount: String(form.discount.value).trim() === "" ? 0 : num(form.discount.value),
       sizes: rows("size").map((r) => ({ name: r.name, delta: String(r.v).trim() === "" ? 0 : num(r.v) })),
       extras: rows("extra").map((r) => ({ name: r.name, price: String(r.v).trim() === "" ? 0 : num(r.v) })),
