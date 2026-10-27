@@ -142,7 +142,7 @@
       const results = await Promise.all(requests);
       const orders = results[0].orders || [];
       const oldPending = knownPending;
-      data.orders = orders.map(normalizeOrder).filter(order => order.mode !== "dinein");
+      data.orders = orders.map(normalizeOrder);
       data.settings = { ...data.settings, ...results[1] };
       if (isCashier()) {
         data.categories = results[2].categories || [];
@@ -335,8 +335,9 @@
         <div class="btn-row">${cashier ? `<button class="btn" data-action="reprint" data-id="${esc(order.id)}">${icon("printer")}Réimprimer</button>` : ""}<button class="btn primary" data-action="ready" data-id="${esc(order.id)}">${icon("check")}Prête</button></div>`;
     } else if (order.status === "ready") {
       const servedHere = order.mode === "pickup";
+      const waitingWaiter = order.mode === "dinein";
       actions = `<div class="btn-row">${cashier ? `<button class="btn" data-action="reprint" data-id="${esc(order.id)}">${icon("printer")}Réimprimer</button>` : ""}
-        ${servedHere ? (cashier ? `<button class="btn primary" data-action="handover" data-id="${esc(order.id)}">${icon("check")}Remise au client</button>` : `<span class="small muted">À remettre au client</span>`) : `<span class="small muted">En attente du livreur</span>`}</div>`;
+        ${servedHere ? (cashier ? `<button class="btn primary" data-action="handover" data-id="${esc(order.id)}">${icon("check")}Remise au client</button>` : `<span class="small muted">À remettre au client</span>`) : waitingWaiter ? `<span class="small muted">Le serveur peut servir</span>` : `<span class="small muted">En attente du livreur</span>`}</div>`;
     } else if (cashier) {
       actions = `<div class="btn-row"><button class="btn" data-action="reprint" data-id="${esc(order.id)}">${icon("printer")}Réimprimer</button></div>`;
     }

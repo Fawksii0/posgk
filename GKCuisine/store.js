@@ -73,7 +73,6 @@ function countdown(ms) {
 }
 
 function columnOf(order) {
-  if (order.mode === "dinein") return null;
   if (order.status === "pending") return "new";
   if (order.status === "preparing") return "prep";
   if (order.status === "ready") return "ready";
