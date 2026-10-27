@@ -10,7 +10,7 @@ function skip() {
 }
 
 export function enterView(root, key = "") {
-  if (skip() || !root) return;
+  if (skip() || !root || root.querySelector("section.auth")) return;
   const enterKey = String(key);
   if (enterKey && enterKey === lastEnterKey) return;
   lastEnterKey = enterKey;
@@ -52,27 +52,12 @@ export function toastIn(el) {
 }
 
 export async function playSplash() {
-  const el = document.querySelector("#splash");
-  if (!el) return;
-  const seen = sessionStorage.getItem("gk-splash");
-  if (skip() || seen) {
-    el.remove();
-    return;
-  }
-  sessionStorage.setItem("gk-splash", "1");
-  const mark = el.querySelector(".splash-mark");
-  animate(mark, { transform: ["scale(0.7)", "scale(1)"], opacity: [0, 1] }, { type: "spring", bounce: 0.32, visualDuration: 0.58 });
-  await new Promise(resolve => setTimeout(resolve, 780));
-  await Promise.all([
-    animate(mark, { transform: "scale(0.88)", opacity: 0 }, { duration: 0.28, ease: "easeIn" }).finished,
-    animate(el, { opacity: 0 }, { duration: 0.34, ease: "easeIn" }).finished
-  ]).catch(() => {});
-  el.remove();
+  /* Splash is owned by app.js so a blocked Motion CDN cannot cover the login button. */
 }
 
 function bindGestures() {
   press("button, a.outline-button, a.round-button", element => {
-    if (element.classList.contains("category-chip") || element.classList.contains("location-button") || element.classList.contains("brand-lockup")) return;
+    if (element.type === "submit" || element.closest("form") || element.classList.contains("category-chip") || element.classList.contains("location-button") || element.classList.contains("brand-lockup")) return;
     animate(element, { scale: 0.96 }, tap);
     return () => animate(element, { scale: 1 }, spring);
   });

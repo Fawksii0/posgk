@@ -5,7 +5,7 @@ import { cpSync, rmSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const apps = ["GKMobile", "GKAdmin", "GKCuisine", "GKCourier"];
+const apps = ["GKMobile", "GKAdmin", "GKCuisine", "GKCourier", "GKServeur", "GKMenu"];
 const app = process.argv[2];
 if (!apps.includes(app)) {
   console.error(`Usage: node scripts/build-pages.mjs <${apps.join("|")}>`);
@@ -21,6 +21,7 @@ cpSync(resolve(root, app), out, { recursive: true, filter: (src) => !/README\.md
 mkdirSync(resolve(out, "shared"), { recursive: true });
 cpSync(resolve(root, "shared"), resolve(out, "shared"), { recursive: true });
 
+writeFileSync(resolve(out, "ok.txt"), "ok\n");
 writeFileSync(resolve(out, "_headers"), `/*
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY

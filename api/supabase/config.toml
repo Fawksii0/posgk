@@ -40,6 +40,8 @@ additional_redirect_urls = [
   "https://kitchen.gkfood.store",
   "https://courier.gkfood.store",
   "https://status.gkfood.store",
+  "https://serveur.gkfood.store",
+  "https://menu.gkfood.store",
   "https://gkfood.store",
   "http://localhost:8800",
   "http://127.0.0.1:8800"

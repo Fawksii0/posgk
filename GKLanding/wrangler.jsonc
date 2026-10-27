@@ -1,0 +1,12 @@
+{
+  "name": "gkfood-landing",
+  "compatibility_date": "2026-10-26",
+  "assets": {
+    "directory": ".",
+    "not_found_handling": "none"
+  },
+  "routes": [
+    { "pattern": "gkfood.store/*", "zone_name": "gkfood.store" },
+    { "pattern": "www.gkfood.store/*", "zone_name": "gkfood.store" }
+  ]
+}

@@ -17,10 +17,20 @@ const route = (method, path, handler, options = {}) => routes.push({
 route("GET", "/health", async (c) => {
   const started = Date.now();
   try {
-    const branches = await all(c.env, "SELECT id FROM branches WHERE active = 1");
-    return { ok: true, service: "gk-api", database: "up", branches: branches.length, ms: Date.now() - started };
+    await c.env.DB.setContext({ actorId: null, actorRole: "anonymous", branchId: "gk-food" });
+    const row = await first(c.env, "SELECT (SELECT COUNT(*) FROM branches WHERE active = 1) AS branches, (SELECT COUNT(*) FROM menu_items WHERE visible = 1) AS n");
+    return {
+      ok: true,
+      service: "gk-api",
+      host: c.env.GK_API_RUNTIME || "edge",
+      database: "up",
+      branches: Number(row?.branches) || 0,
+      menuItems: Number(row?.n) || 0,
+      ms: Date.now() - started
+    };
   } catch {
-    return { ok: false, service: "gk-api", database: "down", ms: Date.now() - started };
+    if (typeof c.env.DB.finish === "function") await c.env.DB.finish(false);
+    return { ok: false, service: "gk-api", host: c.env.GK_API_RUNTIME || "edge", database: "down", branches: 0, menuItems: 0, ms: Date.now() - started };
   }
 }, { public: true, branchScoped: false });
 route("GET", "/api/branches", async (c) => ({
@@ -203,9 +213,10 @@ export default {
     const match = routes.map((r) => [r, r.path.exec(url.pathname)]).find(([r, m]) => r.method === request.method && m);
     if (!match) return json(env, request, { error: { code: "not_found", message: "Route introuvable." } }, 404);
     const [r, m] = match;
+    let commit = false;
     try {
       const c = {
-        env, req: request, url, ip: request.headers.get("CF-Connecting-IP") || "local",
+        env, req: request, url, ip: request.headers.get("CF-Connecting-IP") || request.headers.get("X-Forwarded-For") || "local",
         params: m.groups || {}, body: r.body ? await readBody(request) : {},
         user: await authorize(request, env, !!r.public)
       };
@@ -221,11 +232,18 @@ export default {
       if (c.user?.auth_user_id && request.headers.get("Authorization")?.startsWith("Bearer ")) {
         c.authToken = request.headers.get("Authorization").slice(7);
       }
-      return json(env, request, await r.handler(c));
+      const body = await r.handler(c);
+      commit = true;
+      return json(env, request, body);
     } catch (error) {
-      if (error instanceof HttpError) return json(env, request, { error: { code: error.code, message: error.message, ...(error.extra || {}) } }, error.status);
+      if (error instanceof HttpError) {
+        commit = true;
+        return json(env, request, { error: { code: error.code, message: error.message, ...(error.extra || {}) } }, error.status);
+      }
       console.error("Unhandled API error", error);
       return json(env, request, { error: { code: "internal", message: "Erreur interne." } }, 500);
+    } finally {
+      if (typeof env.DB.finish === "function") await env.DB.finish(commit);
     }
   }
 };

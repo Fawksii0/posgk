@@ -1,4 +1,4 @@
-const VERSION = "gk-menu-v8";
+const VERSION = "gk-menu-v10";
 const SHELL = ["./", "./index.html", "./styles.css", "./data.js", "./app.js", "./motion-ui.js", "./manifest.webmanifest", "./assets/emblem-reference.png"];
 
 self.addEventListener("install", event => {

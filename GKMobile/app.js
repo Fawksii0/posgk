@@ -123,7 +123,7 @@ function normalizeOrder(row) {
 async function loadBranches() {
   state.branchLoading = true;
   state.branchError = "";
-  render();
+  if (state.view !== "auth") render();
   try {
     const response = await GKApi.get("/api/branches");
     state.branches = Array.isArray(response.branches) ? response.branches.filter(branch => branch.active !== false) : [];
@@ -131,14 +131,12 @@ async function loadBranches() {
       GKApi.clearBranch();
       state.selectedBranchId = "";
     }
-    if (!state.selectedBranchId) state.view = "branches";
   } catch (error) {
     state.branchError = error.message || "Impossible de charger les restaurants.";
-    if (!state.selectedBranchId) state.view = "branches";
   } finally {
     state.branchLoading = false;
+    if (state.view !== "auth") render();
   }
-  render();
 }
 
 function lastOrderToReorder(orderId) {
@@ -471,7 +469,7 @@ function renderAuth() {
       <label class="field"><span>E-mail</span><input name="email" type="email" autocomplete="email" placeholder="vous@exemple.com" /></label>`}
       <label class="field"><span>Mot de passe</span><input name="password" type="password" autocomplete="${login ? "current-password" : "new-password"}" placeholder="${login ? "Votre mot de passe" : "8 caractères minimum"}" /></label>
       <p class="form-error" role="alert"></p>
-      <button class="gold-button full-width" type="submit">${login ? "Se connecter" : "S'inscrire"}</button>
+      <button class="gold-button full-width" id="auth-submit" type="submit">${login ? "Se connecter" : "S'inscrire"}</button>
     </form>
     <p class="auth-switch">${login ? "Pas encore de compte ?" : "Déjà inscrit ?"} <button class="text-button" type="button" data-action="auth-switch">${login ? "Créer un compte" : "Se connecter"}</button></p>
     <button class="outline-button full-width" type="button" data-action="guest">${back ? "Retour au panier" : "Continuer en invité"}</button>
@@ -1124,7 +1122,8 @@ main.addEventListener("click", event => {
     case "guest": {
       const target = state.afterAuth || "home";
       state.afterAuth = "home";
-      return goTo(target === "cart" && !state.selectedBranchId ? "home" : target);
+      if (!state.selectedBranchId) return goTo("branches");
+      return goTo(target === "cart" ? "home" : target);
     }
     case "logout":
       GKApi.logout("client").then(() => {
@@ -1134,7 +1133,8 @@ main.addEventListener("click", event => {
         state.orders = [];
         state.ordersError = "";
         state.trackingId = null;
-        state.view = "home";
+        state.view = "auth";
+        state.authMode = "login";
         render();
         showToast("Vous êtes déconnecté.");
       }).catch(error => {
@@ -1145,7 +1145,8 @@ main.addEventListener("click", event => {
         state.orders = [];
         state.trackingId = null;
         state.ordersError = error.message || "La révocation a échoué ; la session locale a été effacée.";
-        state.view = "home";
+        state.view = "auth";
+        state.authMode = "login";
         render();
         showToast("Session locale effacée, mais la révocation serveur a échoué.");
       });
@@ -1173,7 +1174,8 @@ window.addEventListener("gk-api-session-expired", event => {
   state.orders = [];
   state.trackingId = null;
   state.ordersError = "Votre session a expiré. Reconnectez-vous pour consulter vos commandes.";
-  state.view = "branches";
+  state.view = "auth";
+  state.authMode = "login";
   render();
   showToast("Votre session a expiré. Veuillez vous reconnecter.");
 });
@@ -1296,9 +1298,38 @@ window.addEventListener("beforeinstallprompt", event => {
 
 /* ---------- Boot ---------- */
 
+function dismissSplash() {
+  const el = document.querySelector("#splash");
+  if (!el) return Promise.resolve();
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    el.remove();
+    return Promise.resolve();
+  }
+  el.classList.add("is-playing");
+  el.setAttribute("aria-hidden", "false");
+  return new Promise(resolve => {
+    window.setTimeout(() => {
+      el.classList.add("is-leaving");
+      window.setTimeout(() => {
+        el.remove();
+        resolve();
+      }, 340);
+    }, 980);
+  });
+}
+
 loadState();
+if (!state.user) {
+  state.view = "auth";
+  state.authMode = "login";
+} else if (!state.selectedBranchId) {
+  state.view = "branches";
+} else {
+  state.view = "home";
+}
 document.querySelectorAll("[data-icon]").forEach(slot => { slot.innerHTML = icon(slot.dataset.icon); });
 render();
+void dismissSplash();
 void loadBranches().then(() => {
   if (state.selectedBranchId) void loadMenu();
   if (state.user && state.selectedBranchId) void refreshOrders();

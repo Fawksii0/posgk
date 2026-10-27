@@ -1,4 +1,4 @@
-const VERSION = "gk-mobile-v41";
+const VERSION = "gk-mobile-v45";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./data.js", "./store.js", "./app.js", "./motion-ui.js", "./manifest.webmanifest",
   "./assets/emblem-reference.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png"
@@ -22,14 +22,14 @@ self.addEventListener("fetch", event => {
   if (request.method !== "GET" || !request.url.startsWith("http")) return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin || url.pathname.includes("/api/") || url.pathname.includes("/shared/")) return;
-  event.respondWith(
-    caches.open(VERSION).then(async cache => {
-      const cached = await cache.match(request);
-      const network = fetch(request).then(response => {
-        if (response.ok || response.type === "opaque") cache.put(request, response.clone());
-        return response;
-      }).catch(() => cached || Response.error());
-      return cached || network;
-    })
-  );
+  event.respondWith((async () => {
+    const cache = await caches.open(VERSION);
+    try {
+      const response = await fetch(request);
+      if (response.ok) cache.put(request, response.clone());
+      return response;
+    } catch {
+      return (await cache.match(request)) || Response.error();
+    }
+  })());
 });

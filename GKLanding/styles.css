@@ -31,6 +31,12 @@ h2 { margin: 0 0 6px; font-size: 20px; }
 .link { color: var(--gold); font-weight: 600; }
 iframe { width: 100%; height: 300px; border: 0; border-radius: 12px; }
 
+.staff { padding-top: 40px; padding-bottom: 56px; border-top: 1px solid var(--line); }
+.staff p { color: var(--muted); max-width: 36em; }
+.staff-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 18px; }
+.staff-grid a { display: grid; place-items: center; min-height: 48px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-weight: 600; }
+.staff-grid a:hover { border-color: var(--gold); color: var(--gold); }
+
 footer { padding-top: 24px; padding-bottom: 32px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
 
 @media (max-width: 720px) {

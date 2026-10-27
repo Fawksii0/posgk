@@ -193,7 +193,7 @@ export async function orderCreate(c) {
   const lineIds = body.items.map((line) => str(line.id, { max: 80, min: 1, field: "Produit" }));
   const [settingRows, productRows] = await Promise.all([
     all(c.env, "SELECT key, value FROM settings WHERE key IN ('paused', 'freeDelivery', 'deliveryOn', 'defaultPrep')"),
-    all(c.env, "SELECT * FROM menu_items WHERE visible = 1 AND available = 1 AND id = ANY(?::text[])", lineIds)
+    all(c.env, `SELECT * FROM menu_items WHERE visible = 1 AND available = 1 AND id IN (${lineIds.map(() => "?").join(",")})`, ...lineIds)
   ]);
   const setting = (key, def) => { const r = settingRows.find((x) => x.key === key); return r ? jparse(r.value, def) : def; };
   if (setting("paused", false)) fail(409, "paused", "Les commandes sont temporairement en pause.");
@@ -423,7 +423,7 @@ function tableNo(body) {
 async function dineinLines(c, items) {
   if (!Array.isArray(items) || !items.length || items.length > 30) fail(400, "invalid", "Panier invalide.");
   const lineIds = items.map((line) => str(line.id, { max: 80, min: 1, field: "Produit" }));
-  const productRows = await all(c.env, "SELECT * FROM menu_items WHERE visible = 1 AND available = 1 AND id = ANY(?::text[])", lineIds);
+  const productRows = await all(c.env, `SELECT * FROM menu_items WHERE visible = 1 AND available = 1 AND id IN (${lineIds.map(() => "?").join(",")})`, ...lineIds);
   const productsById = new Map(productRows.map((row) => [row.id, row]));
   const normalized = [];
   let subtotal = 0;
@@ -568,6 +568,7 @@ export async function liveWait(c) {
   const since = String(c.url.searchParams.get("rev") || "");
   const first = await livePulse(c);
   if (!since || first.rev !== since) return first;
+  if (typeof c.env.DB.finish === "function") await c.env.DB.finish(true);
   const signal = c.req.signal;
   if (typeof c.env.DB.waitNotify === "function") {
     const deadline = Date.now() + 12000;

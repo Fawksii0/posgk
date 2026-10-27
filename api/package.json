@@ -3,10 +3,11 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "G&K branch-aware backend (Supabase Auth, Postgres and Edge Functions)",
+  "description": "G&K branch-aware backend (always-on Node, Supabase Auth, Postgres)",
   "scripts": {
     "dev": "supabase start --workdir supabase",
     "migrate:local": "supabase db reset --local --workdir supabase",
+    "start": "node server.mjs",
     "functions:serve": "supabase functions serve gk-api --env-file .env.local --workdir supabase",
     "create-staff": "node scripts/create-staff.mjs",
     "create-owner": "node scripts/create-owner.mjs",

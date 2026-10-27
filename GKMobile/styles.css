@@ -513,7 +513,14 @@ body.has-live-bar #app-main { padding-bottom: calc(150px + var(--safe-bottom)); 
   .top-seller-photo img { height: 156px; }
 }
 
-.splash { position: fixed; z-index: 40; inset: 0; display: grid; place-items: center; background: #1a120c; }
-.splash-mark { width: min(42vw, 148px); height: min(42vw, 148px); }
+.splash { position: fixed; z-index: 80; inset: 0; display: grid; place-items: center; background: #1a120c; pointer-events: auto; }
+.splash-mark { width: min(42vw, 148px); height: min(42vw, 148px); transform: scale(.72); opacity: 0; }
 .splash-mark img { display: block; width: 100%; height: 100%; object-fit: contain; }
-@media (prefers-reduced-motion: reduce) { .splash { display: none; } }
+.splash.is-playing .splash-mark { animation: gk-splash-in .7s cubic-bezier(.16, 1, .3, 1) forwards; }
+.splash.is-leaving { animation: gk-splash-out .32s ease-in forwards; pointer-events: none; }
+@keyframes gk-splash-in { to { transform: scale(1); opacity: 1; } }
+@keyframes gk-splash-out { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .splash, .splash.is-playing .splash-mark, .splash.is-leaving { animation: none; }
+  .splash { display: none; }
+}

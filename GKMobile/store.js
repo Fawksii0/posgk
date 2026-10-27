@@ -48,7 +48,7 @@ const state = {
   ...defaultData(),
   favorites: new Set(),
   cart: [],
-  view: "branches",
+  view: "auth",
   category: "All",
   query: "",
   trackingId: null,

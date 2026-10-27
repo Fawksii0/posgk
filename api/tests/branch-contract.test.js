@@ -24,11 +24,13 @@ function mockDb(user = null) {
         async first() {
           if (sql.includes("FROM users WHERE id = ?")) return values[0] === user?.id ? user : null;
           if (sql.includes("FROM users WHERE auth_user_id = ?")) return values[0] === user?.auth_user_id ? user : null;
+          if (sql.includes("FROM menu_items") && sql.includes("FROM branches WHERE active = 1")) return { branches: 2, n: 62 };
           if (sql.includes("SELECT name FROM branches WHERE id = ?")) return branches.find((branch) => branch.id === values[0]) || null;
           if (sql.includes("FROM branches WHERE id = ?")) return branches.find((branch) => branch.id === values[0] && branch.active) || null;
           return null;
         },
         async all() {
+          if (sql.includes("FROM menu_items")) return { results: [{ n: 62 }] };
           if (sql.includes("FROM branches WHERE active = 1")) return { results: branches.filter((branch) => !values.length || branch.id === values[0]) };
           return { results: [] };
         },
@@ -59,6 +61,7 @@ test("GET /health reports the API and a live branch query", async () => {
   assert.equal(body.service, "gk-api");
   assert.equal(body.database, "up");
   assert.equal(body.branches, 2);
+  assert.equal(body.menuItems, 62);
 });
 
 test("CORS allows the public status origin on gkfood.store", async () => {

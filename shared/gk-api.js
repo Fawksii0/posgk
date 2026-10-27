@@ -2,13 +2,14 @@
   "use strict";
 
   const SUPABASE_PROJECT_URL = "https://oxqfnhnxdnwnftduikkh.supabase.co";
+  const FLY_API_URL = "https://api.gkfood.store";
   const API_URL = window.GK_API_URL || (
     window.GK_SUPABASE_URL
       ? `${String(window.GK_SUPABASE_URL).replace(/\/+$/, "")}/functions/v1/gk-api`
       : ["localhost", "127.0.0.1"].includes(location.hostname)
-      ? `${SUPABASE_PROJECT_URL}/functions/v1/gk-api`
+      ? FLY_API_URL
       : /(^|\.)gkfood\.store$/.test(location.hostname)
-        ? `${SUPABASE_PROJECT_URL}/functions/v1/gk-api`
+        ? FLY_API_URL
         : ""
   );
   const SESSION_PREFIX = "gk-api-session:";
