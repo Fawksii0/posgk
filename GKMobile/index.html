@@ -11,7 +11,7 @@
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <meta name="description" content="Order your G&K Food favorites for pickup or delivery." />
     <title>G&K Food — Good food. Great moments.</title>
-    <link rel="stylesheet" href="./styles.css?v=43" />
+    <link rel="stylesheet" href="./styles.css?v=47" />
     <link rel="stylesheet" href="../shared/gk-chat.css?v=1" />
     <link rel="stylesheet" href="../shared/gk-live-scene.css?v=1" />
   </head>
@@ -24,9 +24,9 @@
         <button class="brand-lockup" id="home-brand" type="button" aria-label="G&K Food home">
           <img src="./assets/emblem-reference.png" alt="" class="brand-logo" />
         </button>
-        <button class="location-button" id="location-button" type="button" aria-label="Choisir une adresse de livraison">
+        <button class="location-button" id="location-button" type="button" aria-label="Détecter ma position">
           <small>Livraison à</small>
-          <strong><span class="location-icon" aria-hidden="true" data-icon="pin"></span><span id="location-label">Choisir une adresse</span><span class="location-chevron" aria-hidden="true" data-icon="chevronDown"></span></strong>
+          <strong><span class="location-icon" aria-hidden="true" data-icon="pin"></span><span id="location-label">Ma position</span><span class="location-chevron" aria-hidden="true" data-icon="chevronDown"></span></strong>
         </button>
         <button class="icon-button" id="notif-button" type="button" aria-label="Notifications">
           <span aria-hidden="true" data-icon="bell"></span><i class="dot" aria-hidden="true"></i>
@@ -62,12 +62,14 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="../shared/gk-api.js?v=api3" defer></script>
+    <script src="../shared/gk-push.js?v=1" defer></script>
+    <script src="../shared/gk-item-name.js?v=1" defer></script>
     <script src="../shared/gk-sound.js" defer></script>
     <script src="../shared/gk-chat.js?v=1" defer></script>
     <script src="./data.js" defer></script>
-    <script src="./store.js?v=42" defer></script>
+    <script src="./store.js?v=44" defer></script>
     <script type="module" src="./motion-ui.js?v=40"></script>
     <script type="module" src="../shared/gk-motion-live.js?v=1"></script>
-    <script src="./app.js?v=43" defer></script>
+    <script src="./app.js?v=52" defer></script>
   </body>
 </html>

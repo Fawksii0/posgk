@@ -16,6 +16,7 @@
     "check": "node --check src/index.js && node --check src/auth.js && node --check src/admin.js && node --check src/core.js && node --check src/lib.js && node --check src/orders.js && node --check src/postgres-sql.js && node --check scripts/create-staff.mjs && node --check scripts/create-owner.mjs && node --check tests/branch-contract.test.js"
   },
   "dependencies": {
-    "postgres": "^3.4.7"
+    "postgres": "^3.4.7",
+    "web-push": "^3.6.7"
   }
 }

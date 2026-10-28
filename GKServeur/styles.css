@@ -31,8 +31,9 @@ h1, h2, h3, p, ul { margin: 0; }
 .header-copy small { display: block; color: #cbb9a4; font-size: 10px; }
 .header-copy strong { display: block; overflow: hidden; color: #fff; font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .header-actions { display: flex; gap: 6px; }
-.icon-button { display: grid; min-width: 36px; min-height: 36px; place-items: center; padding: 0 10px; border-radius: 999px; background: #2b2118; color: #f4ead8; font-size: 12px; font-weight: 700; }
+.icon-button { display: grid; min-width: 36px; min-height: 36px; place-items: center; padding: 0 10px; border-radius: 999px; background: #2b2118; color: #f4ead8; font-size: 12px; font-weight: 700; text-decoration: none; }
 .icon-button.warn { background: #5a2a16; color: #ffd7c4; }
+.icon-button.ok { background: #1f4a3a; color: #c8f0dc; }
 
 #app-main { flex: 1; padding: 12px 16px calc(28px + var(--safe-bottom)); }
 
@@ -41,6 +42,7 @@ h1, h2, h3, p, ul { margin: 0; }
 .login-card p { color: var(--muted); font-size: 14px; }
 .login-card label { display: grid; gap: 6px; margin-top: 14px; font-size: 12px; font-weight: 700; }
 .login-card input { min-height: 46px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; font-weight: 500; }
+.login-card .pin-input { font-size: 28px; letter-spacing: .35em; text-align: center; font-weight: 800; }
 .form-error { min-height: 18px; margin-top: 10px; color: #b42318; font-size: 13px; }
 
 .tabs { display: flex; gap: 6px; overflow-x: auto; margin: 12px 0 14px; padding-bottom: 4px; scrollbar-width: none; }
@@ -52,13 +54,18 @@ h1, h2, h3, p, ul { margin: 0; }
 
 .ticket { margin-bottom: 12px; padding: 14px; border-radius: 18px; background: var(--card); box-shadow: var(--shadow); }
 .ticket.is-new { outline: 2px solid var(--gold); }
-.ticket-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.ticket-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ticket-head-end { display: flex; align-items: center; gap: 6px; }
+.ticket-print { display: flex; gap: 4px; }
+.ticket .icon-button { min-width: 32px; min-height: 32px; padding: 0; background: #f3efe4; color: #1a120c; }
+.sheet-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.sheet-title-row .gold-button { flex: none; min-height: 40px; padding: 0 12px; }
 .ticket-head strong { font-size: 16px; }
 .pill { padding: 4px 8px; border-radius: 999px; background: var(--gold-soft); color: var(--gold-deep); font-size: 11px; font-weight: 800; }
 .pill.pending { background: #fff1ce; }
 .pill.preparing { background: #e8f7ef; color: #14804a; }
 .pill.ready { background: #e7eefc; color: #1d4ed8; }
-.pill.delivered { background: #f0f2f6; color: #58677e; }
+.pill.delivered { background: #d1fae5; color: #0f766e; }
 .pill.refused { background: #fde8e8; color: #b42318; }
 .meta { display: flex; gap: 10px; margin: 8px 0; color: var(--muted); font-size: 12px; font-weight: 600; }
 .lines { padding: 0; list-style: none; }
@@ -73,6 +80,32 @@ h1, h2, h3, p, ul { margin: 0; }
 .outline-button { border: 1.5px solid var(--gold); background: #fff; color: var(--gold-deep); }
 .danger-button { background: #fde8e8; color: #b42318; }
 .gold-button:disabled, .outline-button:disabled { opacity: .55; }
+
+.floor-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 12px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.dot { width: 12px; height: 12px; border-radius: 4px; }
+.dot.call { background: #5a2a16; }
+.dot.pending { background: #e3a81f; }
+.dot.prep { background: #1f9d57; }
+.dot.ready { background: #2f6fed; }
+.dot.served { background: #0f766e; }
+.dot.free { background: #d8d3c8; }
+.floor { display: grid; gap: 12px; }
+.floor-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.seat { display: grid; place-items: center; gap: 2px; min-height: 72px; padding: 8px 4px; border: 0; border-radius: 14px; font-weight: 800; }
+.seat b { font-size: 20px; line-height: 1; }
+.seat small { font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.seat.free { background: #d8d3c8; color: #5f5a52; }
+.seat.free small { color: #7a746a; }
+.seat.pending { background: #e3a81f; color: #1b1405; }
+.seat.pending small { color: #5c4308; }
+.seat.prep { background: #1f9d57; color: #fff; }
+.seat.prep small { color: #e7ffe8; }
+.seat.ready { background: #2f6fed; color: #fff; }
+.seat.ready small { color: #dce8ff; }
+.seat.served { background: #0f766e; color: #fff; }
+.seat.served small { color: #d1fae5; }
+.seat.call { background: #5a2a16; color: #fff4ea; }
+.seat.call small { color: #ffd7c4; }
 
 .empty-state { padding: 36px 12px; color: var(--muted); text-align: center; }
 .call-card { background: #1a120c; color: #f4ead8; }

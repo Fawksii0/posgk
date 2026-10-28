@@ -12,12 +12,18 @@ const STEP_BUTTONS = { 1: "Arrivé au restaurant", 2: "Commande récupérée" };
 const STEP_HINTS = {
   1: "Rendez-vous au restaurant G&K Food.",
   2: "Récupérez la commande au comptoir.",
-  4: "Remettez la commande et saisissez le code du client."
+  4: "Remettez la commande et saisissez le code du ticket."
 };
 
 const dayFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 const timeFmt = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
 const shortDay = new Intl.DateTimeFormat("fr-FR", { weekday: "short" });
+
+function mapsNavUrl(dest) {
+  const apple = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (apple) return `https://maps.apple.com/?daddr=${encodeURIComponent(dest)}&dirflg=d`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}&travelmode=driving`;
+}
 
 function dayLabel(ts) {
   const diff = Math.round((startOfDay(Date.now()) - startOfDay(ts)) / DAY);
@@ -214,10 +220,11 @@ function activeView() {
     : `<button class="gold-button" type="submit" form="deliver-form">${icon("check")} Confirmer la livraison</button>`;
   const deliverForm = m.step === 4 ? `
       <form id="deliver-form" class="card delivery-code" novalidate>
-        <h3>Code de livraison</h3>
+        <h3>Livraison</h3>
+        <p class="code-hint">Demandez le code imprimé sur le ticket (pas le n° de commande).</p>
         <div class="field">
-          <label for="code">Demandez au client le code de sa commande</label>
-          <input id="code" class="pin-input code-input" name="code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="••••" />
+          <label for="code">Code de livraison</label>
+          <input id="code" class="pin-input code-input" name="code" type="text" inputmode="numeric" maxlength="8" autocomplete="one-time-code" placeholder="Code du ticket" />
         </div>
         ${m.payment === "cash" ? `<label class="check-row"><input id="cash-ok" type="checkbox" /> Espèces encaissées (${money(m.total)})</label>` : ""}
         <p id="deliver-error" class="form-error" role="alert"></p>
@@ -225,7 +232,7 @@ function activeView() {
   const toPickup = m.step < 4;
   const dest = toPickup ? (m.pickupCoords || m.pickupAddress) : (m.coords || m.rawAddress);
   const mapsBtn = dest
-    ? `<a class="outline-button maps-button" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}" target="_blank" rel="noopener">${icon("navigate")} Ouvrir Maps</a>` : "";
+    ? `<a class="outline-button maps-button" href="${mapsNavUrl(dest)}" target="_blank" rel="noopener">${icon("navigate")} Ouvrir Maps</a>` : "";
   return `
     <h1 class="screen-title">Mission ${esc(m.id)}</h1>
     <ol class="stepper" aria-label="Progression">${stepper}</ol>
@@ -515,7 +522,7 @@ document.addEventListener("submit", async event => {
     const submit = document.querySelector('[type=submit][form="deliver-form"]');
     submit.disabled = true;
     try {
-      await completeMission(form.code.value.trim(), form["cash-ok"]?.checked ?? true);
+      await completeMission(($("code")?.value || form.code?.value || "").trim(), form["cash-ok"]?.checked ?? true);
       render();
       toast(`Livraison terminée · +${money(earning)}`);
     } catch (error) {
@@ -529,7 +536,9 @@ document.addEventListener("submit", async event => {
 document.addEventListener("keydown", event => {
   const overlay = $("overlay");
   if (overlay.hidden) return;
-  if (event.key === "Escape") return closeSheet();
+  if (event.key === "Escape") {
+    return closeSheet();
+  }
   if (event.key !== "Tab") return;
   const focusable = [...overlay.querySelectorAll("button, input, textarea, a[href]")].filter(el => !el.disabled);
   if (!focusable.length) return;
@@ -644,7 +653,13 @@ setInterval(() => {
 }, 1000);
 
 if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
-  navigator.serviceWorker.register("./sw.js").catch(() => {});
+  navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" })
+    .then(() => {
+      if (state.session && !state.mustChange) {
+        try { void window.GKPush?.enable({ api: API, scope: SCOPE, app: "courier", prompt: true }); } catch { /* optional */ }
+      }
+    })
+    .catch(() => {});
 }
 
 render();

@@ -10,9 +10,11 @@
     { id: "web", name: "Landing site", hint: "gkfood.store", kind: "site", url: "https://gkfood.store/", probe: "https://gkfood.store/ok.txt" },
     { id: "app", name: "Customer app", hint: "app.gkfood.store", kind: "site", url: "https://app.gkfood.store/", probe: "https://app.gkfood.store/ok.txt" },
     { id: "kitchen", name: "Kitchen", hint: "kitchen.gkfood.store", kind: "site", url: "https://kitchen.gkfood.store/", probe: "https://kitchen.gkfood.store/ok.txt" },
+    { id: "caisse", name: "Caisse", hint: "caisse.gkfood.store", kind: "site", url: "https://caisse.gkfood.store/", probe: "https://caisse.gkfood.store/ok.txt" },
     { id: "courier", name: "Couriers", hint: "courier.gkfood.store", kind: "site", url: "https://courier.gkfood.store/", probe: "https://courier.gkfood.store/ok.txt" },
     { id: "waiter", name: "Waiter", hint: "serveur.gkfood.store", kind: "site", url: "https://serveur.gkfood.store/", probe: "https://serveur.gkfood.store/ok.txt" },
-    { id: "qr", name: "QR menu", hint: "menu.gkfood.store", kind: "site", url: "https://menu.gkfood.store/", probe: "https://menu.gkfood.store/ok.txt" }
+    { id: "qr", name: "QR menu", hint: "menu.gkfood.store", kind: "site", url: "https://menu.gkfood.store/", probe: "https://menu.gkfood.store/ok.txt" },
+    { id: "ops", name: "Ops console", hint: "ops.gkfood.store", kind: "site", url: "https://ops.gkfood.store/", probe: "https://ops.gkfood.store/ok.txt" }
   ];
 
   const STATUS_EN = {

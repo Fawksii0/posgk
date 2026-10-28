@@ -9,9 +9,16 @@
   <meta property="og:description" content="Snack · Restaurant · Gelato à Bouznika. Commandez en ligne.">
   <meta property="og:image" content="https://gkfood.store/assets/storefront.jpg">
   <link rel="icon" type="image/png" href="assets/emblem.png">
-  <link rel="stylesheet" href="styles.css?v=2">
+  <link rel="stylesheet" href="styles.css?v=5">
 </head>
 <body>
+  <div id="construction-screen" class="construction-screen" hidden>
+    <img src="assets/emblem.png" alt="G&amp;K Food" width="88" height="88">
+    <p class="construction-kicker">En travaux</p>
+    <h1>Nous revenons bientôt</h1>
+    <p id="construction-copy">G&amp;K Food est en construction. Le site commande est temporairement fermé.</p>
+  </div>
+  <p id="ops-banner" class="ops-banner" hidden></p>
   <header class="top">
     <a class="brand" href="/"><img src="assets/emblem.png" alt="" width="40" height="40"><span>G&amp;K Food</span></a>
     <a class="btn" href="https://app.gkfood.store/">Commander</a>
@@ -45,9 +52,11 @@
       <div class="staff-grid">
         <a href="https://app.gkfood.store/">Client</a>
         <a href="https://kitchen.gkfood.store/">Cuisine</a>
+        <a href="https://caisse.gkfood.store/">Caisse</a>
         <a href="https://serveur.gkfood.store/">Serveur</a>
         <a href="https://courier.gkfood.store/">Livreur</a>
         <a href="https://menu.gkfood.store/">Menu QR</a>
+        <a href="https://menu.gkfood.store/print.html">QR tables</a>
         <a href="https://admin.gkfood.store/">Admin</a>
         <a href="https://status.gkfood.store/">Statut</a>
       </div>
@@ -55,6 +64,6 @@
   </main>
 
   <footer>© <span id="yr"></span> G&amp;K Food</footer>
-  <script src="script.js"></script>
+  <script src="script.js?v=3"></script>
 </body>
 </html>

@@ -1,11 +1,11 @@
-// Builds one G&K app for Cloudflare Pages: node scripts/build-pages.mjs <GKMobile|GKAdmin|GKCuisine|GKCourier>
+// Builds one G&K app for Cloudflare Pages: node scripts/build-pages.mjs <GKMobile|GKAdmin|GKCuisine|GKCourier|GKCaisse>
 // Output goes to gk-dist (never the POS "dist"). The app lands at the site root and the shared client at
 // /shared, so the apps' "../shared/gk-api.js" references still resolve.
 import { cpSync, rmSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const apps = ["GKMobile", "GKAdmin", "GKCuisine", "GKCourier", "GKServeur", "GKMenu"];
+const apps = ["GKMobile", "GKAdmin", "GKCuisine", "GKCourier", "GKServeur", "GKMenu", "GKCaisse", "GKOps"];
 const app = process.argv[2];
 if (!apps.includes(app)) {
   console.error(`Usage: node scripts/build-pages.mjs <${apps.join("|")}>`);
@@ -20,13 +20,22 @@ rmSync(out, { recursive: true, force: true });
 cpSync(resolve(root, app), out, { recursive: true, filter: (src) => !/README\.md$/i.test(src) && !/[\\/]references([\\/]|$)/.test(src) });
 mkdirSync(resolve(out, "shared"), { recursive: true });
 cpSync(resolve(root, "shared"), resolve(out, "shared"), { recursive: true });
+if (app === "GKMenu") {
+  const menuPhotos = resolve(root, "GKMobile", "assets", "menu");
+  if (existsSync(menuPhotos)) {
+    mkdirSync(resolve(out, "assets", "menu"), { recursive: true });
+    cpSync(menuPhotos, resolve(out, "assets", "menu"), { recursive: true });
+  }
+}
 
 writeFileSync(resolve(out, "ok.txt"), "ok\n");
+const camera = app === "GKCourier" ? "(self)" : "()";
+const geo = ["GKCourier", "GKMobile"].includes(app) ? "(self)" : "()";
 writeFileSync(resolve(out, "_headers"), `/*
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: camera=(), microphone=(), payment=()
+  Permissions-Policy: camera=${camera}, geolocation=${geo}, microphone=(), payment=(), bluetooth=(self), serial=(self), usb=(self)
 
 /sw.js
   Cache-Control: no-cache
@@ -40,7 +49,7 @@ RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
   Header always set X-Content-Type-Options "nosniff"
   Header always set X-Frame-Options "DENY"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
-  Header always set Permissions-Policy "camera=(), microphone=(), payment=()"
+  Header always set Permissions-Policy "camera=${camera}, geolocation=${geo}, microphone=(), payment=(), bluetooth=(self), serial=(self), usb=(self)"
   <Files "sw.js">
     Header set Cache-Control "no-cache"
   </Files>

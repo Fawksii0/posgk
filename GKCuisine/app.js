@@ -6,7 +6,7 @@
   const sheetRoot = document.getElementById("sheet-root");
   const printArea = document.getElementById("print-area");
   const toastEl = document.getElementById("toast");
-  const ui = { view: "board", col: "new", filter: "all", prep: {}, sheet: null, dirty: false };
+  const ui = { view: "board", col: "new", filter: "all", prep: {}, sheet: null, dirty: false, holdRender: false };
   const data = {
     orders: [], menu: [], categories: [], couriers: [], settings: { paused: false, dispatchMode: "rotation", defaultPrep: 20 },
     loading: false, loaded: false, error: "", actionError: ""
@@ -28,7 +28,7 @@
     { key: "new", label: "Nouvelles", icon: "bell" },
     { key: "prep", label: "En préparation", icon: "flame" },
     { key: "ready", label: "Prêtes", icon: "check" },
-    { key: "out", label: "En livraison / Terminées", icon: "bike" }
+    { key: "out", label: "Terminées", icon: "bike" }
   ];
   const VIEWS = [
     { key: "board", label: "Commandes", icon: "list" },
@@ -62,10 +62,22 @@
     const items = Array.isArray(row.items) ? row.items.map(item => {
       const qty = Number(item.qty) || 1;
       const unit = item.unit === undefined ? Number(item.price || 0) / qty : Number(item.unit);
-      return { qty, name: item.name || "", size: item.size || "", extras: item.extras || [], price: unit };
+      const menuItem = (data.menu || []).find(entry => entry.id === item.id);
+      const category = item.category || item.categoryName || menuItem?.category || (typeof GKItemName !== "undefined" ? GKItemName.categoryFromId(item.id) : "");
+      return {
+        id: item.id,
+        qty,
+        name: typeof GKItemName !== "undefined" ? GKItemName.labeledName(item.name, category) : (item.name || ""),
+        category,
+        size: item.size || "",
+        extras: item.extras || [],
+        price: unit
+      };
     }) : [];
     const dispatchState = row.dispatch_state === "unassigned" ? "failed" : row.dispatch_state === "offered" ? "offering" : row.dispatch_state;
     const paymentType = row.payment === "cash" ? "cash" : "card";
+    const history = Array.isArray(row.history) ? row.history : [];
+    const cashierName = [...history].reverse().find(entry => entry.cashier)?.cashier || "";
     return {
       id: row.id,
       seq: row.seq,
@@ -82,6 +94,8 @@
       total: Number(row.total) || 0,
       payment: paymentType === "cash" ? "Espèces" : "Carte",
       paymentType,
+      cashierName,
+      deliveryCode: row.delivery_code || "",
       createdAt: numberTime(row.created_at),
       acceptedAt: numberTime(row.accepted_at),
       promisedAt: numberTime(row.promised_at),
@@ -142,19 +156,18 @@
       const results = await Promise.all(requests);
       const orders = results[0].orders || [];
       const oldPending = knownPending;
-      data.orders = orders.map(normalizeOrder);
       data.settings = { ...data.settings, ...results[1] };
       if (isCashier()) {
         data.categories = results[2].categories || [];
         const names = new Map(data.categories.map(category => [category.id, category.name]));
-        data.menu = (results[2].items || []).filter(item => item.visible).map(item => ({
+        data.menu = (results[2].items || []).filter(item => item.visible !== false).map(item => ({
           ...item, category: names.get(item.categoryId) || ""
         }));
         data.couriers = results[3].couriers || [];
       } else {
-        data.menu = [];
         data.couriers = [];
       }
+      data.orders = orders.map(normalizeOrder);
       knownPending = new Set(data.orders.filter(order => order.status === "pending").map(order => order.id));
       data.error = "";
       data.loaded = true;
@@ -180,7 +193,7 @@
       const signature = JSON.stringify([data.orders, data.couriers, data.settings, data.menu, data.error, data.loaded, data.loading, data.actionError]);
       if (signature !== lastSignature || !app.firstElementChild) {
         lastSignature = signature;
-        if (pointerDown) renderAfterPointer = true; else render();
+        if (pointerDown || ui.holdRender) renderAfterPointer = true; else render();
       }
       syncAlert(freshIds);
     }
@@ -261,9 +274,7 @@
 
   function renderHeader() {
     const connected = GKPrinter.connected();
-    const printerChip = isCashier()
-      ? `<button class="chip ${connected ? "ok" : "off"}" data-action="view" data-view="settings" aria-label="Imprimante : ${connected ? "connectée" : "déconnectée"}">${icon("printer")}<span>${connected ? `Connectée · ${esc(GKPrinter.name())}` : "Déconnectée"}</span></button>`
-      : "";
+    const printerChip = `<button class="chip ${connected ? "ok" : "off"}" data-action="${connected ? "view" : "printer-connect"}" data-view="settings" aria-label="Imprimante : ${connected ? "connectée" : "déconnectée"}">${icon("printer")}<span>${connected ? `Connectée · ${esc(GKPrinter.name())}` : "Bluetooth · Déconnectée"}</span></button>`;
     return `<header class="top">
       <div class="brand"><img src="assets/emblem-reference.png" alt="G&amp;K Food" width="40" height="40"><span class="pill-black">CUISINE</span></div>
       <div class="chips">
@@ -276,7 +287,7 @@
         <button class="icon-btn" data-action="toggle-sound" aria-label="${state.prefs.sound ? "Couper le son" : "Activer le son"}" aria-pressed="${state.prefs.sound}">${icon(state.prefs.sound ? "volume" : "volumeOff")}</button>
         <button class="icon-btn" data-action="logout" aria-label="Se déconnecter">${icon("logout")}</button></div>
     </header>
-    <nav class="tabs" aria-label="Navigation">${VIEWS.filter(v => (v.key !== "settings" && v.key !== "stock") || isCashier()).map(v => `<button class="tab ${ui.view === v.key ? "active" : ""}" data-action="view" data-view="${v.key}" aria-current="${ui.view === v.key}">${icon(v.icon)}<span>${v.label}</span></button>`).join("")}</nav>`;
+    <nav class="tabs" aria-label="Navigation">${VIEWS.filter(v => v.key !== "stock" || isCashier()).map(v => `<button class="tab ${ui.view === v.key ? "active" : ""}" data-action="view" data-view="${v.key}" aria-current="${ui.view === v.key}">${icon(v.icon)}<span>${v.label}</span></button>`).join("")}</nav>`;
   }
 
   function stepper(orderId, minutes, scope) {
@@ -321,33 +332,38 @@
     const timed = ["pending", "preparing", "ready"].includes(order.status);
     const cashier = isCashier();
     const isNew = order.status === "pending";
-    const lines = order.items.map(item => `<li><span class="qty">${item.qty}×</span><span class="item-main"><b>${esc(item.name)}</b>${item.size ? ` <span class="muted">${esc(item.size)}</span>` : ""}${(item.extras || []).length ? `<span class="extras">+ ${item.extras.map(esc).join(", ")}</span>` : ""}</span><span class="price">${money(item.price * item.qty)}</span></li>`).join("");
-    const draft = ui.prep[order.id] ?? defaultPrep();
-    const timing = order.promisedAt && ["preparing", "ready"].includes(order.status) ? `<div class="timing" data-late-for="${order.promisedAt}">${icon("clock")}<span>Promise ${clock(order.promisedAt)} · <b data-until="${order.promisedAt}">${countdown(order.promisedAt - Date.now())}</b></span></div>` : "";
-    let actions = "";
+    const lines = (order.items || []).map(item => {
+      const label = typeof GKItemName !== "undefined" ? GKItemName.ticketName(item) : item.name;
+      return `<li><span class="qty">${item.qty}×</span><span class="item-main"><b>${esc(label)}</b>${(item.extras || []).length ? `<span class="extras">+ ${item.extras.map(esc).join(", ")}</span>` : ""}</span><span class="price">${money(item.price * item.qty)}</span></li>`;
+    }).join("");
+    const place = order.mode === "dinein" && order.tableNo ? `Table #${order.tableNo}` : modeLabel(order);
+    const printBar = `<div class="kds-print-bar" role="group" aria-label="Imprimer">
+      <button class="icon-btn kds-reprint" data-action="print-original" data-id="${esc(order.id)}" aria-label="Ticket client">${icon("printer")}</button>
+      <button class="icon-btn kds-reprint" data-action="print-kitchen" data-id="${esc(order.id)}" aria-label="Ticket cuisine">${icon("utensils")}</button>
+      <button class="icon-btn kds-reprint" data-action="print-duplicata" data-id="${esc(order.id)}" aria-label="Duplicata">D</button>
+      ${order.mode === "delivery" ? `<button class="icon-btn kds-reprint kds-delivery-print" data-action="print-delivery" data-id="${esc(order.id)}" aria-label="Ticket livraison">${icon("bike")}</button>` : ""}
+    </div>`;
+    let actions = printBar;
     if (isNew) {
-      actions = cashier
-        ? `<div class="prep-row"><span class="small muted">Préparation</span>${stepper(order.id, draft, "draft")}</div>
-           <div class="btn-row"><button class="btn danger" data-action="refuse" data-id="${esc(order.id)}">${icon("close")}Refuser</button><button class="btn primary" data-action="accept" data-id="${esc(order.id)}">${icon("check")}Accepter</button></div>`
-        : `<p class="small muted">En attente d'acceptation par la caisse.</p>`;
+      actions += cashier
+        ? `<div class="btn-row wrap"><button class="btn danger" data-action="refuse" data-id="${esc(order.id)}">Refuser</button><button class="btn primary" data-action="accept" data-id="${esc(order.id)}">Accepter</button></div>`
+        : `<div class="btn-row wrap"><p class="small muted">En attente caisse</p></div>`;
     } else if (order.status === "preparing") {
-      actions = `${cashier ? `<div class="prep-row"><span class="small muted">Temps total</span>${stepper(order.id, order.prepMin, "live")}</div>` : ""}
-        <div class="btn-row">${cashier ? `<button class="btn" data-action="reprint" data-id="${esc(order.id)}">${icon("printer")}Réimprimer</button>` : ""}<button class="btn primary" data-action="ready" data-id="${esc(order.id)}">${icon("check")}Prête</button></div>`;
+      actions += `<div class="btn-row wrap"><button class="btn primary" data-action="ready" data-id="${esc(order.id)}">Prête</button></div>`;
     } else if (order.status === "ready") {
       const servedHere = order.mode === "pickup";
       const waitingWaiter = order.mode === "dinein";
-      actions = `<div class="btn-row">${cashier ? `<button class="btn" data-action="reprint" data-id="${esc(order.id)}">${icon("printer")}Réimprimer</button>` : ""}
-        ${servedHere ? (cashier ? `<button class="btn primary" data-action="handover" data-id="${esc(order.id)}">${icon("check")}Remise au client</button>` : `<span class="small muted">À remettre au client</span>`) : waitingWaiter ? `<span class="small muted">Le serveur peut servir</span>` : `<span class="small muted">En attente du livreur</span>`}</div>`;
-    } else if (cashier) {
-      actions = `<div class="btn-row"><button class="btn" data-action="reprint" data-id="${esc(order.id)}">${icon("printer")}Réimprimer</button></div>`;
+      actions += `<div class="btn-row wrap">${servedHere ? (cashier ? `<button class="btn primary" data-action="handover" data-id="${esc(order.id)}">Remise</button>` : `<span class="small muted">À remettre</span>`) : waitingWaiter ? `<span class="small muted">Serveur</span>` : `<span class="small muted">Livreur</span>`}</div>`;
     }
+    const timer = timed
+      ? `<span class="kds-timer" data-timer="${order.createdAt}" aria-label="Temps écoulé">${icon("clock")}${elapsedText(order.createdAt)}</span>`
+      : `<span class="kds-timer" data-since="${order.createdAt}">${icon("clock")}${minutesSince(order.createdAt)} min</span>`;
     return `<article class="card ${isNew ? "is-new" : ""} mode-${order.mode} ${timed ? `timed ${ageClass(Date.now() - order.createdAt)}` : ""}" data-order="${esc(order.id)}" ${timed ? `data-age-since="${order.createdAt}"` : ""}>
-      <header class="card-head"><div><span class="order-no">${esc(order.id)}</span> ${statusPill(order)}</div>${timed ? `<span class="elapsed" data-timer="${order.createdAt}" aria-label="Temps écoulé">${elapsedText(order.createdAt)}</span>` : `<span class="elapsed" data-since="${order.createdAt}">${minutesSince(order.createdAt)} min</span>`}</header>
-      <div class="card-meta"><span class="who-first">${icon("user")}${esc(firstName(order))}</span><span class="mode-chip ${order.mode}">${icon(modeIcon(order))}${modeLabel(order)}</span></div>
+      <header class="card-head"><span class="order-no">${esc(order.id)}</span><span class="kds-place">${esc(place)}</span>${timer}</header>
       <ul class="lines">${lines}</ul>
       ${order.note ? `<p class="note">${icon("alert")}<span>${esc(order.note)}</span></p>` : ""}
-      <div class="card-total"><span class="pay">${icon(order.paymentType === "cash" ? "cash" : "card")}${esc(order.payment)}</span><b>${money(order.total)}</b></div>
-      ${timing}${dispatchBlock(order, couriers)}${actions}
+      <div class="card-total"><span class="pay">${esc(order.payment)}</span><b>${money(order.total)}</b></div>
+      ${dispatchBlock(order, couriers)}${actions}
     </article>`;
   }
 
@@ -358,14 +374,11 @@
     const couriers = courierMap();
     const strip = `<div class="courier-strip" aria-label="Livreurs">${Object.values(couriers).map(c => `<span class="chip ${c.online ? (c.busy ? "warn" : "ok") : "off"}">${icon("bike")}<span>${esc(c.courier.name.split(" ")[0])} · ${c.online ? (c.busy ? "en mission" : "libre") : "hors ligne"}${c.km == null ? "" : ` · ${c.km.toFixed(1)} km`}</span></span>`).join("")}</div>`;
     const tabs = `<div class="col-tabs" role="tablist">${COLUMNS.map(c => `<button role="tab" class="col-tab ${ui.col === c.key ? "active" : ""}" data-action="col" data-col="${c.key}" aria-selected="${ui.col === c.key}">${c.label}<b>${groups[c.key].length}</b></button>`).join("")}</div>`;
-    const scene = window.gkMotionLive?.liveSceneHtml;
     const cols = COLUMNS.map(c => {
-      const cook = c.key === "prep" && groups.prep.length && scene ? scene("cook", "La cuisine prépare ces commandes", true) : "";
-      const ride = c.key === "out" && groups.out.some(order => order.status === "enroute") && scene ? scene("ride", "Livreurs en route", true) : "";
       const cards = groups[c.key].length ? groups[c.key].map(order => orderCard(order, couriers)).join("") : "";
       return `<section class="col col-${c.key} ${ui.col === c.key ? "is-current" : ""}" aria-label="${c.label}">
       <h2>${icon(c.icon)}${c.label}<b>${groups[c.key].length}</b></h2>
-      <div class="col-body">${cook}${ride}${cards || `<div class="empty-state"><span class="empty-ico">${icon(c.icon)}</span><strong>Aucune commande</strong><small>${EMPTY_HINTS[c.key] || ""}</small></div>`}</div></section>`;
+      <div class="col-body">${cards || `<div class="empty-state"><span class="empty-ico">${icon(c.icon)}</span><strong>Aucune commande</strong><small>${EMPTY_HINTS[c.key] || ""}</small></div>`}</div></section>`;
     }).join("");
     return `${strip}${tabs}<div class="board">${cols}</div>`;
   }
@@ -381,7 +394,7 @@
       <div class="h-main"><b class="h-no">${esc(order.id)}</b>${statusPill(order)}</div>
       <div class="h-info"><span>${icon("clock")}${clock(order.createdAt)}</span><span>${icon("user")}${esc(firstName(order))}</span><span class="mode-chip ${order.mode}">${modeLabel(order)}</span></div>
       ${order.refusedReason ? `<div class="small muted h-reason">${esc(order.refusedReason)}</div>` : ""}
-      <div class="h-end"><b>${money(order.total)}</b>${isCashier() && order.acceptedAt ? `<button class="icon-btn" data-action="reprint" data-id="${esc(order.id)}" aria-label="Réimprimer ${esc(order.id)}">${icon("printer")}</button>` : ""}</div></article>`).join("");
+      <div class="h-end"><b>${money(order.total)}</b>${order.acceptedAt ? `<button class="icon-btn" data-action="print-original" data-id="${esc(order.id)}" aria-label="Ticket ${esc(order.id)}">${icon("printer")}</button><button class="icon-btn" data-action="print-kitchen" data-id="${esc(order.id)}" aria-label="Cuisine">${icon("utensils")}</button><button class="icon-btn" data-action="print-duplicata" data-id="${esc(order.id)}" aria-label="Duplicata">D</button>${order.mode === "delivery" ? `<button class="icon-btn" data-action="print-delivery" data-id="${esc(order.id)}" aria-label="Livraison">${icon("bike")}</button>` : ""}` : ""}</div></article>`).join("");
     const revenue = today.filter(order => order.status === "delivered").reduce((sum, order) => sum + order.total, 0);
     const done = today.filter(order => order.status === "delivered").length;
     const lost = today.filter(order => ["refused", "cancelled"].includes(order.status)).length;
@@ -398,7 +411,8 @@
     const sections = [...groups].map(([category, items]) => `<section class="stock-group"><h3>${esc(category)}<span>${items.filter(item => item.available).length}/${items.length}</span></h3>
       <div class="stock-grid">${items.map(item => {
         const on = !!item.available;
-        return `<button class="stock-tile ${on ? "on" : "off"}" role="switch" aria-checked="${on}" data-action="stock" data-id="${esc(item.id)}" aria-label="${esc(item.name)} : ${on ? "disponible" : "épuisé"}"><b>${esc(item.name)}</b><span class="stock-state"><i></i>${on ? "Disponible" : "Épuisé"}</span></button>`;
+        const label = typeof GKItemName !== "undefined" ? GKItemName.labeledName(item.name, item.category) : item.name;
+        return `<button class="stock-tile ${on ? "on" : "off"}" role="switch" aria-checked="${on}" data-action="stock" data-id="${esc(item.id)}" aria-label="${esc(label)} : ${on ? "disponible" : "épuisé"}"><b>${esc(label)}</b><span class="stock-state"><i></i>${on ? "Disponible" : "Épuisé"}</span></button>`;
       }).join("")}</div></section>`).join("");
     return `<section class="panel wide"><div class="panel-head"><div><h2>Stock</h2><p class="muted">Touchez un article pour le marquer épuisé. Synchronisé avec le menu client.</p></div><span class="stat ${out ? "warn" : "ok"}">${out ? `${out} épuisé(s)` : "Tout disponible"}</span></div>
       ${sections || `<p class="empty">Aucun article de menu disponible.</p>`}</section>`;
@@ -412,53 +426,80 @@
   function renderSettings() {
     const settings = data.settings;
     const connected = GKPrinter.connected();
-    return `<section class="panel settings"><h2>Réglages</h2>
-      <div class="group"><h3>Affectation des livreurs</h3>
+    const cashier = isCashier();
+    const bleOk = GKPrinter.bleSupported();
+    const serialOk = GKPrinter.serialSupported();
+    const where = GKPrinter.platform();
+    const status = connected
+      ? `Connectée : ${esc(GKPrinter.name())}`
+      : where.iOS
+        ? "iPhone / iPad : Apple n'autorise pas le Bluetooth dans Chrome ni Safari. Le ticket s'ouvre en aperçu (AirPrint si l'imprimante le gère). Pour une imprimante thermique G&K, utilisez Chrome sur Android ou un PC."
+        : where.android
+          ? "Android : ouvrez Cuisine dans Chrome (pas Samsung Internet). Allumez le Bluetooth, acceptez Localisation / Appareils à proximité, puis Bluetooth (BLE). L'imprimante doit être BLE, pas seulement « Bluetooth classique »."
+          : bleOk
+            ? "PC : Bluetooth (BLE) ouvre le sélecteur Chrome. Port série = imprimante déjà couplée dans Windows (COM / USB)."
+            : "Bluetooth web indisponible. Chrome ou Edge, en https.";
+    const dispatch = cashier ? `<div class="group"><h3>Affectation des livreurs</h3>
         <div class="seg" role="radiogroup" aria-label="Mode d'affectation">
           <button role="radio" aria-checked="${settings.dispatchMode === "rotation"}" class="${settings.dispatchMode === "rotation" ? "active" : ""}" data-action="dispatch-mode" data-mode="rotation">Rotation</button>
           <button role="radio" aria-checked="${settings.dispatchMode === "proximity"}" class="${settings.dispatchMode === "proximity" ? "active" : ""}" data-action="dispatch-mode" data-mode="proximity">Proximité</button></div>
-        <p class="small muted">Le serveur affecte automatiquement un livreur selon ce mode. Les offres expirent après 60 s.</p></div>
-      <div class="group"><h3>Imprimante</h3>
-        <p class="small ${connected ? "ok-text" : "muted"}">${connected ? `Connectée : ${esc(GKPrinter.name())}` : GKPrinter.supported() ? "Aucune imprimante connectée." : "Bluetooth indisponible (Chrome/Edge en https ou localhost requis) : aperçu à l'écran utilisé."}</p>
-        <div class="btn-row wrap"><button class="btn primary" data-action="printer-connect">${icon("bluetooth")}Connecter une imprimante Bluetooth</button>
-          ${connected ? `<button class="btn" data-action="printer-disconnect">Déconnecter</button>` : ""}
-          <button class="btn" data-action="printer-test">${icon("printer")}Imprimer un ticket de test</button></div>
-        <div class="setting"><div><b>Largeur du papier</b></div><div class="seg" role="radiogroup" aria-label="Largeur du papier">
-          ${[58, 80].map(width => `<button role="radio" aria-checked="${state.prefs.paper === width}" class="${state.prefs.paper === width ? "active" : ""}" data-action="paper" data-paper="${width}">${width} mm</button>`).join("")}</div></div>
-        ${switchRow("Ouvrir la boîte d'impression du navigateur", "Lorsque l'aperçu de secours s'affiche (sans imprimante Bluetooth).", state.prefs.autoBrowserPrint, "toggle-autoprint")}</div>
-      <div class="group"><h3>Commandes</h3>
+        <p class="small muted">Le serveur affecte automatiquement un livreur selon ce mode. Les offres expirent après 60 s.</p></div>` : "";
+    const orders = cashier ? `<div class="group"><h3>Commandes</h3>
         ${switchRow("Pause des commandes", "Les clients ne peuvent plus valider leur panier lorsque le service est en pause.", !!settings.paused, "toggle-pause")}
         <div class="setting"><div><b>Temps de préparation par défaut</b></div>
           <div class="stepper" role="group" aria-label="Temps par défaut"><button class="icon-btn" data-action="default-prep" data-delta="-5" aria-label="Moins 5 minutes" ${defaultPrep() <= 5 ? "disabled" : ""}>${icon("minus")}</button><span class="stepper-value"><b>${defaultPrep()}</b> min</span><button class="icon-btn" data-action="default-prep" data-delta="5" aria-label="Plus 5 minutes" ${defaultPrep() >= 90 ? "disabled" : ""}>${icon("plus")}</button></div></div>
-        ${switchRow("Alerte sonore", "Bip à l'arrivée d'une nouvelle commande.", state.prefs.sound, "toggle-sound")}</div>
+        ${switchRow("Alerte sonore", "Bip à l'arrivée d'une nouvelle commande.", state.prefs.sound, "toggle-sound")}</div>`
+      : `<div class="group"><h3>Alertes</h3>${switchRow("Alerte sonore", "Bip à l'arrivée d'une nouvelle commande.", state.prefs.sound, "toggle-sound")}</div>`;
+    return `<section class="panel settings"><h2>Réglages</h2>
+      ${dispatch}
+      <div class="group"><h3>Imprimante Bluetooth</h3>
+        <p class="small ${connected ? "ok-text" : "muted"}">${status}</p>
+        <div class="btn-row wrap">
+          ${where.iOS ? "" : `<button class="btn primary" data-action="printer-connect">${icon("bluetooth")}Bluetooth (BLE)</button>`}
+          ${serialOk ? `<button class="btn" data-action="printer-serial">${icon("printer")}Port série USB / COM</button>` : ""}
+          ${connected ? `<button class="btn" data-action="printer-disconnect">Déconnecter</button>` : ""}
+          <button class="btn" data-action="printer-test">${icon("printer")}${where.iOS ? "Aperçu / AirPrint" : "Ticket de test"}</button>
+        </div>
+        <div class="setting"><div><b>Largeur du papier</b></div><div class="seg" role="radiogroup" aria-label="Largeur du papier">
+          ${[58, 80].map(width => `<button role="radio" aria-checked="${state.prefs.paper === width}" class="${state.prefs.paper === width ? "active" : ""}" data-action="paper" data-paper="${width}">${width} mm</button>`).join("")}</div></div>
+        ${serialOk ? `<div class="setting"><div><b>Vitesse port série</b></div><div class="seg" role="radiogroup" aria-label="Vitesse">
+          ${[9600, 19200, 115200].map(baud => `<button role="radio" aria-checked="${Number(state.prefs.baud) === baud}" class="${Number(state.prefs.baud) === baud ? "active" : ""}" data-action="baud" data-baud="${baud}">${baud}</button>`).join("")}</div></div>` : ""}
+        ${switchRow("Ouvrir la boîte d'impression du navigateur", "Lorsque l'aperçu de secours s'affiche (sans imprimante Bluetooth).", state.prefs.autoBrowserPrint, "toggle-autoprint")}</div>
+      ${orders}
     </section>`;
   }
 
   function render() {
+    if (ui.holdRender) return;
     renderQueued = false;
     ui.dirty = false;
-    if (!state.session) {
-      syncAlert();
-      app.innerHTML = renderLogin();
-      document.title = baseTitle;
-      return;
+    try {
+      if (!state.session) {
+        syncAlert();
+        app.innerHTML = renderLogin();
+        document.title = baseTitle;
+        return;
+      }
+      if (state.session.mustChange) {
+        app.innerHTML = renderChangeSecret();
+        document.title = baseTitle;
+        return;
+      }
+      if (!isCashier() && ui.view === "stock") ui.view = "board";
+      const previousScroll = [...app.querySelectorAll(".col-body")].map(element => element.scrollTop);
+      let body;
+      if (!data.loaded && data.loading) body = `<section class="panel"><p class="empty">Chargement des commandes et des réglages…</p></section>`;
+      else if (!data.loaded && data.error) body = `<section class="panel"><h2>Connexion au serveur impossible</h2><p class="form-error">${esc(data.error)}</p><button class="btn primary" data-action="refresh">Réessayer</button></section>`;
+      else body = { board: renderBoard, history: renderHistory, stock: renderStock, settings: renderSettings }[ui.view]();
+      const banners = `${data.error && data.loaded ? `<p class="banner" role="alert">Erreur de synchronisation : ${esc(data.error)}. Les dernières données chargées sont affichées. <button class="btn small-btn" data-action="refresh">Réessayer</button></p>` : ""}${data.actionError ? `<p class="banner" role="alert">Action impossible : ${esc(data.actionError)}</p>` : ""}`;
+      app.innerHTML = `${renderHeader()}<main class="main view-${ui.view}">${banners}${body}</main>`;
+      app.querySelectorAll(".col-body").forEach((element, index) => { if (previousScroll[index]) element.scrollTop = previousScroll[index]; });
+      updateBadge();
+      window.gkMotionLive?.playLiveScenes(app);
+    } catch (err) {
+      console.error(err);
+      app.innerHTML = `<main class="login"><section class="login-card"><h1>Cuisine</h1><p class="form-error">L'écran n'a pas pu s'afficher. Rechargez la page.</p><button class="btn primary block" type="button" data-action="refresh">Réessayer</button></section></main>`;
     }
-    if (state.session.mustChange) {
-      app.innerHTML = renderChangeSecret();
-      document.title = baseTitle;
-      return;
-    }
-    if ((!isCashier() && ["settings", "stock"].includes(ui.view))) ui.view = "board";
-    const previousScroll = [...app.querySelectorAll(".col-body")].map(element => element.scrollTop);
-    let body;
-    if (!data.loaded && data.loading) body = `<section class="panel"><p class="empty">Chargement des commandes et des réglages…</p></section>`;
-    else if (!data.loaded && data.error) body = `<section class="panel"><h2>Connexion au serveur impossible</h2><p class="form-error">${esc(data.error)}</p><button class="btn primary" data-action="refresh">Réessayer</button></section>`;
-    else body = { board: renderBoard, history: renderHistory, stock: renderStock, settings: renderSettings }[ui.view]();
-    const banners = `${data.error && data.loaded ? `<p class="banner" role="alert">Erreur de synchronisation : ${esc(data.error)}. Les dernières données chargées sont affichées. <button class="btn small-btn" data-action="refresh">Réessayer</button></p>` : ""}${data.actionError ? `<p class="banner" role="alert">Action impossible : ${esc(data.actionError)}</p>` : ""}`;
-    app.innerHTML = `${renderHeader()}<main class="main view-${ui.view}">${banners}${body}</main>`;
-    app.querySelectorAll(".col-body").forEach((element, index) => { if (previousScroll[index]) element.scrollTop = previousScroll[index]; });
-    updateBadge();
-    window.gkMotionLive?.playLiveScenes(app);
   }
 
   function schedule() {
@@ -508,43 +549,53 @@
       <button class="btn block ghost" data-action="close-sheet">Annuler</button>`);
   }
 
-  function receiptDoc(order) {
-    return {
-      id: order.id, seq: order.seq, createdAt: order.createdAt, mode: order.mode,
-      customerName: order.customer?.name || "", phone: order.customer?.phone || "",
-      address: order.address?.street || "", zone: order.address?.zone || "", note: order.note,
-      subtotal: order.subtotal, fee: order.fee, discount: order.discount, total: order.total,
-      payment: order.paymentType === "cash" ? "cash" : "card", status: order.status,
-      items: order.items.map(item => ({ qty: item.qty, name: item.name, size: item.size, extras: item.extras, unit: item.price }))
-    };
-  }
-  const receiptOpts = reprint => ({ seller: data.settings.restaurant || {}, logo: "assets/emblem-reference.png", reprint });
-
-  function openPreview(order, reprint, reason) {
-    ui.sheet = { type: "preview" };
+  function openPreview(order, kind, reason) {
+    ui.sheet = { type: "preview", id: order.id, kind };
     printArea.innerHTML = "";
-    openSheet(`<h2>Ticket #${esc(order.id)}</h2>${reason ? `<p class="muted small">${esc(reason)}</p>` : ""}
-      <div class="ticket-wrap">${GKReceipt.previewTicket(receiptDoc(order), receiptOpts(reprint))}</div>
-      <div class="btn-row"><button class="btn" data-action="close-sheet">Fermer</button><button class="btn primary" data-action="browser-print" data-id="${esc(order.id)}" data-reprint="${reprint ? 1 : 0}">${icon("printer")}Imprimer</button></div>`);
-    if (state.prefs.autoBrowserPrint) setTimeout(() => GKReceipt.printTicket(receiptDoc(order), receiptOpts(reprint)), 300);
+    const paper = state.prefs.paper;
+    const title = kind === "duplicata" ? "Duplicata" : kind === "delivery" ? "Ticket livraison" : kind === "kitchen" ? "Ticket cuisine" : "Ticket client";
+    openSheet(`<h2>${title} #${esc(order.seq || order.id)}</h2>${reason ? `<p class="muted small">${esc(reason)}</p>` : ""}
+      ${ticketMarkup(order, { paper, kind })}
+      <div class="btn-row"><button class="btn" data-action="close-sheet">Fermer</button><button class="btn primary" data-action="browser-print" data-id="${esc(order.id)}" data-kind="${esc(kind)}">${icon("printer")}Imprimer ce ticket</button></div>`);
   }
 
-  async function printOrder(order, reprint = false) {
-    if (!isCashier()) return false;
-    let reason;
+  async function printOrder(order, options = {}) {
+    const kind = typeof options === "boolean" ? (options ? "duplicata" : "original") : (options.kind || "original");
+    const silent = options.silent === true;
+    const withKitchen = options.withKitchen === true;
+    const paper = state.prefs.paper;
+    order = {
+      ...order,
+      cashierName: order.cashierName || state.session?.name || "",
+      items: (order.items || []).map(item => {
+        const menuItem = (data.menu || []).find(entry => entry.id === item.id);
+        const category = item.category || menuItem?.category || (typeof GKItemName !== "undefined" ? GKItemName.categoryFromId(item.id) : "");
+        return { ...item, category, name: item.name || menuItem?.name || "" };
+      })
+    };
+    await ensureTicketArt();
+    async function send(copy) {
+      await GKPrinter.write(buildTicket(order, { paper, kind: copy }));
+    }
+    const label = copy => (copy === "duplicata" ? "Duplicata" : copy === "delivery" ? "Ticket livraison" : copy === "kitchen" ? "Ticket cuisine" : "Ticket client");
     if (GKPrinter.connected()) {
       try {
-        await GKPrinter.write(buildTicket(order, { paper: state.prefs.paper, reprint }));
-        toast(`Ticket ${order.id} envoyé à l'imprimante.`);
+        await send(kind);
+        if (withKitchen) await send("kitchen");
+        if (!silent) toast(withKitchen
+          ? `Ticket client + cuisine #${order.seq || order.id} envoyés.`
+          : `${label(kind)} #${order.seq || order.id} envoyé.`);
         return true;
       } catch (error) {
-        reason = `Échec d'impression Bluetooth (${error.message || "erreur"})`;
+        if (silent) return false;
+        toast(`Échec d'impression (${error.message || "erreur"}).`);
+        openPreview(order, kind, "L'imprimante n'a pas reçu le ticket.");
+        return false;
       }
-    } else {
-      reason = GKPrinter.supported() ? "Aucune imprimante connectée" : "Bluetooth indisponible";
     }
-    toast(`${reason} : aperçu du ticket affiché.`);
-    openPreview(order, reprint, `${reason} — impression via le navigateur.`);
+    if (silent) return false;
+    openPreview(order, kind, "Connectez l'imprimante (Réglages) pour le ticket thermique.");
+    if (state.prefs.autoBrowserPrint) printEscposHtml(order, { paper, kind });
     return false;
   }
 
@@ -622,8 +673,9 @@
     refresh() { data.error = ""; refreshData(); },
     track(el) { const order = findOrder(el.dataset.id); if (order) openTrack(order); },
     "toggle-sound"() { state.prefs.sound = !state.prefs.sound; save(); render(); },
-    "toggle-autoprint"() { if (requireCashier()) { state.prefs.autoBrowserPrint = !state.prefs.autoBrowserPrint; save(); render(); } },
-    paper(el) { if (requireCashier()) { state.prefs.paper = Number(el.dataset.paper); save(); render(); } },
+    "toggle-autoprint"() { state.prefs.autoBrowserPrint = !state.prefs.autoBrowserPrint; save(); render(); },
+    paper(el) { state.prefs.paper = Number(el.dataset.paper); save(); render(); },
+    baud(el) { state.prefs.baud = Number(el.dataset.baud) || 9600; save(); render(); },
     prep(el) {
       if (!requireCashier()) return;
       const delta = Number(el.dataset.delta);
@@ -651,7 +703,7 @@
         ui.col = "prep";
         const accepted = result?.order ? normalizeOrder(result.order) : order;
         render();
-        try { await printOrder(accepted, false); } catch { toast("Impression impossible : la commande est bien acceptée."); }
+        try { await printOrder(accepted, { kind: "original", withKitchen: true }); } catch { toast("Impression impossible : la commande est bien acceptée."); }
       });
     },
     refuse(el) { if (requireCashier()) openRefuse(el.dataset.id); },
@@ -662,7 +714,7 @@
     async ready(el) {
       await runAction(() => api.post(`/api/orders/${encodeURIComponent(el.dataset.id)}/ready`, {}, API_SCOPE), () => {
         const order = findOrder(el.dataset.id);
-        ui.col = "ready";
+        ui.col = "out";
       });
     },
     handover(el) {
@@ -672,7 +724,11 @@
         if (order?.mode === "pickup") ui.col = "out";
       });
     },
-    reprint(el) { const order = findOrder(el.dataset.id); if (order) printOrder(order, true); },
+    reprint(el) { const order = findOrder(el.dataset.id); if (order) printOrder(order, { kind: "original" }); },
+    "print-original"(el) { const order = findOrder(el.dataset.id); if (order) printOrder(order, { kind: "original" }); },
+    "print-kitchen"(el) { const order = findOrder(el.dataset.id); if (order) printOrder(order, { kind: "kitchen" }); },
+    "print-duplicata"(el) { const order = findOrder(el.dataset.id); if (order) printOrder(order, { kind: "duplicata" }); },
+    "print-delivery"(el) { const order = findOrder(el.dataset.id); if (order) printOrder(order, { kind: "delivery" }); },
     assign(el) {
       if (!requireCashier()) return;
       const select = app.querySelector(`select[data-assign="${CSS.escape(el.dataset.id)}"]`);
@@ -693,30 +749,61 @@
       if (requireCashier()) runAction(() => api.patch("/api/admin/settings/operations", { paused: !data.settings.paused }, API_SCOPE));
     },
     async "printer-connect"() {
-      if (!requireCashier()) return;
+      ui.holdRender = true;
       try {
         const name = await GKPrinter.connect();
         state.prefs.lastPrinter = name;
         save();
         toast(`Imprimante connectée : ${name}`);
       } catch (error) {
-        toast(error?.name === "NotFoundError" ? "Aucune imprimante sélectionnée." : `Connexion impossible : ${error.message || "erreur"}`);
+        toast(error?.name === "NotFoundError"
+          ? (GKPrinter.platform().android
+            ? "Aucune imprimante BLE choisie. Autorisez Localisation / Appareils à proximité, et vérifiez que l'imprimante est BLE."
+            : "Fenêtre fermée, ou aucune imprimante BLE. Sur PC, essayez Port série si elle est déjà couplée dans Windows.")
+          : `Bluetooth : ${error.message || "erreur"}`);
+      } finally {
+        ui.holdRender = false;
+        render();
       }
-      render();
+    },
+    async "printer-serial"() {
+      ui.holdRender = true;
+      try {
+        const name = await GKPrinter.connectSerial(state.prefs.baud || 9600);
+        state.prefs.lastPrinter = name;
+        save();
+        toast(`Imprimante connectée : ${name}`);
+      } catch (error) {
+        toast(error?.name === "NotFoundError"
+          ? "Aucun port choisi. Couplez d'abord l'imprimante dans les paramètres Bluetooth de Windows."
+          : `Port série : ${error.message || "erreur"}`);
+      } finally {
+        ui.holdRender = false;
+        render();
+      }
     },
     "printer-disconnect"() { GKPrinter.disconnect(); },
     "printer-test"() {
-      if (!requireCashier()) return;
       const order = {
         id: "TEST", createdAt: Date.now(), mode: "pickup", customer: { name: "Ticket de test" },
         items: [{ qty: 1, name: "Impression OK", size: "Éàç œ 123", extras: [], price: 0 }],
         subtotal: 0, fee: 0, total: 0, payment: "-", paymentType: "card"
       };
-      printOrder(order, false);
+      printOrder(order, { kind: "original", skipPair: true });
     },
     "browser-print"(el) {
-      const order = data.orders.find(item => item.id === el.dataset.id);
-      if (order) GKReceipt.printTicket(receiptDoc(order), receiptOpts(el.dataset.reprint === "1"));
+      const order = data.orders.find(item => item.id === el.dataset.id) || (el.dataset.id === "TEST" ? {
+        id: "TEST", createdAt: Date.now(), mode: "pickup", customer: { name: "Ticket de test" },
+        items: [{ qty: 1, name: "Impression OK", size: "Éàç œ 123", extras: [], price: 0 }],
+        subtotal: 0, fee: 0, total: 0, payment: "-", paymentType: "card"
+      } : null);
+      if (!order) return;
+      const kind = el.dataset.kind || "original";
+      if (GKPrinter.connected()) {
+        printOrder(order, { kind });
+        return;
+      }
+      printEscposHtml(order, { paper: state.prefs.paper, kind });
     },
     "alert-dismiss"(el) {
       if (el.dataset.id) silencedIds.add(el.dataset.id);
@@ -729,6 +816,7 @@
   document.addEventListener("pointerdown", () => { pointerDown = true; });
   const pointerUp = () => {
     pointerDown = false;
+    if (ui.holdRender) return;
     if (renderAfterPointer) { renderAfterPointer = false; setTimeout(render, 60); }
   };
   document.addEventListener("pointerup", pointerUp);
@@ -741,6 +829,9 @@
     if (state.session?.mustChange && element.dataset.action !== "logout") return;
     if (element.dataset.action === "close-sheet" && event.target !== element && element.classList.contains("sheet-backdrop")) return;
     if (element.disabled) return;
+    if (element.dataset.action === "printer-connect" || element.dataset.action === "printer-serial") {
+      ui.holdRender = true;
+    }
     const action = actions[element.dataset.action];
     if (action) action(element);
   });
@@ -895,7 +986,10 @@
     alertShownId = order.id;
     alertShownCount = alertQueue.length;
     const cashier = isCashier();
-    const lines = (order.items || []).map(item => `<li><span class="qty">${item.qty}×</span><span><b>${esc(item.name)}</b>${item.size ? ` <span class="muted">${esc(item.size)}</span>` : ""}${(item.extras || []).length ? `<span class="extras">+ ${item.extras.map(esc).join(", ")}</span>` : ""}</span></li>`).join("");
+    const lines = (order.items || []).map(item => {
+      const label = typeof GKItemName !== "undefined" ? GKItemName.ticketName(item) : item.name;
+      return `<li><span class="qty">${item.qty}×</span><span><b>${esc(label)}</b>${(item.extras || []).length ? `<span class="extras">+ ${item.extras.map(esc).join(", ")}</span>` : ""}</span></li>`;
+    }).join("");
     const more = alertQueue.length - 1;
     alertRoot.innerHTML = `<div class="new-alert" role="alertdialog" aria-modal="true" aria-labelledby="na-title">
       <div class="na-body">
@@ -913,7 +1007,7 @@
     alertRoot.querySelector(".na-accept")?.focus();
   }
 
-  GKPrinter.onChange(() => schedule());
+  try { GKPrinter.onChange(() => schedule()); } catch { /* printer module optional at boot */ }
 
   setInterval(tickTimers, 1000);
   setInterval(tickDom, 1000);
@@ -940,8 +1034,11 @@
     void refreshData();
     startWatch();
   }
-  GKPrinter.reconnect(state.prefs.lastPrinter);
+  try { GKPrinter.reconnect(state.prefs.lastPrinter); } catch { /* ignore */ }
+  try { ensureTicketArt(); } catch { /* logo optional */ }
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
+    navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" })
+      .then(() => { if (state.session && !state.session.mustChange) enablePhonePush(true); })
+      .catch(() => {});
   }
 })();

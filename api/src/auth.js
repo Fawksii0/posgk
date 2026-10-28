@@ -5,6 +5,20 @@ import { run, first, audit, publicUser, lockLeft, recordFail, clearFails, tooMan
 const TTL = { owner: 4 * 3600, courier: 30 * 86400 };
 const STAFF_TTL = 12 * 3600;
 const WEAK_PINS = new Set(["0000", "1111", "2222", "3333", "4444", "5555", "6666", "7777", "8888", "9999", "1234", "4321", "0123", "2580"]);
+export const FLOOR_CODE_ROLES = ["cashier", "waiter", "chef"];
+
+export async function issueLoginCode(env, userId) {
+  let code = "";
+  for (let i = 0; i < 60; i += 1) {
+    const next = String(1000 + Math.floor(Math.random() * 9000));
+    if (WEAK_PINS.has(next)) continue;
+    const taken = await first(env, "SELECT id FROM users WHERE login_code = ? AND id != ?", next, userId);
+    if (!taken) { code = next; break; }
+  }
+  if (!code) fail(500, "code_exhausted", "Impossible de générer un code unique.");
+  await run(env, "UPDATE users SET login_code = ?, pin_hash = ?, must_change = 0 WHERE id = ?", code, await hashSecret(code), userId);
+  return code;
+}
 
 export async function issueToken(env, user, ttl) {
   const iat = Math.floor(now() / 1000);
@@ -221,8 +235,27 @@ export async function courierLogin(c) {
   return finishLogin(c.env, user);
 }
 
-/* ---------- Supabase Auth staff email/password ---------- */
+/* ---------- Floor staff: unique 4-digit code (caisse / serveur / cuisine) ---------- */
 export async function staffLogin(c) {
+  const code = String(c.body.code || "").replace(/\D/g, "").slice(0, 8);
+  if (code) {
+    const keys = [[`staffcode:${code}`, POLICY.account], [`ip:${c.ip}`, POLICY.ip]];
+    const left = await lockLeft(c.env, keys);
+    if (left) tooMany(left);
+    if (!/^\d{4}$/.test(code)) { await recordFail(c.env, keys); BAD(); }
+    await c.env.DB.setContext({ actorId: null, actorRole: "admin", branchId: null });
+    const user = await first(c.env, "SELECT * FROM users WHERE login_code = ?", code);
+    const hashOk = user?.pin_hash ? await verifySecret(code, user.pin_hash) : false;
+    const plainOk = !!user && !user.pin_hash && user.login_code === code;
+    if (!user || !user.active || !FLOOR_CODE_ROLES.includes(user.role) || (!hashOk && !plainOk)) {
+      await c.env.DB.setContext({ actorId: null, actorRole: "anonymous", branchId: null });
+      await recordFail(c.env, keys); BAD();
+    }
+    if (plainOk) await run(c.env, "UPDATE users SET pin_hash = ? WHERE id = ?", await hashSecret(code), user.id);
+    await clearFails(c.env, keys);
+    return finishLogin(c.env, user);
+  }
+
   const email = String(c.body.email || "").trim().toLowerCase().slice(0, 120);
   const password = str(c.body.password, { max: 200, field: "Mot de passe", trim: false });
   const keys = [[`staff:${email}`, POLICY.account], [`ip:${c.ip}`, POLICY.ip]];
@@ -294,10 +327,14 @@ export async function ownerSwitch(c) {
 }
 
 /* ---------- secret change ---------- */
+export function validateLoginCode(value) {
+  if (!/^\d{4}$/.test(value)) fail(400, "weak_secret", "Le code doit contenir exactement 4 chiffres.");
+  if (WEAK_PINS.has(value)) fail(400, "weak_secret", "Code trop simple. Choisissez-en un autre.");
+}
+
 export function validateNewSecret(role, value) {
   if (role === "courier") {
-    if (!/^\d{4}$/.test(value)) fail(400, "weak_secret", "Le PIN doit contenir exactement 4 chiffres.");
-    if (WEAK_PINS.has(value)) fail(400, "weak_secret", "PIN trop simple. Choisissez-en un autre.");
+    validateLoginCode(value);
   } else if (typeof value !== "string" || value.length < 8 || value.length > 100) {
     fail(400, "weak_secret", "Le mot de passe doit contenir au moins 8 caractères.");
   }
@@ -311,22 +348,30 @@ export async function changeSecret(c) {
   const keys = [[`chg:${user.id}`, POLICY.account]];
   const left = await lockLeft(c.env, keys);
   if (left) tooMany(left);
-  let validCurrent = user.role === "courier" || user.role === "owner"
-    ? await verifySecret(current, user.role === "courier" ? user.pin_hash : user.password_hash)
+  const pinRole = user.role === "courier" || (FLOOR_CODE_ROLES.includes(user.role) && user.login_code);
+  let validCurrent = user.role === "owner" || pinRole
+    ? await verifySecret(current, user.role === "owner" ? user.password_hash : user.pin_hash)
     : false;
-  if (user.role !== "courier" && user.role !== "owner") {
+  if (!pinRole && user.role !== "owner") {
     const result = await authRequest(c.env, "token?grant_type=password", { email: user.email, password: current });
     validCurrent = !!result.ok && result.data.user?.id === user.auth_user_id;
   }
   if (!validCurrent) { await recordFail(c.env, keys); fail(401, "invalid_credentials", "Code actuel incorrect."); }
-  validateNewSecret(user.role, next);
+  if (pinRole && user.role !== "courier") validateLoginCode(next);
+  else validateNewSecret(user.role, next);
   if (next === current) fail(400, "weak_secret", "Le nouveau code doit être différent.");
   await clearFails(c.env, keys);
 
   let authSession = null;
-  if (user.role === "courier" || user.role === "owner") {
-    const column = user.role === "courier" ? "pin_hash" : "password_hash";
-    await run(c.env, `UPDATE users SET ${column} = ?, must_change = 0, token_version = token_version + 1 WHERE id = ?`, await hashSecret(next), user.id);
+  if (user.role === "courier" || user.role === "owner" || pinRole) {
+    if (FLOOR_CODE_ROLES.includes(user.role)) {
+      const taken = await first(c.env, "SELECT id FROM users WHERE login_code = ? AND id != ?", next, user.id);
+      if (taken) fail(409, "duplicate", "Ce code est déjà utilisé.");
+      await run(c.env, "UPDATE users SET login_code = ?, pin_hash = ?, must_change = 0, token_version = token_version + 1 WHERE id = ?", next, await hashSecret(next), user.id);
+    } else {
+      const column = user.role === "courier" ? "pin_hash" : "password_hash";
+      await run(c.env, `UPDATE users SET ${column} = ?, must_change = 0, token_version = token_version + 1 WHERE id = ?`, await hashSecret(next), user.id);
+    }
   } else {
     await updateAuthUser(c.env, user.auth_user_id, { password: next });
     const result = await authRequest(c.env, "token?grant_type=password", { email: user.email, password: next });
@@ -336,7 +381,7 @@ export async function changeSecret(c) {
   }
   const fresh = await first(c.env, "SELECT * FROM users WHERE id = ?", user.id);
   await audit(c.env, fresh, "Code modifié", "Changement de mot de passe/PIN");
-  return user.role === "courier" || user.role === "owner"
+  return user.role === "courier" || user.role === "owner" || pinRole
     ? { token: await issueToken(c.env, fresh), user: publicUser(fresh), branchId: fresh.branch_id || undefined }
     : supabaseLogin(authSession, fresh);
 }

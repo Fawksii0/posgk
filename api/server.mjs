@@ -23,6 +23,9 @@ function envForRequest() {
     SESSION_SECRET: process.env.SESSION_SECRET,
     OWNER_DOOR_KEY: process.env.OWNER_DOOR_KEY,
     DISPATCH_SECRET: process.env.DISPATCH_SECRET,
+    VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY || "",
+    VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY || "",
+    VAPID_SUBJECT: process.env.VAPID_SUBJECT || "mailto:hello@gkfood.store",
     ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS || "",
     GK_API_RUNTIME: runtime,
     DB: database.forRequest()

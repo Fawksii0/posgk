@@ -8,7 +8,7 @@
       ? `${String(window.GK_SUPABASE_URL).replace(/\/+$/, "")}/functions/v1/gk-api`
       : ["localhost", "127.0.0.1"].includes(location.hostname)
       ? FLY_API_URL
-      : /(^|\.)gkfood\.store$/.test(location.hostname)
+      : /(^|\.)gkfood\.store$/.test(location.hostname) || /^gk-[\w-]+\.pages\.dev$/.test(location.hostname)
         ? FLY_API_URL
         : ""
   );

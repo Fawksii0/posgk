@@ -5,6 +5,7 @@ import { webcrypto } from "node:crypto";
 import app from "../src/index.js";
 import { signToken } from "../src/lib.js";
 import { numberedParameters } from "../src/postgres-sql.js";
+import { tableAllowed } from "../src/tables.js";
 
 globalThis.crypto ||= webcrypto;
 
@@ -64,12 +65,28 @@ test("GET /health reports the API and a live branch query", async () => {
   assert.equal(body.menuItems, 62);
 });
 
+test("CORS allows localhost kitchen on any port", async () => {
+  const env = { ALLOWED_ORIGINS: "", DB: mockDb() };
+  const response = await app.fetch(new Request("https://api.test/health", {
+    headers: { Origin: "http://localhost:8800" }
+  }), env);
+  assert.equal(response.headers.get("Access-Control-Allow-Origin"), "http://localhost:8800");
+});
+
 test("CORS allows the public status origin on gkfood.store", async () => {
   const env = { ALLOWED_ORIGINS: "", DB: mockDb() };
   const response = await app.fetch(new Request("https://api.test/health", {
     headers: { Origin: "https://status.gkfood.store" }
   }), env);
   assert.equal(response.headers.get("Access-Control-Allow-Origin"), "https://status.gkfood.store");
+});
+
+test("CORS allows G&K Pages preview origins", async () => {
+  const env = { ALLOWED_ORIGINS: "", DB: mockDb() };
+  const response = await app.fetch(new Request("https://api.test/health", {
+    headers: { Origin: "https://gk-caisse.pages.dev" }
+  }), env);
+  assert.equal(response.headers.get("Access-Control-Allow-Origin"), "https://gk-caisse.pages.dev");
 });
 
 test("GET /api/branches returns only the requested branch fields", async () => {
@@ -205,4 +222,11 @@ test("public dine-in order lookup requires the table number and stays on that br
   assert.equal((await ok.json()).order.status, "preparing");
   const wrongTable = await app.fetch(new Request("https://api.test/api/dinein/orders/112345678?table=9", { headers }), env);
   assert.equal(wrongTable.status, 404);
+});
+
+test("G&K Food table numbers include 10/20/30/40 and 11-77, not only 1-24", () => {
+  assert.equal(tableAllowed("gk-food", 30, 24), true);
+  assert.equal(tableAllowed("gk-food", 77, 24), true);
+  assert.equal(tableAllowed("gk-food", 10, 24), true);
+  assert.equal(tableAllowed("gk-food", 9, 24), false);
 });

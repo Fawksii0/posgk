@@ -1,0 +1,14 @@
+{
+  "name": "gk-caisse-site",
+  "compatibility_date": "2026-10-26",
+  "assets": {
+    "directory": ".",
+    "not_found_handling": "single-page-application"
+  },
+  "routes": [
+    {
+      "pattern": "caisse.gkfood.store",
+      "custom_domain": true
+    }
+  ]
+}

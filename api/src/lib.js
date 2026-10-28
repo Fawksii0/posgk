@@ -99,7 +99,8 @@ export function originAllowed(env, origin) {
     const url = new URL(origin);
     const host = url.hostname;
     if (url.protocol === "https:" && (host === "gkfood.store" || host.endsWith(".gkfood.store"))) return true;
-    if (url.protocol === "http:" && (host === "localhost" || host === "127.0.0.1") && (url.port === "8800" || url.port === "")) return true;
+    if (url.protocol === "https:" && /^gk-[\w-]+\.pages\.dev$/.test(host)) return true;
+    if (url.protocol === "http:" && (host === "localhost" || host === "127.0.0.1")) return true;
   } catch {
     return false;
   }
@@ -163,6 +164,50 @@ export function normEmail(raw) {
 }
 
 export const jparse = (s, def) => { try { return JSON.parse(s); } catch { return def; } };
+
+const ITEM_PREFIX = {
+  Sandwichs: "Sandwich",
+  Salades: "Salade",
+  Pizzas: "Pizza",
+  Burgers: "Burger",
+  Desserts: "Dessert",
+  Boissons: "Boisson",
+  Plats: "Plat",
+  Tacos: "Tacos",
+  Jus: "Jus",
+  Pasticcio: "Pasticcio"
+};
+export function catalogItemName(name, category) {
+  const product = String(name || "").trim();
+  const cat = String(category || "").trim();
+  const prefix = ITEM_PREFIX[cat] || (cat ? cat.replace(/s$/i, "") : "");
+  if (!product) return prefix;
+  if (!prefix) return product;
+  const lower = product.toLowerCase();
+  if (lower.startsWith(prefix.toLowerCase()) || lower.startsWith(cat.toLowerCase())) return product;
+  return `${prefix} ${product}`;
+}
+
+export function ticketItemName(item) {
+  const name = catalogItemName(item?.name, item?.category);
+  const size = String(item?.size || "").trim();
+  if (!size) return name;
+  if (name.toLowerCase().endsWith(` ${size.toLowerCase()}`)) return name;
+  return `${name} ${size}`;
+}
+
+const SLUG_CAT = {
+  sandwichs: "Sandwichs", tacos: "Tacos", pizzas: "Pizzas", salades: "Salades",
+  pasticcio: "Pasticcio", pates: "Pâtes", burgers: "Burgers", plats: "Plats",
+  desserts: "Desserts", boissons: "Boissons", jus: "Jus", tajines: "Tajines"
+};
+export function categoryFromItem(item) {
+  const cat = String(item?.category || "").trim();
+  if (cat) return cat;
+  const parts = String(item?.id || "").split("_");
+  if (parts[0] !== "p" || parts.length < 3) return "Autres";
+  return SLUG_CAT[parts[parts.length - 2]] || "Autres";
+}
 
 export function haversineKm(a, b) {
   const R = 6371, rad = (x) => (x * Math.PI) / 180;

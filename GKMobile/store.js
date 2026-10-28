@@ -1,5 +1,7 @@
 const STORE_KEY = "gk-mobile-v2";
 const FREE_DELIVERY_DEFAULT = 150;
+const STORE_COORDS = { lat: 33.7895, lng: -7.1597 };
+const MAX_DELIVERY_KM = 12;
 const stageTemplates = {
   delivery: [
     { title: "En attente de confirmation", detail: "La cuisine va valider votre commande", icon: "clock" },
@@ -59,7 +61,9 @@ const state = {
   pendingUser: null,
   afterAuth: "home",
   orderPhone: "",
-  phoneOverride: false
+  phoneOverride: false,
+  locating: false,
+  locateError: ""
 };
 
 function hydrateCart(raw) {
@@ -137,9 +141,22 @@ const lineUnit = line => line.product.price + line.size.delta + line.extras.redu
 const cartCount = () => state.cart.reduce((total, line) => total + line.quantity, 0);
 const cartSubtotal = () => state.cart.reduce((total, line) => total + lineUnit(line) * line.quantity, 0);
 const currentAddress = () => state.addresses.find(address => address.id === state.addressId) ?? state.addresses[0] ?? null;
-const zoneOf = address => zones.find(zone => zone.id === address?.zone) ?? null;
+const zoneOf = address => address ? (zones.find(zone => zone.id === address.zone) ?? zones[0] ?? null) : null;
+function kmFromStore(address) {
+  const lat = Number(address?.lat), lng = Number(address?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return Infinity;
+  const rad = x => (x * Math.PI) / 180;
+  const dLat = rad(lat - STORE_COORDS.lat), dLng = rad(lng - STORE_COORDS.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(STORE_COORDS.lat)) * Math.cos(rad(lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(h));
+}
+function hasGps(address) {
+  return Number.isFinite(Number(address?.lat)) && Number.isFinite(Number(address?.lng));
+}
 const currentPayment = () => ({ id: "cash", type: "cash", label: "Espèces à la réception" });
 const isPaused = () => !!state.settings.paused;
+const isConstruction = () => state.settings.opsMode === "construction";
+const opsBanner = () => String(state.settings.opsMessage || "").trim();
 const isSoldOut = productId => products.find(product => product.id === productId)?.available === false;
 const freeDeliveryFrom = () => Number(state.settings.freeDelivery ?? FREE_DELIVERY_DEFAULT);
 
@@ -155,14 +172,16 @@ const cartTotal = () => Math.max(0, cartSubtotal() + deliveryFee() - Number(stat
 function checkoutIssue() {
   if (state.menuStatus !== "loaded") return "Le menu n'est pas disponible. Réessayez après le chargement.";
   if (!state.cart.length) return "Votre panier est vide.";
+  if (isConstruction()) return opsBanner() || "G&K Food est en travaux. Revenez bientôt.";
   if (isPaused()) return PAUSE_MESSAGE;
   const soldOut = state.cart.find(line => isSoldOut(line.product.id));
   if (soldOut) return `${soldOut.product.name} n'est plus disponible : retirez-le de votre panier.`;
   if (state.delivery === "delivery") {
     const address = currentAddress();
-    if (!address) return "Ajoutez une adresse de livraison.";
+    if (!hasGps(address)) return "Autorisez la localisation pour que le livreur vous trouve.";
+    if (kmFromStore(address) > MAX_DELIVERY_KM) return "Cette position est hors zone de livraison.";
     const zone = zoneOf(address);
-    if (!zone) return "Choisissez une zone de livraison valide.";
+    if (!zone) return "Aucune zone de livraison n'est ouverte.";
     if (cartSubtotal() < zone.min) return `Commande minimum de ${zone.min} MAD pour la zone ${zone.name}.`;
   }
   return "";

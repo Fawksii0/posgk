@@ -4,13 +4,18 @@ import * as auth from "./auth.js";
 import * as admin from "./admin.js";
 import * as orders from "./orders.js";
 import * as chat from "./chat.js";
+import * as push from "./push.js";
+import * as ops from "./ops.js";
+import { getOpsMode } from "./core.js";
 
 const routes = [];
 const route = (method, path, handler, options = {}) => routes.push({
   method, path: new RegExp(`^${path}$`), handler,
   branchScoped: !["/api/branches", "/api/me/branches", "/api/auth/client/signup", "/api/auth/client/login",
     "/api/auth/courier", "/api/auth/staff", "/api/auth/owner", "/api/auth/refresh", "/api/auth/change-secret",
-    "/api/auth/revoke", "/api/me"].includes(path),
+    "/api/auth/revoke", "/api/me", "/api/settings/public",
+    "/api/ops/overview", "/api/ops/mode", "/api/ops/switches", "/api/ops/warmup",
+    "/api/ops/bounce", "/api/ops/dispatch-tick", "/api/ops/broadcast"].includes(path),
   ...options
 });
 
@@ -18,7 +23,10 @@ route("GET", "/health", async (c) => {
   const started = Date.now();
   try {
     await c.env.DB.setContext({ actorId: null, actorRole: "anonymous", branchId: "gk-food" });
-    const row = await first(c.env, "SELECT (SELECT COUNT(*) FROM branches WHERE active = 1) AS branches, (SELECT COUNT(*) FROM menu_items WHERE visible = 1) AS n");
+    const [row, opsMode] = await Promise.all([
+      first(c.env, "SELECT (SELECT COUNT(*) FROM branches WHERE active = 1) AS branches, (SELECT COUNT(*) FROM menu_items WHERE visible = 1) AS n"),
+      getOpsMode(c.env)
+    ]);
     return {
       ok: true,
       service: "gk-api",
@@ -26,6 +34,7 @@ route("GET", "/health", async (c) => {
       database: "up",
       branches: Number(row?.branches) || 0,
       menuItems: Number(row?.n) || 0,
+      opsMode: opsMode.mode,
       ms: Date.now() - started
     };
   } catch {
@@ -80,6 +89,8 @@ route("POST", "/api/admin/promos", admin.promoSave, { body: true });
 route("PUT", "/api/admin/promos/(?<id>[^/]+)", admin.promoSave, { body: true });
 route("DELETE", "/api/admin/promos/(?<id>[^/]+)", admin.promoDelete);
 route("GET", "/api/settings/public", async (c) => {
+  const branchId = c.branchId || "gk-food";
+  await c.env.DB.setContext({ actorId: c.user?.id || null, actorRole: c.user?.role || "anonymous", branchId });
   const menu = await admin.publicMenu(c);
   return { settings: menu.settings };
 }, { public: true });
@@ -90,6 +101,7 @@ route("GET", "/api/admin/users", admin.usersList);
 route("POST", "/api/admin/users", admin.userCreate, { body: true });
 route("PUT", "/api/admin/users/(?<id>[^/]+)", admin.userUpdate, { body: true });
 route("DELETE", "/api/admin/users/(?<id>[^/]+)", admin.userDelete);
+route("POST", "/api/admin/users/(?<id>[^/]+)/reset-code", admin.userResetCode);
 route("GET", "/api/admin/couriers", admin.couriersList);
 route("GET", "/api/live/couriers", admin.liveCouriers);
 route("GET", "/api/live/pulse", orders.livePulse);
@@ -107,9 +119,20 @@ route("GET", "/api/admin/clients", admin.clientsList);
 route("PATCH", "/api/admin/clients/(?<id>[^/]+)/block", admin.clientBlock, { body: true });
 route("GET", "/api/notifications", admin.notificationsList);
 route("POST", "/api/notifications/read", admin.notificationsRead, { body: true });
+route("GET", "/api/push/vapid", (c) => push.vapidPublic(c), { public: true, branchScoped: false });
+route("POST", "/api/push/subscribe", (c) => push.subscribe(c), { body: true, branchScoped: false });
+route("POST", "/api/push/unsubscribe", (c) => push.unsubscribe(c), { body: true, branchScoped: false });
 route("GET", "/api/admin/audit", admin.auditList);
 route("GET", "/api/owner/audit", admin.ownerAuditList, { branchScoped: false });
 route("GET", "/api/admin/stats", admin.stats);
+route("GET", "/api/admin/cloture", admin.cloture);
+route("GET", "/api/ops/overview", ops.overview);
+route("POST", "/api/ops/mode", ops.setMode, { body: true });
+route("POST", "/api/ops/switches", ops.setSwitches, { body: true });
+route("POST", "/api/ops/warmup", ops.warmup, { body: true });
+route("POST", "/api/ops/bounce", ops.bounce, { body: true });
+route("POST", "/api/ops/dispatch-tick", ops.dispatchTick, { body: true });
+route("POST", "/api/ops/broadcast", ops.broadcast, { body: true });
 
 route("GET", "/api/chat/unread", chat.unreadCounts);
 route("GET", "/api/orders/(?<id>[^/]+)/messages", chat.messagesList);
@@ -117,10 +140,12 @@ route("POST", "/api/orders/(?<id>[^/]+)/messages", chat.messageSend, { body: tru
 route("GET", "/api/orders", orders.ordersList);
 route("POST", "/api/orders", orders.orderCreate, { body: true });
 route("POST", "/api/dinein/orders", orders.dineinOrderCreate, { public: true, body: true });
+route("POST", "/api/pos/orders", orders.posOrderCreate, { body: true });
 route("GET", "/api/dinein/orders/(?<id>[^/]+)", orders.dineinOrderGet, { public: true });
 route("POST", "/api/dinein/waiter", orders.waiterCallCreate, { public: true, body: true });
 route("GET", "/api/dinein/calls", orders.waiterCallsList);
 route("POST", "/api/dinein/calls/(?<id>[^/]+)/ack", orders.waiterCallAck, { body: true });
+route("POST", "/api/dinein/tables/(?<table>[^/]+)/settle", orders.dineinTableSettle, { body: true });
 route("GET", "/api/orders/(?<id>[^/]+)", orders.orderGet);
 route("POST", "/api/orders/(?<id>[^/]+)/cancel", orders.orderCancel, { body: true });
 route("POST", "/api/orders/(?<id>[^/]+)/accept", orders.orderAccept, { body: true });
@@ -239,6 +264,10 @@ export default {
       if (error instanceof HttpError) {
         commit = true;
         return json(env, request, { error: { code: error.code, message: error.message, ...(error.extra || {}) } }, error.status);
+      }
+      if (error?.code === "42501") {
+        commit = true;
+        return json(env, request, { error: { code: "forbidden", message: "Action refusée. Vérifiez le rôle et la succursale." } }, 403);
       }
       console.error("Unhandled API error", error);
       return json(env, request, { error: { code: "internal", message: "Erreur interne." } }, 500);

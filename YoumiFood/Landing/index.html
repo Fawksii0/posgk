@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Youmi — Your cravings. Delivered.</title>
+  <meta name="description" content="Youmi is the new food delivery platform bringing your favorite restaurants closer, faster, and easier.">
+  <meta name="theme-color" content="#171717">
+  <link rel="icon" href="assets/favicon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="hero" id="home">
+    <nav class="nav">
+      <a class="logo" href="#home" aria-label="Youmi home"><img src="assets/youmi_wordmark.svg" alt="Youmi"></a>
+      <button class="menu-toggle" type="button" aria-label="Menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="nav-links" id="nav-links">
+        <a class="active" href="#home">Home</a>
+        <a href="#about">About</a>
+        <a href="#restaurants">For Restaurants</a>
+        <a href="#riders">For Riders</a>
+        <a href="#contact">Contact</a>
+        <a class="btn btn-ghost nav-cta" href="#contact">Sign In</a>
+        <a class="btn btn-primary nav-cta" href="#notify">Get Early Access</a>
+      </div>
+    </nav>
+
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">Good food. Local favorites.</p>
+        <h1>Your cravings.<br><span>Delivered.</span></h1>
+        <p class="lead">Youmi is the new food delivery platform bringing your favorite restaurants closer, faster, and easier.</p>
+
+        <form class="notify" id="notify" novalidate>
+          <label class="sr-only" for="email">Email address</label>
+          <input id="email" name="email" type="email" placeholder="Enter your email" autocomplete="email" required>
+          <button class="btn btn-primary" type="submit">Notify Me</button>
+        </form>
+        <p class="form-msg" id="form-msg" role="status" aria-live="polite"></p>
+
+        <ul class="perks">
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v8a2 2 0 0 0 2 2v10h2V12a2 2 0 0 0 2-2V2h-2v6h-1V2H9v6H8V2zM17 2c-2 1.5-3 4-3 7s1 4 3 4v9h2V2z"/></svg>
+            <span>Local<br>Restaurants</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>
+            <span>Fast<br>Delivery</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-8-5.3-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.700-8 11-8 11z"/></svg>
+            <span>Better Food,<br>Happier Days</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 3C9 3 4 8.500 4 15c0 1.800.5 3.200 1.200 4.300C6 14 9.500 10.500 14 9c-3.500 2-6 5-7 9.500 1 .4 2.200.5 3 .5 7 0 10-6 10-16z"/></svg>
+            <span>A Greener<br>Community</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="hero-art" aria-hidden="true">
+        <div class="bag">
+          <img src="assets/youmi_wordmark.svg" alt="">
+        </div>
+
+        <div class="plate">
+          <span class="burger">🍔</span>
+          <span class="fries">🍟</span>
+        </div>
+
+        <div class="phone">
+          <div class="phone-notch"></div>
+          <div class="screen">
+            <div class="s-status"><b>9:41</b><i></i></div>
+            <div class="s-top"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.500A2.500 2.500 0 1 1 12 6.500a2.500 2.500 0 0 1 0 5z"/></svg><span>Casablanca</span><img src="assets/youmi_wordmark.svg" alt=""></div>
+            <div class="s-search">Search for restaurants, dishes…</div>
+            <div class="s-cats">
+              <span><i>🍔</i>Burgers</span><span><i>🍕</i>Pizza</span><span><i>🥙</i>Moroccan</span><span><i>🍣</i>Sushi</span><span><i>⋯</i>More</span>
+            </div>
+            <div class="s-banner">
+              <div><b>Good food.<br><em>Better days.</em></b></div>
+              <span>🍔</span>
+            </div>
+            <div class="s-row"><b>Popular near you</b><em>See all</em></div>
+            <div class="s-cards">
+              <div><span class="img a">🍲</span><b>Le Bistrot</b><small>Moroccan · 25–40 min</small></div>
+              <div><span class="img b">🍱</span><b>Sushi House</b><small>Sushi · 30–45 min</small></div>
+            </div>
+            <div class="s-nav"><span class="on">Home</span><span>Orders</span><span>Favorites</span><span>Profile</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="how" aria-labelledby="how-title">
+      <p class="kicker">How it works</p>
+      <h2 id="how-title">Your favorite food, <span>in a few taps.</span></h2>
+
+      <ol class="steps">
+        <li>
+          <span class="ico"><svg viewBox="0 0 24 24"><path d="M4 9.500V20h16V9.500M3 9l2-5h14l2 5c0 1.700-1.300 3-3 3s-3-1.300-3-3c0 1.700-1.300 3-3 3S9 10.700 9 9c0 1.700-1.300 3-3 3S3 10.700 3 9zM9.500 20v-5h5v5"/></svg></span>
+          <h3>1. Choose</h3>
+          <p>Browse local restaurants and find your favorites.</p>
+        </li>
+        <li>
+          <span class="ico"><svg viewBox="0 0 24 24"><path d="M3 4h2.500l2.200 11h10.100l2-8H6.500M9 20a1 1 0 1 0 0-.1M17 20a1 1 0 1 0 0-.1"/></svg></span>
+          <h3>2. Order</h3>
+          <p>Place your order in seconds.</p>
+        </li>
+        <li>
+          <span class="ico"><svg viewBox="0 0 24 24"><path d="M5 17a2.500 2.500 0 1 0 .1 0M19 17a2.500 2.500 0 1 0 .1 0M7.500 17H14l2-6h-4l-1-3H8M16 11l1.500-4H20"/></svg></span>
+          <h3>3. Track</h3>
+          <p>Follow your delivery in real time.</p>
+        </li>
+        <li>
+          <span class="ico"><svg viewBox="0 0 24 24"><path d="M12 21s-8-5.300-8-11a4.500 4.500 0 0 1 8-2.800A4.500 4.500 0 0 1 20 10c0 5.700-8 11-8 11z"/></svg></span>
+          <h3>4. Enjoy</h3>
+          <p>Good food, delivered to your door.</p>
+        </li>
+      </ol>
+
+      <a class="btn btn-primary btn-lg" href="#notify" data-focus="email">Get Early Access</a>
+      <p class="fine">Be the first to experience Youmi.</p>
+    </section>
+
+    <section class="info" id="about">
+      <div class="info-in">
+        <h2>About Youmi</h2>
+        <p>Youmi connects you with the restaurants you love in your city. We work with local kitchens and local riders, so food arrives hot, fast and fairly priced — and money stays in the community.</p>
+      </div>
+    </section>
+
+    <section class="info alt" id="restaurants">
+      <div class="info-in">
+        <h2>For Restaurants</h2>
+        <p>Reach new customers, manage your menu and orders from one dashboard, and get paid reliably. Youmi Partners and Youmi Kitchen are built for busy service.</p>
+        <a class="link" href="#contact">Become a partner →</a>
+      </div>
+    </section>
+
+    <section class="info" id="riders">
+      <div class="info-in">
+        <h2>For Riders</h2>
+        <p>Flexible work, clear earnings and a simple app. Pick up, deliver, get paid — with Youmi Rider.</p>
+        <a class="link" href="#contact">Ride with us →</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer" id="contact">
+    <img src="assets/youmi_wordmark.svg" alt="Youmi">
+    <p>Questions, partnerships or want to ride with us?</p>
+    <a class="link" href="mailto:hello@youmi.ma">hello@youmi.ma</a>
+    <small>© <span id="yr"></span> Youmi. All rights reserved.</small>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

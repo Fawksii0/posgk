@@ -1,10 +1,29 @@
-import { fail, now, randomDigits, randomId, str, numv, jparse, haversineKm, normPhone, safeEqual } from "./lib.js";
-import { all, first, run, stmt, batch, getSetting, setSetting, audit, notify, need } from "./core.js";
+import { fail, now, randomDigits, randomId, str, numv, jparse, haversineKm, normPhone, safeEqual, catalogItemName } from "./lib.js";
+import { all, first, run, stmt, batch, getSetting, setSetting, getOpsMode, audit, notify, need } from "./core.js";
 import { courierContact } from "./chat.js";
+import { tableAllowed } from "./tables.js";
 
 export const STORE = { lat: 33.7895, lng: -7.1597 };
+const MAX_DELIVERY_KM = 12;
+
+async function rejectIfConstruction(c) {
+  const ops = await getOpsMode(c.env);
+  if (ops.mode === "construction") fail(503, "construction", ops.message || "G&K Food est en travaux. Revenez bientôt.");
+}
 const ACTIVE = ["preparing", "ready", "enroute"];
-const ITEM_FIELDS = ["id", "seq", "customer_name", "customer_phone", "mode", "status", "items", "subtotal", "fee", "service_fee", "discount", "promo", "total", "payment", "zone_id", "zone_name", "address", "address_label", "table_no", "note", "delivery_code", "eta_min", "prep_minutes", "promised_at", "accepted_at", "ready_at", "picked_up_at", "delivered_at", "courier_id", "dispatch_state", "offered_to", "offer_expires", "dispatch_km", "dispatch_manual", "courier_step", "courier_earning", "cash_settled", "refused_reason", "cancel_reason", "history", "created_at", "updated_at"];
+const ITEM_FIELDS = ["id", "seq", "customer_name", "customer_phone", "mode", "status", "items", "subtotal", "fee", "service_fee", "discount", "promo", "total", "payment", "zone_id", "zone_name", "address", "address_label", "table_no", "note", "delivery_code", "eta_min", "prep_minutes", "promised_at", "accepted_at", "ready_at", "picked_up_at", "delivered_at", "courier_id", "dispatch_state", "offered_to", "offer_expires", "dispatch_km", "dispatch_manual", "courier_step", "courier_earning", "cash_settled", "refused_reason", "cancel_reason", "history", "created_at", "updated_at", "dest_lat", "dest_lng", "cashier_id"];
+
+function revealDeliveryCode(role) {
+  return ["client", "owner", "cashier", "chef", "waiter", "manager", "admin"].includes(role);
+}
+
+function newDeliveryCode(seq) {
+  for (let i = 0; i < 12; i += 1) {
+    const pin = randomDigits(4);
+    if (pin !== String(seq) && Number(pin) !== Number(seq)) return pin;
+  }
+  return randomDigits(4);
+}
 
 export function orderOut(row, { revealCode = false } = {}) {
   if (!row) return null;
@@ -13,6 +32,14 @@ export function orderOut(row, { revealCode = false } = {}) {
   out.items = jparse(row.items, []);
   out.history = jparse(row.history, []);
   out.offered = !!row.offered_to;
+  if (row.dest_lat != null && row.dest_lng != null) {
+    out.lat = Number(row.dest_lat);
+    out.lng = Number(row.dest_lng);
+    out.dest_lat = Number(row.dest_lat);
+    out.dest_lng = Number(row.dest_lng);
+  }
+  out.pickup_lat = STORE.lat;
+  out.pickup_lng = STORE.lng;
   if (!revealCode) delete out.delivery_code;
   return out;
 }
@@ -35,6 +62,14 @@ async function updateStatus(env, row, status, by, fields = {}, extra = {}) {
   }
   values.push(row.id);
   return first(env, `UPDATE orders SET ${sets.join(", ")} WHERE id = ? RETURNING *`, ...values);
+}
+function floorStaffId(user) {
+  if (!user?.id) return null;
+  return ["cashier", "waiter", "chef", "manager", "admin", "owner"].includes(user.role) ? user.id : null;
+}
+function withCashier(row, user, fields = {}) {
+  if (!row?.cashier_id && floorStaffId(user)) fields.cashier_id = user.id;
+  return fields;
 }
 function requireOrder(row) { if (!row) fail(404, "not_found", "Commande introuvable."); }
 function needModeAction(c, row) {
@@ -149,8 +184,8 @@ export async function ordersList(c) {
         : await all(c.env, "SELECT * FROM orders WHERE mode = 'dinein' ORDER BY created_at DESC LIMIT 300");
     } else if (forced === "kitchen") {
       rows = status
-        ? await all(c.env, "SELECT * FROM orders WHERE mode != 'dinein' AND status = ? ORDER BY created_at DESC LIMIT 300", status)
-        : await all(c.env, "SELECT * FROM orders WHERE mode != 'dinein' ORDER BY created_at DESC LIMIT 300");
+        ? await all(c.env, "SELECT * FROM orders WHERE status = ? ORDER BY created_at DESC LIMIT 300", status)
+        : await all(c.env, "SELECT * FROM orders ORDER BY created_at DESC LIMIT 300");
     } else if (mode) {
       rows = status
         ? await all(c.env, "SELECT * FROM orders WHERE mode = ? AND status = ? ORDER BY created_at DESC LIMIT 300", mode, status)
@@ -161,7 +196,7 @@ export async function ordersList(c) {
         : await all(c.env, "SELECT * FROM orders ORDER BY created_at DESC LIMIT 300");
     }
   }
-  const revealCode = u.role === "client" || u.role === "owner";
+  const revealCode = revealDeliveryCode(u.role);
   const out = rows.map((row) => orderOut(row, { revealCode }));
   if (u.role === "client") {
     for (let i = 0; i < rows.length; i += 1) {
@@ -177,7 +212,7 @@ export async function orderGet(c) {
   clientOwns(c, row);
   if (c.user.role === "courier" && row.courier_id !== c.user.id && row.offered_to !== c.user.id) fail(404, "not_found", "Commande introuvable.");
   if (c.user.role !== "client" && c.user.role !== "courier") need(c.user, "orders.view");
-  const out = orderOut(row, { revealCode: c.user.role === "client" || c.user.role === "owner" });
+  const out = orderOut(row, { revealCode: revealDeliveryCode(c.user.role) });
   if (c.user.role === "client") {
     const courier = await courierContact(c.env, row);
     if (courier) out.courier = courier;
@@ -187,14 +222,17 @@ export async function orderGet(c) {
 
 export async function orderCreate(c) {
   if (c.user.role !== "client") fail(403, "forbidden", "Réservé aux clients.");
+  await rejectIfConstruction(c);
   const body = c.body;
   if (body.mode !== "delivery" && body.mode !== "pickup") fail(400, "invalid", "Mode de commande invalide.");
   if (!Array.isArray(body.items) || !body.items.length || body.items.length > 30) fail(400, "invalid", "Panier invalide.");
   const lineIds = body.items.map((line) => str(line.id, { max: 80, min: 1, field: "Produit" }));
-  const [settingRows, productRows] = await Promise.all([
+  const [settingRows, productRows, categoryRows] = await Promise.all([
     all(c.env, "SELECT key, value FROM settings WHERE key IN ('paused', 'freeDelivery', 'deliveryOn', 'defaultPrep')"),
-    all(c.env, `SELECT * FROM menu_items WHERE visible = 1 AND available = 1 AND id IN (${lineIds.map(() => "?").join(",")})`, ...lineIds)
+    all(c.env, `SELECT * FROM menu_items WHERE visible = 1 AND available = 1 AND id IN (${lineIds.map(() => "?").join(",")})`, ...lineIds),
+    all(c.env, "SELECT id, name FROM menu_categories")
   ]);
+  const categoryById = new Map(categoryRows.map((row) => [row.id, row.name]));
   const setting = (key, def) => { const r = settingRows.find((x) => x.key === key); return r ? jparse(r.value, def) : def; };
   if (setting("paused", false)) fail(409, "paused", "Les commandes sont temporairement en pause.");
   const productsById = new Map(productRows.map((r) => [r.id, r]));
@@ -209,19 +247,25 @@ export async function orderCreate(c) {
     const unit = product.price + (size?.delta || 0) + extras.reduce((sum, item) => sum + item.price, 0);
     const price = Math.round(unit * qty * 100) / 100;
     subtotal += price;
-    normalized.push({ id: product.id, name: product.name, qty, size: size?.name || "", extras: extras.map((item) => item.name), unit, price, image: product.image_url });
+    const category = categoryById.get(product.category_id) || "";
+    normalized.push({ id: product.id, name: catalogItemName(product.name, category), category, qty, size: size?.name || "", extras: extras.map((item) => item.name), unit, price, image: product.image_url });
   }
   const settings = setting("freeDelivery", 150);
-  let fee = 0, zoneId = null, zoneName = "", address = "", addressLabel = "", etaMin = null;
+  let fee = 0, zoneId = null, zoneName = "", address = "", addressLabel = "", etaMin = null, destLat = null, destLng = null;
   if (body.mode === "delivery") {
     if (!setting("deliveryOn", true)) fail(409, "delivery_paused", "La livraison est indisponible.");
-    zoneId = str(body.address?.zone, { max: 40, min: 1, field: "Zone" });
-    const zone = await first(c.env, "SELECT * FROM zones WHERE id = ? AND enabled = 1", zoneId);
-    if (!zone) fail(400, "invalid_zone", "Zone de livraison invalide.");
+    destLat = numv(body.address?.lat, { min: -90, max: 90, field: "Latitude" });
+    destLng = numv(body.address?.lng, { min: -180, max: 180, field: "Longitude" });
+    const km = haversineKm(STORE, { lat: destLat, lng: destLng });
+    if (km > MAX_DELIVERY_KM) fail(400, "out_of_zone", "Cette position est hors zone de livraison.");
+    const zones = await all(c.env, "SELECT * FROM zones WHERE enabled = 1 ORDER BY fee, name");
+    if (!zones.length) fail(400, "invalid_zone", "Aucune zone de livraison n'est ouverte.");
+    const askedZone = body.address?.zone ? str(body.address.zone, { max: 40, min: 1, field: "Zone" }) : "";
+    const zone = zones.find((row) => row.id === askedZone) || zones[0];
     if (subtotal < zone.min_order) fail(400, "minimum_order", `Commande minimum de ${zone.min_order} MAD.`);
-    address = str(body.address?.street, { max: 200, min: 5, field: "Adresse" });
-    addressLabel = str(body.address?.label, { max: 30 });
-    zoneName = zone.name; etaMin = zone.eta_min;
+    address = str(body.address?.street || "Position GPS", { max: 200, min: 5, field: "Adresse" });
+    addressLabel = str(body.address?.label || "GPS", { max: 30 });
+    zoneId = zone.id; zoneName = zone.name; etaMin = zone.eta_min;
     fee = subtotal >= (zone.free_from ?? settings) ? 0 : zone.fee;
   }
   let discount = 0, promo = null;
@@ -241,12 +285,12 @@ export async function orderCreate(c) {
   const history = JSON.stringify([{ status: "pending", at: t, by: c.user.id }]);
   const total = Math.max(0, Math.round((subtotal + fee - discount) * 100) / 100);
   await run(c.env, `INSERT INTO orders
-    (id, seq, client_id, customer_name, customer_phone, mode, status, items, subtotal, fee, service_fee, discount, promo, total, payment, zone_id, zone_name, address, address_label, note, delivery_code, eta_min, prep_minutes, promised_at, dispatch_state, history, created_at, updated_at)
-    VALUES (?,?,?,?,? ,?,'pending',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'none',?,?,?)`,
+    (id, seq, client_id, customer_name, customer_phone, mode, status, items, subtotal, fee, service_fee, discount, promo, total, payment, zone_id, zone_name, address, address_label, note, delivery_code, eta_min, prep_minutes, promised_at, dispatch_state, history, created_at, updated_at, dest_lat, dest_lng)
+    VALUES (?,?,?,?,? ,?,'pending',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'none',?,?,?,?,?)`,
     id, seq, c.user.id, name, phone, body.mode, JSON.stringify(normalized), subtotal, fee, 0, discount, promo, total,
-    str(body.payment || "cash", { max: 40 }), zoneId, zoneName, address, addressLabel, note, String(seq),
+    str(body.payment || "cash", { max: 40 }), zoneId, zoneName, address, addressLabel, note, newDeliveryCode(seq),
     body.mode === "delivery" ? etaMin : prep,
-    prep, t + prep * 60000, history, t, t);
+    prep, t + prep * 60000, history, t, t, destLat, destLng);
   const row = await getOrder(c.env, id);
   await Promise.all([
     notify(c.env, { audience: "staff", title: `Nouvelle commande #${seq}`, text: `${name} · ${total} MAD`, orderId: id }),
@@ -275,7 +319,7 @@ export async function orderAccept(c) {
   if (row.status !== "pending") fail(409, "invalid_status", "Cette commande n'est plus en attente.");
   const prep = numv(c.body.prepMinutes, { min: 5, max: 90, int: true, def: 20, field: "Préparation" });
   const t = now();
-  const fresh = await updateStatus(c.env, row, "preparing", c.user.id, { accepted_at: t, prep_minutes: prep, promised_at: t + prep * 60000, eta_min: prep, dispatch_state: row.mode === "delivery" ? "searching" : "none" }, { prepMinutes: prep });
+  const fresh = await updateStatus(c.env, row, "preparing", c.user.id, withCashier(row, c.user, { accepted_at: t, prep_minutes: prep, promised_at: t + prep * 60000, eta_min: prep, dispatch_state: row.mode === "delivery" ? "searching" : "none" }), { prepMinutes: prep, cashier: c.user.name || c.user.email || "" });
   await Promise.all([
     notifyOrder(c.env, fresh, `Commande #${row.seq} acceptée`, `Préparation estimée : ${prep} min.`),
     ...(row.mode === "dinein" ? [notify(c.env, { audience: "waiter", title: `Table ${row.table_no} acceptée`, text: `#${row.seq} · ${prep} min`, orderId: row.id })] : []),
@@ -288,7 +332,8 @@ export async function orderAccept(c) {
 export async function orderRefuse(c) {
   const row = await getOrder(c.env, c.params.id);
   needModeAction(c, row);
-  if (row.status !== "pending") fail(409, "invalid_status", "Cette commande n'est plus en attente.");
+  const canRefuse = row.status === "pending" || (row.mode === "dinein" && row.status === "preparing");
+  if (!canRefuse) fail(409, "invalid_status", "Cette commande n'est plus en attente.");
   const reason = str(c.body.reason, { max: 200, min: 2, field: "Motif" });
   const updated = await updateStatus(c.env, row, "refused", c.user.id, { refused_reason: reason });
   await Promise.all([
@@ -316,10 +361,15 @@ export async function orderReady(c) {
   requireOrder(row);
   if (row.mode === "dinein") need(c.user, "orders.dinein");
   else need(c.user, "orders.ready");
-  if (row.status !== "preparing") fail(409, "invalid_status", "La commande ne peut pas être marquée prête.");
-  const fresh = await updateStatus(c.env, row, "ready", c.user.id, { ready_at: now() });
+  const fromPending = row.mode === "dinein" && row.status === "pending";
+  if (!fromPending && row.status !== "preparing") fail(409, "invalid_status", "La commande ne peut pas être marquée prête.");
+  const fields = { ready_at: now() };
+  if (fromPending) fields.accepted_at = now();
+  const extra = fromPending ? { cashier: c.user.name || c.user.email || "" } : {};
+  const fresh = await updateStatus(c.env, row, "ready", c.user.id, withCashier(row, c.user, fields), extra);
   await Promise.all([
     notifyOrder(c.env, fresh, `Commande #${row.seq} prête`, row.mode === "delivery" ? "Le livreur peut venir la récupérer." : "Votre commande est prête à retirer.", { client: row.mode === "pickup", courier: row.mode === "delivery" }),
+    ...(row.mode === "dinein" ? [notify(c.env, { audience: "waiter", title: `Table ${row.table_no} prête`, text: `#${row.seq}`, orderId: row.id })] : []),
     audit(c.env, c.user, "Commande prête", `#${row.seq}`, row)
   ]);
   return { order: orderOut(fresh) };
@@ -335,6 +385,26 @@ export async function orderHandover(c) {
     audit(c.env, c.user, "Commande remise au client", `#${row.seq}`, row)
   ]);
   return { order: orderOut(updated) };
+}
+
+export async function dineinTableSettle(c) {
+  need(c.user, "orders.dinein");
+  const table = tableNo({ table: c.params.table });
+  const rows = await all(c.env,
+    `SELECT * FROM orders WHERE mode = 'dinein' AND table_no = ?
+     AND (status IN ('pending', 'preparing', 'ready') OR (status = 'delivered' AND COALESCE(cash_settled, 0) = 0))
+     ORDER BY created_at`, table);
+  if (rows.some((row) => ["pending", "preparing", "ready"].includes(row.status))) {
+    fail(409, "open_tickets", "La table a encore des commandes en cours. Servez-les avant d'encaisser.");
+  }
+  const bills = rows.filter((row) => row.status === "delivered");
+  if (!bills.length) fail(409, "nothing", "Rien à encaisser sur cette table.");
+  const t = now();
+  const ids = bills.map((row) => row.id);
+  await run(c.env, `UPDATE orders SET cash_settled = 1, updated_at = ? WHERE id IN (${ids.map(() => "?").join(",")})`, t, ...ids);
+  const total = bills.reduce((sum, row) => sum + Number(row.total || 0), 0);
+  await audit(c.env, c.user, "Table encaissée", `Table ${table} · ${bills.length} ticket${bills.length > 1 ? "s" : ""} · ${Math.round(total)} MAD`, { table, ids });
+  return { ok: true, table, count: bills.length, total };
 }
 
 export async function courierOffers(c) {
@@ -420,15 +490,23 @@ function tableNo(body) {
   return numv(body.table ?? body.tableNo, { min: 1, max: 80, int: true, field: "Table" });
 }
 
+function assertTable(c, table, tableCount) {
+  if (!tableAllowed(c.branchId, table, tableCount)) fail(400, "invalid", "Numéro de table invalide.");
+}
+
 async function dineinLines(c, items) {
   if (!Array.isArray(items) || !items.length || items.length > 30) fail(400, "invalid", "Panier invalide.");
-  const lineIds = items.map((line) => str(line.id, { max: 80, min: 1, field: "Produit" }));
-  const productRows = await all(c.env, `SELECT * FROM menu_items WHERE visible = 1 AND available = 1 AND id IN (${lineIds.map(() => "?").join(",")})`, ...lineIds);
-  const productsById = new Map(productRows.map((row) => [row.id, row]));
+  const lineIds = items.map((line) => str(String(line.id ?? ""), { max: 80, min: 1, field: "Produit" }));
+  const [productRows, categoryRows] = await Promise.all([
+    all(c.env, `SELECT * FROM menu_items WHERE visible = 1 AND available = 1 AND id IN (${lineIds.map(() => "?").join(",")})`, ...lineIds),
+    all(c.env, "SELECT id, name FROM menu_categories")
+  ]);
+  const productsById = new Map(productRows.map((row) => [String(row.id), row]));
+  const categoryById = new Map(categoryRows.map((row) => [String(row.id), row.name]));
   const normalized = [];
   let subtotal = 0;
   for (const line of items) {
-    const product = productsById.get(line.id);
+    const product = productsById.get(String(line.id));
     if (!product) fail(409, "unavailable", "Un produit n'est plus disponible.");
     const qty = numv(line.qty, { min: 1, max: 50, int: true, field: "Quantité" });
     const size = jparse(product.sizes, []).find((item) => item.name === line.size);
@@ -437,13 +515,41 @@ async function dineinLines(c, items) {
     const unit = base + (size?.delta || 0) + extras.reduce((sum, item) => sum + item.price, 0);
     const price = Math.round(unit * qty * 100) / 100;
     subtotal += price;
-    normalized.push({ id: product.id, name: product.name, qty, size: size?.name || "", extras: extras.map((item) => item.name), unit, price, image: product.image_url });
+    const category = categoryById.get(String(product.category_id)) || "";
+    normalized.push({ id: product.id, name: catalogItemName(product.name, category), category, qty, size: size?.name || "", extras: extras.map((item) => item.name), unit, price, image: product.image_url });
+  }
+  return { normalized, subtotal: Math.max(0, Math.round(subtotal * 100) / 100) };
+}
+
+async function takeawayLines(c, items) {
+  if (!Array.isArray(items) || !items.length || items.length > 30) fail(400, "invalid", "Panier invalide.");
+  const lineIds = items.map((line) => str(String(line.id ?? ""), { max: 80, min: 1, field: "Produit" }));
+  const [productRows, categoryRows] = await Promise.all([
+    all(c.env, `SELECT * FROM menu_items WHERE visible = 1 AND available = 1 AND id IN (${lineIds.map(() => "?").join(",")})`, ...lineIds),
+    all(c.env, "SELECT id, name FROM menu_categories")
+  ]);
+  const productsById = new Map(productRows.map((row) => [String(row.id), row]));
+  const categoryById = new Map(categoryRows.map((row) => [String(row.id), row.name]));
+  const normalized = [];
+  let subtotal = 0;
+  for (const line of items) {
+    const product = productsById.get(String(line.id));
+    if (!product) fail(409, "unavailable", "Un produit n'est plus disponible.");
+    const qty = numv(line.qty, { min: 1, max: 50, int: true, field: "Quantité" });
+    const size = jparse(product.sizes, []).find((item) => item.name === line.size);
+    const extras = jparse(product.extras, []).filter((item) => (line.extras || []).includes(item.name));
+    const unit = product.price + (size?.delta || 0) + extras.reduce((sum, item) => sum + item.price, 0);
+    const price = Math.round(unit * qty * 100) / 100;
+    subtotal += price;
+    const category = categoryById.get(String(product.category_id)) || "";
+    normalized.push({ id: product.id, name: catalogItemName(product.name, category), category, qty, size: size?.name || "", extras: extras.map((item) => item.name), unit, price, image: product.image_url });
   }
   return { normalized, subtotal: Math.max(0, Math.round(subtotal * 100) / 100) };
 }
 
 export async function dineinOrderCreate(c) {
   await asDinein(c);
+  await rejectIfConstruction(c);
   const body = c.body;
   const table = tableNo(body);
   const [settingRows, priced] = await Promise.all([
@@ -452,8 +558,8 @@ export async function dineinOrderCreate(c) {
   ]);
   const setting = (key, def) => { const r = settingRows.find((x) => x.key === key); return r ? jparse(r.value, def) : def; };
   if (setting("paused", false)) fail(409, "paused", "Les commandes sont temporairement en pause.");
-  const maxTable = Number(setting("tableCount", 24)) || 24;
-  if (table > maxTable) fail(400, "invalid", "Numéro de table invalide.");
+  const maxTable = Number(setting("tableCount", 17)) || 17;
+  assertTable(c, table, maxTable);
   const { normalized, subtotal } = priced;
   const counter = await first(c.env, "INSERT INTO order_counters (branch_id, value) VALUES (?, 1000) ON CONFLICT (branch_id) DO UPDATE SET value = order_counters.value + 1 RETURNING value", c.branchId);
   const seq = Number(counter.value);
@@ -466,11 +572,12 @@ export async function dineinOrderCreate(c) {
     (id, seq, client_id, customer_name, customer_phone, mode, status, items, subtotal, fee, service_fee, discount, promo, total, payment, zone_id, zone_name, address, address_label, table_no, note, delivery_code, eta_min, prep_minutes, promised_at, dispatch_state, history, created_at, updated_at)
     VALUES (?,?,NULL,?,?,'dinein','pending',?,?,0,0,0,NULL,?, 'cash', NULL, '', ?, ?, ?, ?, ?, ?, ?, ?, 'none', ?, ?, ?)`,
     id, seq, name, `table-${table}`, JSON.stringify(normalized), subtotal, total,
-    `Table ${table}`, "Sur place", table, note, String(seq),
+    `Table ${table}`, "Sur place", table, note, newDeliveryCode(seq),
     prep, prep, t + prep * 60000, history, t, t);
   const row = await getOrder(c.env, id);
   await Promise.all([
     notify(c.env, { audience: "waiter", title: `Table ${table} · #${seq}`, text: `Commande sur place · ${total} MAD`, orderId: id }),
+    notify(c.env, { audience: "staff", title: `Table ${table} · #${seq}`, text: `Sur place · ${total} MAD`, orderId: id }),
     audit(c.env, { name: `Table ${table}`, role: "dinein" }, "Commande sur place", `#${seq} · table ${table} · ${total} MAD`, { id })
   ]);
   return { order: orderOut(row, { revealCode: true }) };
@@ -493,6 +600,86 @@ export async function orderRevise(c) {
   return { order: orderOut(updated, { revealCode: true }) };
 }
 
+export async function posOrderCreate(c) {
+  const body = c.body || {};
+  const mode = body.mode;
+  if (!["pickup", "delivery", "dinein"].includes(mode)) fail(400, "invalid", "Mode de commande invalide.");
+  if (c.user.role === "waiter") {
+    if (mode !== "dinein") fail(403, "forbidden", "Le serveur ne peut prendre que des commandes sur place.");
+    need(c.user, "orders.dinein");
+  } else {
+    need(c.user, "orders.act");
+  }
+  const settingRows = await all(c.env, "SELECT key, value FROM settings WHERE key IN ('paused', 'freeDelivery', 'deliveryOn', 'defaultPrep', 'tableCount')");
+  const setting = (key, def) => { const r = settingRows.find((x) => x.key === key); return r ? jparse(r.value, def) : def; };
+  if (setting("paused", false)) fail(409, "paused", "Les commandes sont temporairement en pause.");
+  let table = 0;
+  let priced;
+  if (mode === "dinein") {
+    table = tableNo(body);
+    assertTable(c, table, Number(setting("tableCount", 17)) || 17);
+    priced = await dineinLines(c, body.items);
+  } else {
+    priced = await takeawayLines(c, body.items);
+  }
+  let fee = 0, zoneId = null, zoneName = "", address = "", addressLabel = "", etaMin = null, destLat = null, destLng = null;
+  if (mode === "delivery") {
+    if (!setting("deliveryOn", true)) fail(409, "delivery_paused", "La livraison est indisponible.");
+    const hasGps = body.address?.lat != null && body.address?.lng != null && body.address.lat !== "" && body.address.lng !== "";
+    const zones = await all(c.env, "SELECT * FROM zones WHERE enabled = 1 ORDER BY fee, name");
+    if (!zones.length) fail(400, "invalid_zone", "Aucune zone de livraison n'est ouverte.");
+    const askedZone = body.address?.zone ? str(body.address.zone, { max: 40, min: 1, field: "Zone" }) : "";
+    const zone = zones.find((row) => row.id === askedZone) || zones[0];
+    if (priced.subtotal < zone.min_order) fail(400, "minimum_order", `Commande minimum de ${zone.min_order} MAD.`);
+    if (hasGps) {
+      destLat = numv(body.address.lat, { min: -90, max: 90, field: "Latitude" });
+      destLng = numv(body.address.lng, { min: -180, max: 180, field: "Longitude" });
+      if (haversineKm(STORE, { lat: destLat, lng: destLng }) > MAX_DELIVERY_KM) fail(400, "out_of_zone", "Cette position est hors zone de livraison.");
+    }
+    address = str(body.address?.street || "Caisse · livraison", { max: 200, min: 5, field: "Adresse" });
+    addressLabel = str(body.address?.label || "Caisse", { max: 30 });
+    zoneId = zone.id; zoneName = zone.name; etaMin = zone.eta_min;
+    fee = priced.subtotal >= (zone.free_from ?? setting("freeDelivery", 150)) ? 0 : zone.fee;
+  } else if (mode === "dinein") {
+    address = `Table ${table}`;
+    addressLabel = "Sur place";
+  }
+  const { normalized, subtotal } = priced;
+  const counter = await first(c.env, "INSERT INTO order_counters (branch_id, value) VALUES (?, 1000) ON CONFLICT (branch_id) DO UPDATE SET value = order_counters.value + 1 RETURNING value", c.branchId);
+  const seq = Number(counter.value);
+  const id = "1" + randomDigits(8), t = now(), prep = Number(setting("defaultPrep", 20));
+  const name = str(body.customer?.name || (mode === "dinein" ? `Table ${table}` : "Caisse"), { max: 60, min: 1, field: "Nom" });
+  let phone = "caisse";
+  if (body.customer?.phone) phone = normPhone(body.customer.phone);
+  else if (mode === "dinein") phone = `table-${table}`;
+  const note = str(body.note, { max: 300, field: "Note" });
+  const payment = str(body.payment || "cash", { max: 40 });
+  const source = c.user.role === "waiter" ? "Serveur" : "Caisse";
+  const history = JSON.stringify([{ status: "pending", at: t, by: c.user.id, cashier: c.user.name || c.user.email || "" }]);
+  const total = Math.max(0, Math.round((subtotal + fee) * 100) / 100);
+  await run(c.env, `INSERT INTO orders
+    (id, seq, client_id, customer_name, customer_phone, mode, status, items, subtotal, fee, service_fee, discount, promo, total, payment, zone_id, zone_name, address, address_label, table_no, note, delivery_code, eta_min, prep_minutes, promised_at, dispatch_state, history, created_at, updated_at, dest_lat, dest_lng, cashier_id)
+    VALUES (?,?,NULL,?,?,?,'pending',?,?,?,?,0,NULL,?,?,?,?,?,?,?,?,?,?,?,?, 'none',?,?,?,?,?,?)`,
+    id, seq, name, phone, mode, JSON.stringify(normalized), subtotal, fee, 0, total, payment,
+    zoneId, zoneName, address, addressLabel, mode === "dinein" ? table : null, note, newDeliveryCode(seq),
+    mode === "delivery" ? etaMin : prep, prep, t + prep * 60000, history, t, t, destLat, destLng, floorStaffId(c.user));
+  let row = await getOrder(c.env, id);
+  await Promise.all([
+    notify(c.env, { audience: "staff", title: `${source} · #${seq}`, text: `${name} · ${total} MAD`, orderId: id }),
+    ...(mode === "dinein" ? [notify(c.env, { audience: "waiter", title: `Table ${table} · #${seq}`, text: `${source} · ${total} MAD`, orderId: id })] : []),
+    audit(c.env, c.user, `Commande ${source.toLowerCase()}`, `#${seq} · ${mode} · ${total} MAD`, { id })
+  ]);
+  if (body.accept !== false) {
+    const accepted = await updateStatus(c.env, row, "preparing", c.user.id, withCashier(row, c.user, {
+      accepted_at: t, prep_minutes: prep, promised_at: t + prep * 60000, eta_min: prep,
+      dispatch_state: mode === "delivery" ? "searching" : "none"
+    }), { prepMinutes: prep, cashier: c.user.name || c.user.email || "", source: "caisse" });
+    if (mode === "delivery") await offerNext(c.env, accepted);
+    row = await getOrder(c.env, id);
+  }
+  return { order: orderOut(row, { revealCode: true }) };
+}
+
 export async function dineinOrderGet(c) {
   await asDinein(c);
   const table = tableNo({ table: c.url.searchParams.get("table") ?? c.url.searchParams.get("t") });
@@ -503,9 +690,10 @@ export async function dineinOrderGet(c) {
 
 export async function waiterCallCreate(c) {
   await asDinein(c);
+  await rejectIfConstruction(c);
   const table = tableNo(c.body);
-  const maxTable = Number(await getSetting(c.env, "tableCount", 24)) || 24;
-  if (table > maxTable) fail(400, "invalid", "Numéro de table invalide.");
+  const maxTable = Number(await getSetting(c.env, "tableCount", 17)) || 17;
+  assertTable(c, table, maxTable);
   const recent = await first(c.env, "SELECT id FROM waiter_calls WHERE table_no = ? AND status = 'open' AND created_at > ?", table, now() - 120000);
   if (recent) fail(429, "wait", "Le serveur a déjà été prévenu. Patientez un instant.");
   const id = randomId("w_"), t = now();
@@ -540,12 +728,17 @@ export async function livePulse(c) {
   else need(c.user, "orders.view");
   if (kind === "dinein") {
     const [orders, calls] = await Promise.all([
-      all(c.env, "SELECT id FROM orders WHERE mode = 'dinein' AND status = 'pending' ORDER BY created_at DESC LIMIT 80"),
+      all(c.env, `SELECT id, status, COALESCE(cash_settled, 0) AS cash_settled FROM orders
+        WHERE mode = 'dinein' AND (
+          status IN ('pending', 'preparing', 'ready')
+          OR (status = 'delivered' AND COALESCE(cash_settled, 0) = 0)
+        ) ORDER BY created_at DESC LIMIT 200`),
       all(c.env, "SELECT id FROM waiter_calls WHERE status = 'open' ORDER BY created_at DESC LIMIT 80")
     ]);
-    const pendingIds = orders.map((row) => row.id);
+    const pendingIds = orders.filter((row) => row.status === "pending").map((row) => row.id);
     const callIds = calls.map((row) => row.id);
-    return { kind, pendingIds, callIds, rev: `${pendingIds.join(",")}|${callIds.join(",")}` };
+    const board = orders.map((row) => `${row.id}:${row.status}:${row.cash_settled}`).join(",");
+    return { kind, pendingIds, callIds, rev: `${board}|${callIds.join(",")}` };
   }
   const orders = await all(c.env, "SELECT id FROM orders WHERE mode != 'dinein' AND status = 'pending' ORDER BY created_at DESC LIMIT 80");
   const pendingIds = orders.map((row) => row.id);

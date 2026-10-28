@@ -17,7 +17,11 @@ const GKReceipt = (() => {
   const absUrl = url => { try { return new URL(url, location.href).href; } catch { return url || ""; } };
 
   const MODE = { delivery: "Livraison", pickup: "À emporter", dinein: "Sur place" };
-  const optionsOf = item => [item.size, ...(item.extras || [])].filter(Boolean).map(esc).join(" · ");
+  const itemName = item => {
+    const label = typeof GKItemName !== "undefined" ? GKItemName.ticketName(item) : (item?.name || "");
+    return String(label || "").toLocaleUpperCase("fr-FR");
+  };
+  const optionsOf = item => (item.extras || []).filter(Boolean).map(extra => esc(String(extra).toLocaleUpperCase("fr-FR"))).join(" · ");
   const invoiceNumber = doc => `FAC-${new Date(doc.createdAt).getFullYear()}-${String(doc.seq || String(doc.id).slice(-6)).padStart(5, "0")}`;
 
   const CSS = `
@@ -90,6 +94,14 @@ const GKReceipt = (() => {
 .gkr .i-foot b { color: #111; font-size: 14px; }
 @media (max-width: 560px) { .gkr.invoice { padding: 18px; } .gkr .i-top, .gkr .i-bottom { flex-direction: column; } .gkr .i-title { text-align: left; } .gkr .i-parties { grid-template-columns: 1fr; } .gkr .i-totals { width: 100%; } }
 `;
+  const THERMAL_CSS = `
+@page { size: 80mm auto; margin: 0; }
+html, body { margin: 0; background: #fff; color: #000; }
+.escpos-ticket { width: 80mm; padding: 3mm; color: #000; background: #fff; }
+.escpos-logo { display: block; width: 32mm; margin: 0 auto 2mm; filter: grayscale(1) contrast(1.4) invert(1); }
+.escpos-ticket pre { margin: 0; font: 12px/1.25 ui-monospace, Consolas, "Courier New", monospace; white-space: pre-wrap; color: #000; }
+.escpos-foot svg { display: block; width: 100%; height: 10mm; margin-top: 2mm; fill: #000; stroke: #000; }
+`;
 
   const paymentLabel = doc => doc.payment === "cash" ? "Espèces" : "Carte bancaire";
 
@@ -119,7 +131,7 @@ const GKReceipt = (() => {
         <hr class="sep">
         <div class="box"><b>${esc(doc.customerName || "Client")}</b>${doc.phone ? `<span>${esc(doc.phone)}</span>` : ""}${addr}</div>
         <hr class="sep">
-        <div class="lines">${(doc.items || []).map(item => `<div class="line"><div class="qty">${esc(item.qty)}×</div><div class="name">${esc(item.name)}${optionsOf(item) ? `<span class="opts">${optionsOf(item)}</span>` : ""}</div><div class="amt">${esc(money(item.qty * item.unit))}</div></div>`).join("")}</div>
+        <div class="lines">${(doc.items || []).map(item => `<div class="line"><div class="qty">${esc(item.qty)}×</div><div class="name">${esc(itemName(item))}${optionsOf(item) ? `<span class="opts">${optionsOf(item)}</span>` : ""}</div><div class="amt">${esc(money(item.qty * item.unit))}</div></div>`).join("")}</div>
         ${doc.note ? `<div class="note"><b>Note :</b> ${esc(doc.note)}</div>` : ""}
         <hr class="sep">
         ${totalsRows(doc)}
@@ -143,7 +155,7 @@ const GKReceipt = (() => {
         <div class="party"><h3>Facturé à</h3><b>${esc(doc.customerName || "Client")}</b>${doc.phone ? `<span>${esc(doc.phone)}</span>` : ""}${doc.mode === "delivery" && doc.address ? `<span>${esc(doc.address)}${doc.zone ? ` · ${esc(doc.zone)}` : ""}</span>` : `<span>Retrait au restaurant</span>`}<span>Commande #${esc(doc.id)} · ${MODE[doc.mode] || esc(doc.mode)}</span></div>
       </div>
       <table class="items"><thead><tr><th>Désignation</th><th class="r">Qté</th><th class="r">Prix unitaire</th><th class="r">Total</th></tr></thead><tbody>
-        ${(doc.items || []).map(item => `<tr><td>${esc(item.name)}${optionsOf(item) ? `<span class="opts">${optionsOf(item)}</span>` : ""}</td><td class="r">${esc(item.qty)}</td><td class="r">${esc(money(item.unit))}</td><td class="r"><b>${esc(money(item.qty * item.unit))}</b></td></tr>`).join("")}
+        ${(doc.items || []).map(item => `<tr><td>${esc(itemName(item))}${optionsOf(item) ? `<span class="opts">${optionsOf(item)}</span>` : ""}</td><td class="r">${esc(item.qty)}</td><td class="r">${esc(money(item.unit))}</td><td class="r"><b>${esc(money(item.qty * item.unit))}</b></td></tr>`).join("")}
       </tbody></table>
       <div class="i-bottom">
         <div class="i-note"><span class="stamp ${paid ? "" : "due"}">${paid ? "Payée" : "À régler"}</span><div>Mode de paiement : <b>${esc(paymentLabel(doc))}</b></div>${doc.note ? `<div>Note : ${esc(doc.note)}</div>` : ""}<div>Montants exprimés en dirhams marocains (MAD).</div></div>
@@ -153,15 +165,67 @@ const GKReceipt = (() => {
     </div>`;
   }
 
+  const dh = n => `${Math.round(Number(n) || 0)} DH`;
+  const pad = (left, right, cols = 42) => {
+    const l = String(left);
+    const r = String(right);
+    const room = Math.max(1, cols - r.length);
+    const head = l.length >= room ? l.slice(0, Math.max(1, room - 1)) : l;
+    return `${head}${"".padEnd(Math.max(1, room - head.length), ".")}${r}`;
+  };
+  const rule = (cols = 42) => "-".repeat(cols);
+
+  function cloture(report, { seller = {}, logo = "" } = {}) {
+    const at = new Date(report.dayStart || Date.now());
+    const printed = new Date(report.printedAt || Date.now());
+    const cols = 42;
+    const center = text => {
+      const s = String(text);
+      const space = Math.max(0, Math.floor((cols - s.length) / 2));
+      return `${" ".repeat(space)}${s}`;
+    };
+    const lines = [
+      center((seller.name || "G&K FOOD").toLocaleUpperCase("fr-FR")),
+      center("CLOTURE"),
+      center(shortDate.format(at)),
+      `Date : ${shortDate.format(at)}`,
+      `Heure : ${timeFmt.format(printed)}`,
+      rule(cols),
+      pad("LIVRAISON", `${Number(report.byMode?.delivery?.count || 0)}  ${dh(report.byMode?.delivery?.total)}`, cols),
+      pad("EMPORTE", `${Number(report.byMode?.pickup?.count || 0)}  ${dh(report.byMode?.pickup?.total)}`, cols),
+      pad("SUR PLACE", `${Number(report.byMode?.dinein?.count || 0)}  ${dh(report.byMode?.dinein?.total)}`, cols),
+      rule(cols),
+      pad("COMMANDES", String(Number(report.orders || 0)), cols)
+    ];
+    if (report.cancelled) lines.push(pad("ANNULEES / REFUSEES", String(Number(report.cancelled)), cols));
+    const staff = report.byStaff || [];
+    if (staff.length) {
+      lines.push(rule(cols), pad("PAR PERSONNE", "CA", cols));
+      staff.forEach(entry => {
+        const tag = entry.role === "waiter" ? "SRV " : entry.role === "cashier" ? "CAI " : "";
+        lines.push(pad(`${tag}${String(entry.name || "Personnel")}`.toLocaleUpperCase("fr-FR"), `${Number(entry.count || 0)}  ${dh(entry.total)}`, cols));
+      });
+    }
+    lines.push(rule(cols), pad("CATEGORIES", "QTE", cols));
+    const categories = report.categories || report.products || [];
+    if (!categories.length) lines.push("AUCUNE VENTE");
+    else categories.forEach(item => lines.push(pad(String(item.name || "").toLocaleUpperCase("fr-FR"), String(item.qty), cols)));
+    lines.push(rule(cols), pad("TOTAL", dh(report.total), cols));
+    const logoImg = logo ? `<img class="escpos-logo" alt="G&amp;K" src="${esc(absUrl(logo))}" />` : "";
+    return `<div class="escpos-ticket" style="width:80mm">${logoImg}<pre>${esc(lines.join("\n"))}</pre>
+      <div class="escpos-foot"><svg viewBox="0 0 240 32" aria-hidden="true"><path fill="none" stroke="#000" stroke-width="1.3" d="M6 6h228M12 10h216"/><path fill="#000" d="M28 22 36 12l8 10-8 10zm32 0 8-10 8 10-8 10zm32 0 8-10 8 10-8 10zm32 0 8-10 8 10-8 10zm32 0 8-10 8 10-8 10zm32 0 8-10 8 10-8 10zm32 0 8-10 8 10-8 10z"/></svg></div>
+    </div>`;
+  }
+
   // Prints inside an isolated iframe so app styles never leak into the document.
-  function print(html, { title = "G&K", page = "80mm auto", margin = "0" } = {}) {
+  function print(html, { title = "G&K", page = "80mm auto", margin = "0", css } = {}) {
     const frame = document.createElement("iframe");
     frame.setAttribute("aria-hidden", "true");
     frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
     document.body.appendChild(frame);
     const doc = frame.contentDocument;
     doc.open();
-    doc.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(title)}</title><style>@page{size:${page};margin:${margin}}html,body{margin:0;background:#fff}${CSS}</style></head><body>${html}</body></html>`);
+    doc.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(title)}</title><style>@page{size:${page};margin:${margin}}html,body{margin:0;background:#fff;color:#000}${css || CSS}</style></head><body>${html}</body></html>`);
     doc.close();
     const run = () => {
       frame.contentWindow.focus();
@@ -181,15 +245,19 @@ const GKReceipt = (() => {
   }
 
   const page = body => `<!doctype html><html lang="fr"><head><meta charset="utf-8"><style>html,body{margin:0;background:#ecebe7}body{padding:14px}${CSS}</style></head><body>${body}</body></html>`;
+  const thermalPage = body => `<!doctype html><html lang="fr"><head><meta charset="utf-8"><style>html,body{margin:0;background:#fff}body{padding:8px}${THERMAL_CSS}</style></head><body>${body}</body></html>`;
   // Previews run in an iframe so the host app's CSS can never alter the document.
   const preview = html => `<iframe class="gkr-preview" title="Aperçu" style="width:100%;height:420px;border:0;border-radius:10px;background:#ecebe7" srcdoc="${esc(page(html))}" onload="try{this.style.height=this.contentDocument.documentElement.scrollHeight+'px'}catch(e){}"></iframe>`;
+  const previewThermal = html => `<iframe class="gkr-preview" title="Aperçu" style="width:100%;height:420px;border:0;border-radius:10px;background:#fff" srcdoc="${esc(thermalPage(html))}" onload="try{this.style.height=this.contentDocument.documentElement.scrollHeight+'px'}catch(e){}"></iframe>`;
 
   return {
     css: CSS,
     ticket, invoice, invoiceNumber, money,
     previewTicket: (doc, opts) => preview(ticket(doc, opts)),
     previewInvoice: (doc, opts) => preview(invoice(doc, opts)),
+    previewCloture: (report, opts) => previewThermal(cloture(report, opts)),
     printTicket: (doc, opts) => print(ticket(doc, opts), { title: `Ticket ${doc.id}`, page: "80mm auto", margin: "0" }),
-    printInvoice: (doc, opts) => print(invoice(doc, opts), { title: invoiceNumber(doc), page: "A4", margin: "10mm" })
+    printInvoice: (doc, opts) => print(invoice(doc, opts), { title: invoiceNumber(doc), page: "A4", margin: "10mm" }),
+    printCloture: (report, opts) => print(cloture(report, opts), { title: "Cloture", page: "80mm auto", margin: "0", css: THERMAL_CSS })
   };
 })();

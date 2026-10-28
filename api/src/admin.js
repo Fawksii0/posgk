@@ -1,7 +1,7 @@
 // Menu, zones, promos, settings, users, couriers (admin side), clients, audit, notifications, stats.
-import { fail, now, hashSecret, randomId, randomDigits, normPhone, normEmail, str, numv, bool, oneOf, jparse } from "./lib.js";
+import { fail, now, hashSecret, randomId, randomDigits, normPhone, normEmail, str, numv, bool, oneOf, jparse, categoryFromItem } from "./lib.js";
 import { run, first, all, stmt, batch, getSetting, setSetting, audit, notify, need, can, publicUser, MANAGED_STAFF } from "./core.js";
-import { validateNewSecret, createAuthUser, updateAuthUser, deleteAuthUser } from "./auth.js";
+import { validateNewSecret, createAuthUser, updateAuthUser, deleteAuthUser, issueLoginCode, FLOOR_CODE_ROLES } from "./auth.js";
 import { tickDispatch, retryFailedOrders, releaseOfferedTo, STORE } from "./orders.js";
 
 /* ---------- serializers ---------- */
@@ -10,11 +10,11 @@ export const zoneOut = (r) => ({ id: r.id, name: r.name, fee: r.fee, min: r.min_
 const promoOut = (r) => ({ id: r.id, code: r.code, type: r.type, value: r.value, min: r.min_order, expiry: r.expiry, active: !!r.active, uses: r.uses });
 const catOut = (r) => ({ id: r.id, name: r.name, position: r.position });
 
-const PUBLIC_SETTINGS = ["paused", "deliveryOn", "restaurant", "hours", "freeDelivery", "tableCount"];
+const PUBLIC_SETTINGS = ["paused", "deliveryOn", "restaurant", "hours", "freeDelivery", "tableCount", "opsMode", "opsMessage"];
 const HIDDEN_SETTINGS = ["rotationPointer"];
 
 export async function publicMenu(c) {
-  const defaults = { paused: false, deliveryOn: true, freeDelivery: 150, tableCount: 24 };
+  const defaults = { paused: false, deliveryOn: true, freeDelivery: 150, tableCount: 17, opsMode: "live", opsMessage: "" };
   const [cats, items, zones, rows] = await Promise.all([
     all(c.env, "SELECT * FROM menu_categories ORDER BY position, name"),
     all(c.env, "SELECT * FROM menu_items WHERE visible = 1 ORDER BY created_at"),
@@ -25,7 +25,9 @@ export async function publicMenu(c) {
   const settings = {};
   for (const k of PUBLIC_SETTINGS) settings[k] = stored.has(k) ? jparse(stored.get(k), defaults[k] ?? null) : (defaults[k] ?? null);
   settings.paused = !!settings.paused; settings.deliveryOn = !!settings.deliveryOn;
-  settings.tableCount = Number(settings.tableCount) || 24;
+  settings.tableCount = Number(settings.tableCount) || 17;
+  settings.opsMode = ["live", "construction", "incident"].includes(settings.opsMode) ? settings.opsMode : "live";
+  settings.opsMessage = String(settings.opsMessage || "");
   return { categories: cats.map(catOut), items: items.map(itemOut), zones: zones.map(zoneOut), settings };
 }
 
@@ -207,7 +209,7 @@ export async function settingsGet(c) {
   for (const r of rows) if (!HIDDEN_SETTINGS.includes(r.key)) out[r.key] = jparse(r.value, null);
   out.paused = !!out.paused; out.deliveryOn = out.deliveryOn === undefined ? true : !!out.deliveryOn;
   if (out.freeDelivery === undefined) out.freeDelivery = 150;
-  if (out.tableCount === undefined) out.tableCount = 24;
+  if (out.tableCount === undefined) out.tableCount = 17;
   if (out.defaultPrep === undefined) out.defaultPrep = 20;
   if (out.dispatchMode === undefined) out.dispatchMode = "rotation";
   return out;
@@ -260,16 +262,20 @@ export async function userCreate(c) {
   const password = str(c.body.password, { max: 100, trim: false, field: "Mot de passe" });
   validateNewSecret(role, password);
   if (await first(c.env, "SELECT id FROM users WHERE email = ?", email)) fail(409, "duplicate", "Cet e-mail est déjà utilisé.");
+  const branchId = role === "admin" ? null : (c.branchId || c.user.branch_id || null);
+  if (role !== "admin" && !branchId) fail(400, "branch_required", "Choisissez une succursale.");
   const authUser = await createAuthUser(c.env, { email, password, metadata: { gk_role: role } });
   const id = randomId("u_");
   try {
-    await run(c.env, "INSERT INTO users (id, auth_user_id, role, name, email, active, must_change, created_at, created_by) VALUES (?,?,?,?,?,1,1,?,?)", id, authUser.id, role, name, email, now(), c.user.id);
+    await run(c.env, "INSERT INTO users (id, auth_user_id, role, name, email, branch_id, active, must_change, created_at, created_by) VALUES (?,?,?,?,?,?,1,1,?,?)", id, authUser.id, role, name, email, branchId, now(), c.user.id);
   } catch (error) {
     await deleteAuthUser(c.env, authUser.id);
     throw error;
   }
   await audit(c.env, c.user, "Utilisateur créé", `${name} (${role})`, { id, role });
-  return publicUser(await userWithBranch(c.env, id));
+  const created = publicUser(await userWithBranch(c.env, id));
+  if (FLOOR_CODE_ROLES.includes(role)) created.code = await issueLoginCode(c.env, id);
+  return created;
 }
 export async function userUpdate(c) {
   need(c.user, "users.manage");
@@ -298,7 +304,18 @@ export async function userUpdate(c) {
   if (role !== cur.role) tv++;
   await run(c.env, "UPDATE users SET name=?, email=?, role=?, active=?, must_change=?, token_version=? WHERE id=?", name, email, role, active, mc, tv, cur.id);
   await audit(c.env, c.user, "Utilisateur modifié", `${name} (${role})${active ? "" : " — désactivé"}`, cur);
-  return publicUser(await userWithBranch(c.env, cur.id));
+  const updated = publicUser(await userWithBranch(c.env, cur.id));
+  if (FLOOR_CODE_ROLES.includes(role) && !cur.login_code) updated.code = await issueLoginCode(c.env, cur.id);
+  return updated;
+}
+
+export async function userResetCode(c) {
+  need(c.user, "users.manage");
+  const cur = visibleTarget(c, await first(c.env, "SELECT * FROM users WHERE id = ?", c.params.id));
+  if (!FLOOR_CODE_ROLES.includes(cur.role)) fail(400, "invalid", "Ce rôle n'utilise pas de code caisse / serveur.");
+  const code = await issueLoginCode(c.env, cur.id);
+  await audit(c.env, c.user, "Code personnel réinitialisé", `${cur.name} (${cur.role})`, cur);
+  return { ...publicUser(await userWithBranch(c.env, cur.id)), code };
 }
 export async function userDelete(c) {
   need(c.user, "users.manage");
@@ -521,5 +538,74 @@ export async function stats(c) {
     today: { ...today, avg: today.count ? today.revenue / today.count : 0 }, yesterday: { ...yesterday, avg: yesterday.count ? yesterday.revenue / yesterday.count : 0 },
     series, statusToday: Object.fromEntries(statusRows.map((r) => [r.status, r.n])), topProducts,
     couriers: { online: online.n, total: totalC.n, onMission: onMission.n }
+  };
+}
+
+export async function cloture(c) {
+  need(c.user, "stats.view");
+  const t = now();
+  let dayStart = Number(c.url.searchParams.get("dayStart"));
+  if (!Number.isFinite(dayStart) || dayStart <= 0 || dayStart < t - 400 * 86400000 || dayStart > t + 86400000) {
+    dayStart = t - (t % 86400000);
+  }
+  const dayEnd = dayStart + 86400000;
+  const rows = await all(c.env, `SELECT o.seq, o.mode, o.status, o.items, o.total, o.created_at, o.cashier_id, o.history,
+    u.name AS cashier_name, u.role AS cashier_role
+    FROM orders o LEFT JOIN users u ON u.id = o.cashier_id
+    WHERE o.created_at >= ? AND o.created_at < ? ORDER BY o.created_at`, dayStart, dayEnd);
+  const sold = [];
+  const skipped = [];
+  for (const row of rows) {
+    if (row.status === "refused" || row.status === "cancelled") skipped.push(row);
+    else sold.push(row);
+  }
+  const categories = new Map();
+  for (const row of sold) {
+    const lines = Array.isArray(row.items) ? row.items : jparse(row.items, []);
+    for (const item of lines) {
+      const name = (categoryFromItem(item) || "Autres").toLocaleUpperCase("fr-FR");
+      const qty = Number(item.qty) || 0;
+      const current = categories.get(name) || { name, qty: 0 };
+      current.qty += qty;
+      categories.set(name, current);
+    }
+  }
+  const modeOf = (mode) => (mode === "delivery" ? "delivery" : mode === "dinein" ? "dinein" : "pickup");
+  const byMode = { delivery: { count: 0, total: 0 }, pickup: { count: 0, total: 0 }, dinein: { count: 0, total: 0 } };
+  const staff = new Map();
+  let total = 0;
+  const staffOf = (row) => {
+    if (row.cashier_id) {
+      return { id: row.cashier_id, name: row.cashier_name || "Personnel", role: row.cashier_role || "" };
+    }
+    const hist = Array.isArray(row.history) ? row.history : jparse(row.history, []);
+    const hit = hist.find((entry) => entry?.by && String(entry.by).startsWith("u_"));
+    if (hit) return { id: hit.by, name: hit.cashier || "Personnel", role: "" };
+    return { id: "app", name: "App / QR", role: "client" };
+  };
+  for (const row of sold) {
+    const amount = Number(row.total) || 0;
+    total += amount;
+    const key = modeOf(row.mode);
+    byMode[key].count += 1;
+    byMode[key].total += amount;
+    const who = staffOf(row);
+    const bucket = staff.get(who.id) || { id: who.id, name: who.name, role: who.role, count: 0, total: 0, byMode: { delivery: 0, pickup: 0, dinein: 0 } };
+    bucket.count += 1;
+    bucket.total += amount;
+    bucket.byMode[key] += amount;
+    if (!bucket.name && who.name) bucket.name = who.name;
+    staff.set(who.id, bucket);
+  }
+  return {
+    dayStart,
+    dayEnd,
+    printedAt: t,
+    orders: sold.length,
+    cancelled: skipped.length,
+    total,
+    byMode,
+    byStaff: [...staff.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "fr")),
+    categories: [...categories.values()].sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name, "fr"))
   };
 }

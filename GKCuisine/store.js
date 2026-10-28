@@ -3,7 +3,7 @@ const API_SCOPE = "cuisine";
 
 const defaultState = () => ({
   session: null,
-  prefs: { sound: true, paper: 80, autoBrowserPrint: false, lastPrinter: "" }
+  prefs: { sound: true, paper: 80, baud: 9600, autoBrowserPrint: false, lastPrinter: "" }
 });
 
 function sessionUser(session) {
@@ -30,6 +30,9 @@ function load() {
     }
   } catch { /* corrupted storage: start with defaults */ }
   base.session = sessionUser(window.GKApi.session(API_SCOPE));
+  if (base.session?.branchId) {
+    try { window.GKApi.setBranch(base.session.branchId); } catch { /* ignore */ }
+  }
   return base;
 }
 
@@ -41,9 +44,18 @@ function save() {
   } catch { /* storage unavailable */ }
 }
 
+function enablePhonePush(prompt) {
+  try { void window.GKPush?.enable({ api: window.GKApi, scope: API_SCOPE, app: "cuisine", prompt }); } catch { /* optional */ }
+}
+
 function setSession(result) {
   const session = window.GKApi.setSession(API_SCOPE, result);
   state.session = sessionUser(session);
+  const branchId = result?.branchId || state.session?.branchId;
+  if (branchId) {
+    try { window.GKApi.setBranch(branchId); } catch { /* ignore */ }
+  }
+  if (state.session && !state.session.mustChange) enablePhonePush(true);
   return state.session;
 }
 
@@ -85,6 +97,7 @@ function groupOrders(orders) {
   orders.forEach(order => {
     const column = columnOf(order);
     if (column) groups[column].push(order);
+    if (column === "ready") groups.out.push(order);
   });
   ["new", "prep", "ready"].forEach(key => groups[key].sort((a, b) => a.createdAt - b.createdAt));
   groups.out.sort((a, b) => b.createdAt - a.createdAt);

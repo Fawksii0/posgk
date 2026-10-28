@@ -30,7 +30,8 @@ export const PERMS = {
   "settings.ops": FRONT,
   "users.manage": ADM,
   "audit.view": ADM,
-  "stats.view": MGR
+  "stats.view": MGR,
+  "ops.console": ADM
 };
 export const can = (u, perm) => !!u && (PERMS[perm] || []).includes(u.role);
 export function need(u, perm) { if (!can(u, perm)) fail(403, "forbidden", "Accès refusé."); }
@@ -48,13 +49,27 @@ export async function getSetting(env, key, def) {
 }
 export const setSetting = (env, key, value) => run(env, "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (branch_id, key) DO UPDATE SET value = excluded.value", key, JSON.stringify(value));
 
+export async function getOpsMode(env) {
+  const mode = await getSetting(env, "opsMode", "live");
+  const message = await getSetting(env, "opsMessage", "");
+  return {
+    mode: ["live", "construction", "incident"].includes(mode) ? mode : "live",
+    message: String(message || "")
+  };
+}
+
 /* ---------- audit / notifications ---------- */
 export async function audit(env, actor, action, detail = "", target = null) {
   await run(env, "INSERT INTO audit_log (at, actor_id, actor_name, actor_role, action, detail, target_id, target_role) VALUES (?,?,?,?,?,?,?,?)",
     now(), actor?.id || null, actor?.name || "Système", actor?.role || "system", action, String(detail).slice(0, 300), target?.id || null, target?.role || null);
 }
-export const notify = (env, { audience, userId = null, title, text = "", orderId = null }) =>
-  run(env, "INSERT INTO notifications (audience, user_id, title, text, order_id, created_at) VALUES (?,?,?,?,?,?)", audience, userId, title, text, orderId, now());
+export async function notify(env, { audience, userId = null, title, text = "", orderId = null }) {
+  await run(env, "INSERT INTO notifications (audience, user_id, title, text, order_id, created_at) VALUES (?,?,?,?,?,?)", audience, userId, title, text, orderId, now());
+  try {
+    const { sendPush } = await import("./push.js");
+    await sendPush(env, { audience, userId, title, text, orderId });
+  } catch { /* push is optional; in-app inbox still works */ }
+}
 
 /* ---------- login throttling ---------- */
 const DAY = 86400000;
@@ -97,6 +112,7 @@ export function publicUser(u) {
     active: !!u.active, blocked: !!u.blocked, mustChange: !!u.must_change,
     branchId: u.branch_id || u.active_branch_id || null,
     branchName: u.branch_name || u.active_branch_name || null,
+    loginCode: u.login_code || null,
     createdAt: u.created_at, lastLogin: u.last_login || null
   };
 }
