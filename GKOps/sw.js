@@ -1,4 +1,4 @@
-const VERSION = "gk-ops-push-v1";
+const VERSION = "gk-ops-push-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", event => event.waitUntil(self.clients.claim()));

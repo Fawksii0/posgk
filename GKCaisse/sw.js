@@ -1,4 +1,4 @@
-const VERSION = "gk-caisse-v5";
+const VERSION = "gk-caisse-v6";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./data.js", "./store.js", "./escpos.js", "./app.js", "./manifest.webmanifest", "./assets/emblem-reference.png"
 ];

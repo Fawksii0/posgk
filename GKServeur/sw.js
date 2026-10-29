@@ -1,4 +1,4 @@
-const VERSION = "gk-serveur-v24";
+const VERSION = "gk-serveur-v25";
 const SHELL = ["./", "./index.html", "./styles.css", "./data.js", "./store.js", "./escpos.js", "./app.js", "./motion-ui.js", "./manifest.webmanifest", "./assets/emblem-reference.png"];
 
 self.addEventListener("install", event => {

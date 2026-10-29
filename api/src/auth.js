@@ -174,6 +174,7 @@ export async function clientSignup(c) {
     const login = await authRequest(c.env, "token?grant_type=password", { email, password });
     if (!login.ok || !login.data.user) fail(502, "auth_unavailable", "Création du compte impossible. Réessayez.");
     const user = await profileForAuthUser(c.env, login.data.user, "client", name, { email, phone });
+    await clearFails(c.env, keys);
     return supabaseLogin(login.data, user);
   } catch (error) {
     await deleteAuthUser(c.env, created.id).catch(() => {});

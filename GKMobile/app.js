@@ -4,7 +4,18 @@ const sheet = document.querySelector("#sheet");
 let toastTimer;
 let installPrompt = null;
 
-const PHONE_RE = /^(\+212|0)[5-7]\d{8}$/;
+const PHONE_RE = /^0[5-7]\d{8}$/;
+
+// Mirrors the API's normPhone (api/src/lib.js) so the client accepts the same formats:
+// 06 12 34 56 78, +212 6 12 34 56 78, 00212612345678 and 612345678.
+function normalizePhone(raw) {
+  let digits = String(raw ?? "").replace(/[^\d+]/g, "");
+  if (digits.startsWith("+212")) digits = `0${digits.slice(4)}`;
+  else if (digits.startsWith("00212")) digits = `0${digits.slice(5)}`;
+  else if (digits.startsWith("212") && digits.length === 12) digits = `0${digits.slice(3)}`;
+  else if (/^[5-7]\d{8}$/.test(digits)) digits = `0${digits}`;
+  return PHONE_RE.test(digits) ? digits : "";
+}
 const BARE_VIEWS = ["auth"];
 const LOCAL_DISH_FOLDERS = {
   salades: "salades",
@@ -481,11 +492,11 @@ function renderAuth() {
     <h1 id="auth-heading">${login ? "Bon retour !" : "Créer un compte"}</h1>
     <p class="auth-lead">${back ? "Connectez-vous pour finaliser votre commande." : "Connectez-vous pour consulter vos commandes."}</p>
     <form id="auth-form" novalidate>
-      ${login ? `<label class="field"><span>E-mail ou téléphone</span><input name="identifier" autocomplete="username" placeholder="vous@exemple.com ou 06 12 34 56 78" /></label>` : `
-      <label class="field"><span>Nom complet</span><input name="name" autocomplete="name" placeholder="Votre nom complet" /></label>
-      <label class="field"><span>Téléphone</span><input name="phone" type="tel" autocomplete="tel" placeholder="06 12 34 56 78" /></label>
-      <label class="field"><span>E-mail</span><input name="email" type="email" autocomplete="email" placeholder="vous@exemple.com" /></label>`}
-      <label class="field"><span>Mot de passe</span><input name="password" type="password" autocomplete="${login ? "current-password" : "new-password"}" placeholder="${login ? "Votre mot de passe" : "8 caractères minimum"}" /></label>
+      ${login ? `<label class="field"><span>E-mail ou téléphone</span><input name="identifier" autocomplete="username" maxlength="120" placeholder="vous@exemple.com ou 06 12 34 56 78" /></label>` : `
+      <label class="field"><span>Nom complet</span><input name="name" autocomplete="name" maxlength="60" placeholder="Votre nom complet" /></label>
+      <label class="field"><span>Téléphone</span><input name="phone" type="tel" autocomplete="tel" maxlength="20" placeholder="06 12 34 56 78" /></label>
+      <label class="field"><span>E-mail</span><input name="email" type="email" autocomplete="email" maxlength="120" placeholder="vous@exemple.com" /></label>`}
+      <label class="field"><span>Mot de passe</span><input name="password" type="password" autocomplete="${login ? "current-password" : "new-password"}" maxlength="${login ? 200 : 100}" placeholder="${login ? "Votre mot de passe" : "8 caractères minimum"}" /></label>
       <p class="form-error" role="alert"></p>
       <button class="gold-button full-width" id="auth-submit" type="submit">${login ? "Se connecter" : "S'inscrire"}</button>
     </form>
@@ -1061,7 +1072,7 @@ function startCheckout() {
   }
   const issue = checkoutIssue();
   if (issue) return showToast(issue);
-  if (!PHONE_RE.test(checkoutPhone())) {
+  if (!normalizePhone(checkoutPhone())) {
     state.orderError = "Saisissez un numéro de téléphone valide (06 12 34 56 78) pour être joint à la livraison.";
     state.phoneOverride = true;
     return render();
@@ -1089,7 +1100,7 @@ function placeOrder() {
   };
   if (delivery) payload.address = { zone: address.zone, street: address.street, label: address.label || "GPS", lat: address.lat, lng: address.lng };
   if (state.promo?.code) payload.promo = state.promo.code;
-  payload.customer = { phone: checkoutPhone() };
+  payload.customer = { phone: normalizePhone(checkoutPhone()) };
   GKApi.post("/api/orders", payload, "client").then(result => {
     state.orderSubmitting = false;
     const order = normalizeOrder(result.order);
@@ -1316,12 +1327,14 @@ main.addEventListener("submit", async event => {
     let path, body;
     if (signup) {
       const name = String(data.get("name") ?? "").trim();
-      const phone = String(data.get("phone") ?? "").replace(/[\s.-]/g, "");
+      const phone = normalizePhone(data.get("phone"));
       const email = String(data.get("email") ?? "").trim().toLowerCase();
       if (name.length < 2) return formError(form, "Saisissez votre nom.");
-      if (!PHONE_RE.test(phone)) return formError(form, "Numéro invalide. Exemple : 06 12 34 56 78.");
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return formError(form, "E-mail invalide.");
+      if (name.length > 60) return formError(form, "Le nom doit contenir 60 caractères maximum.");
+      if (!phone) return formError(form, "Numéro invalide. Exemple : 06 12 34 56 78.");
+      if (email.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return formError(form, "E-mail invalide.");
       if (password.length < 8) return formError(form, "Le mot de passe doit contenir au moins 8 caractères.");
+      if (password.length > 100) return formError(form, "Le mot de passe doit contenir 100 caractères maximum.");
       path = "/api/auth/client/signup";
       body = { name, phone, email, password };
     } else {
@@ -1459,6 +1472,9 @@ setInterval(() => {
   else if (!document.hidden && state.user && state.orders.some(order => order.status === "active")) void refreshOrders();
 }, 8000);
 main.addEventListener("input", event => {
+  const form = event.target.closest("form");
+  const error = form?.querySelector(".form-error");
+  if (error?.textContent) error.textContent = "";
   if (event.target.id === "cart-note") { state.cartNote = event.target.value; saveState(); }
   if (event.target.id === "cart-phone") state.orderPhone = event.target.value;
   if (event.target.id === "promo-code") { state.promoError = ""; state.promoMessage = ""; }
