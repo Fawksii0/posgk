@@ -4,6 +4,7 @@ import * as auth from "./auth.js";
 import * as admin from "./admin.js";
 import * as orders from "./orders.js";
 import * as chat from "./chat.js";
+import * as ops from "./ops.js";
 
 const routes = [];
 const route = (method, path, handler, options = {}) => routes.push({
@@ -110,6 +111,13 @@ route("POST", "/api/notifications/read", admin.notificationsRead, { body: true }
 route("GET", "/api/admin/audit", admin.auditList);
 route("GET", "/api/owner/audit", admin.ownerAuditList, { branchScoped: false });
 route("GET", "/api/admin/stats", admin.stats);
+route("GET", "/api/ops/overview", ops.overview, { branchScoped: false });
+route("POST", "/api/ops/mode", ops.setMode, { body: true, branchScoped: false });
+route("POST", "/api/ops/switches", ops.setSwitches, { body: true, branchScoped: false });
+route("POST", "/api/ops/warmup", ops.warmup, { body: true, branchScoped: false });
+route("POST", "/api/ops/bounce", ops.bounce, { body: true, branchScoped: false });
+route("POST", "/api/ops/dispatch-tick", ops.dispatchTick, { body: true, branchScoped: false });
+route("POST", "/api/ops/broadcast", ops.broadcast, { body: true, branchScoped: false });
 
 route("GET", "/api/chat/unread", chat.unreadCounts);
 route("GET", "/api/orders/(?<id>[^/]+)/messages", chat.messagesList);

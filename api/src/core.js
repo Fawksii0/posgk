@@ -30,7 +30,8 @@ export const PERMS = {
   "settings.ops": FRONT,
   "users.manage": ADM,
   "audit.view": ADM,
-  "stats.view": MGR
+  "stats.view": MGR,
+  "ops.console": ADM
 };
 export const can = (u, perm) => !!u && (PERMS[perm] || []).includes(u.role);
 export function need(u, perm) { if (!can(u, perm)) fail(403, "forbidden", "Accès refusé."); }
@@ -47,6 +48,15 @@ export async function getSetting(env, key, def) {
   return r ? jparse(r.value, def) : def;
 }
 export const setSetting = (env, key, value) => run(env, "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (branch_id, key) DO UPDATE SET value = excluded.value", key, JSON.stringify(value));
+
+export async function getOpsMode(env) {
+  const mode = await getSetting(env, "opsMode", "live");
+  const message = await getSetting(env, "opsMessage", "");
+  return {
+    mode: ["live", "construction", "incident"].includes(mode) ? mode : "live",
+    message: String(message || "")
+  };
+}
 
 /* ---------- audit / notifications ---------- */
 export async function audit(env, actor, action, detail = "", target = null) {

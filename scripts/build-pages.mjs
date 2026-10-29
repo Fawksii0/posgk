@@ -5,7 +5,7 @@ import { cpSync, rmSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const apps = ["GKMobile", "GKAdmin", "GKCuisine", "GKCourier", "GKServeur", "GKMenu"];
+const apps = ["GKMobile", "GKAdmin", "GKCuisine", "GKCourier", "GKServeur", "GKMenu", "GKOps"];
 const app = process.argv[2];
 if (!apps.includes(app)) {
   console.error(`Usage: node scripts/build-pages.mjs <${apps.join("|")}>`);

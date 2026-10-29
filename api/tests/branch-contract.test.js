@@ -271,6 +271,13 @@ test("waiters act on dine-in tickets; chefs stay on kitchen orders", () => {
   assert.equal(can({ role: "cashier" }, "orders.dinein"), true);
 });
 
+test("OPS console is restricted to platform administrators", () => {
+  assert.equal(can({ role: "owner" }, "ops.console"), true);
+  assert.equal(can({ role: "admin" }, "ops.console"), true);
+  assert.equal(can({ role: "manager" }, "ops.console"), false);
+  assert.equal(can({ role: "cashier" }, "ops.console"), false);
+});
+
 test("waiter POS publishes and settles a dine-in table", async () => {
   const waiter = {
     id: "waiter-pos", role: "waiter", token_version: 0, active: 1, blocked: 0,
