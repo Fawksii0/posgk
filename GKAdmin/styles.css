@@ -466,6 +466,12 @@ h1, h2, h3, .kpi-value, .today-kpi-value { font-family: "DM Sans", ui-sans-serif
 .today-intro h2 { margin: 0; font-size: clamp(28px, 3vw, 38px); line-height: 1.1; }
 .today-eyebrow { margin-bottom: 4px; color: var(--muted); font-size: 13px; }
 .today-date { color: var(--muted); font-size: 14px; }
+.today-intro-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.today-cloture .cloture-preview { max-height: none; background: #fff; }
+.today-cloture .gkr-preview { min-height: 360px; }
+.cloture-day-row { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.cloture-day { display: grid; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.cloture-day input[type="date"] { min-height: 44px; padding: 0 10px; border: 1px solid var(--line); border-radius: 12px; font: inherit; color: var(--ink); background: #fff; }
 .today-empty-note { padding: 12px 16px; border: 1px solid var(--line); border-radius: 14px; color: var(--muted); background: var(--gold-soft); font-size: 14px; }
 .today-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .today-kpi, .today-panel { min-width: 0; padding: 19px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); }

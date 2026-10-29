@@ -12,11 +12,12 @@ const Store = (() => {
     couriers: { path: "/api/admin/couriers", key: "couriers", map: (v) => (v.couriers || []).map(courierOut) },
     clients: { path: "/api/admin/clients", key: "customers", map: (v) => (v.clients || []).map((c) => ({ ...c, email: c.email || "", points: c.points || 0 })) },
     audit: { path: "/api/admin/audit", key: "audit", map: (v) => (v.audit || []).map((a) => ({ ...a, at: Number(a.at) })) },
-    settings: { path: "/api/admin/settings", key: "settings", map: settingsOut }
+    settings: { path: "/api/admin/settings", key: "settings", map: settingsOut },
+    cloture: { path: () => `/api/admin/cloture?dayStart=${state.clotureDayStart}`, key: "cloture", map: (v) => v }
   };
   const deleteUser = (id) => mutate("delete", `/api/admin/users/${encodeURIComponent(id)}`, undefined, ["users"]);
   const routeDatasets = {
-    dashboard: ["stats", "orders", "couriers", "audit", "menu", "settings"],
+    dashboard: ["stats", "orders", "couriers", "audit", "menu", "settings", "cloture"],
     commandes: ["orders", "couriers", "zones"],
     factures: ["orders", "settings", "zones"],
     menu: ["menu"],
@@ -52,11 +53,11 @@ const Store = (() => {
     restaurant: { name: "", phone: "", email: "", address: "" },
     hours: Object.fromEntries(DAYS.map((d) => [d.id, { closed: false, open: "11:00", close: "23:00" }])),
     notif: { newOrder: true, unassigned: true, lowStock: true, dailyReport: false },
-    deliveryOn: false, acceptingOrders: true, dispatchMode: "rotation", defaultPrep: 20, maxDeliveryKm: 15
+    deliveryOn: false, acceptingOrders: true, dispatchMode: "rotation", defaultPrep: 20, freeDelivery: 0
   });
   let state = {
     user: null, scope: "admin", mustChange: false, orders: [], products: [], categories: [], zones: [], promos: [],
-    users: [], couriers: [], customers: [], audit: [], settings: emptySettings(), stats: null,
+    users: [], couriers: [], customers: [], audit: [], settings: emptySettings(), stats: null, cloture: null, clotureDayStart: 0,
     loading: {}, errors: {}, loaded: {}, branches: [], branchId: ""
   };
   const listeners = new Set();
@@ -67,7 +68,31 @@ const Store = (() => {
   const subscribe = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
   const get = () => state;
   const dayStart = (ts) => new Date(ts).setHours(0, 0, 0, 0);
+  const defaultClotureDay = () => {
+    const start = dayStart(Date.now());
+    return new Date().getHours() < 8 ? start - 86400000 : start;
+  };
+  state.clotureDayStart = defaultClotureDay();
   const byId = (list, id) => (list || []).find((item) => item.id === id) || null;
+  const PRINTER_KEY = "gk-admin-printer";
+  function printerPrefs() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(PRINTER_KEY) || "{}");
+      return {
+        paper: Number(saved.paper) === 58 ? 58 : 80,
+        baud: [9600, 19200, 115200].includes(Number(saved.baud)) ? Number(saved.baud) : 9600,
+        lastPrinter: String(saved.lastPrinter || "")
+      };
+    } catch {
+      return { paper: 80, baud: 9600, lastPrinter: "" };
+    }
+  }
+  function setPrinterPrefs(patch) {
+    const next = { ...printerPrefs(), ...patch };
+    try { localStorage.setItem(PRINTER_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+    emit();
+    return next;
+  }
 
   function can(permission) {
     const map = { users: "users", settings: "settings", zones: "zones", promos: "promos", audit: "audit", clients: "clients", couriers: "couriers", stats: "stats", deleteProduct: "deleteProduct" };
@@ -106,8 +131,7 @@ const Store = (() => {
       hours: { ...def.hours, ...(raw.hours || {}) }, notif: { ...def.notif, ...(raw.notif || {}) },
       deliveryOn: !!raw.deliveryOn, acceptingOrders: !raw.paused,
       dispatchMode: raw.dispatchMode || def.dispatchMode,
-      defaultPrep: Number(raw.defaultPrep || def.defaultPrep),
-      maxDeliveryKm: Number(raw.maxDeliveryKm || def.maxDeliveryKm)
+      defaultPrep: Number(raw.defaultPrep || def.defaultPrep), freeDelivery: Number(raw.freeDelivery || 0)
     };
   }
   function sessionScope() {
@@ -130,6 +154,7 @@ const Store = (() => {
     try { stored = api().session(state.scope); } catch (error) { state.errors.auth = error.message; emit(); return; }
     state.user = stored?.user || null;
     state.mustChange = !!stored?.mustChange || !!stored?.user?.mustChange;
+    state.clotureDayStart = defaultClotureDay();
     emit();
     if (state.user && !state.mustChange) {
       if (await loadBranches()) await refreshAll();
@@ -173,7 +198,7 @@ const Store = (() => {
     api().setBranch(branchId);
     state.branchId = branchId;
     state.orders = []; state.products = []; state.categories = []; state.zones = []; state.promos = [];
-    state.users = []; state.couriers = []; state.customers = []; state.audit = []; state.stats = null;
+    state.users = []; state.couriers = []; state.customers = []; state.audit = []; state.stats = null; state.cloture = null;
     state.settings = emptySettings(); state.loading = {}; state.errors = {}; state.loaded = {};
     emit();
     await refreshAll();
@@ -186,11 +211,12 @@ const Store = (() => {
     delete state.errors[name];
     emit();
     try {
-      const response = await request("get", spec.path);
+      const response = await request("get", typeof spec.path === "function" ? spec.path() : spec.path);
       const result = spec.map(response || {});
       if (name === "menu") { state.categories = result.categories; state.products = result.products; }
       else if (name === "settings") state.settings = result;
       else if (name === "stats") state.stats = result;
+      else if (name === "cloture") state.cloture = result;
       else state[spec.key] = result;
       state.loaded[name] = true;
     } catch (error) {
@@ -198,6 +224,7 @@ const Store = (() => {
       if (name === "menu") { state.categories = []; state.products = []; }
       else if (name === "settings") state.settings = emptySettings();
       else if (name === "stats") state.stats = null;
+      else if (name === "cloture") state.cloture = null;
       else state[spec.key] = [];
       state.loaded[name] = false;
     } finally {
@@ -207,7 +234,7 @@ const Store = (() => {
   }
   async function refreshAll() {
     const names = Object.keys(datasets).filter((name) => {
-      if (name === "stats") return can("stats");
+      if (name === "stats" || name === "cloture") return can("stats");
       if (name === "users") return can("users");
       if (name === "settings") return !!state.user;
       if (name === "couriers") return can("couriers");
@@ -248,6 +275,7 @@ const Store = (() => {
       state.user = response.user;
       state.mustChange = !!response.mustChange || !!response.user?.mustChange;
       state.errors = {}; state.loaded = {}; state.loading = {};
+      state.clotureDayStart = defaultClotureDay();
       if (!state.mustChange) {
         if (await loadBranches()) await refreshAll();
       }
@@ -275,7 +303,8 @@ const Store = (() => {
     state.user = null;
     state.mustChange = false;
     state.orders = []; state.products = []; state.categories = []; state.zones = []; state.promos = [];
-    state.users = []; state.couriers = []; state.customers = []; state.audit = []; state.stats = null;
+    state.users = []; state.couriers = []; state.customers = []; state.audit = []; state.stats = null; state.cloture = null;
+    state.clotureDayStart = defaultClotureDay();
     state.settings = emptySettings(); state.loading = {}; state.errors = {}; state.loaded = {};
     state.branches = []; state.branchId = "";
     emit();
@@ -386,6 +415,10 @@ const Store = (() => {
     const r = await mutate("post", `/api/admin/couriers/${encodeURIComponent(id)}/reset-pin`, {}, ["couriers"]);
     return r.ok ? { ...r.data, ok: true } : r;
   };
+  const resetStaffCode = async (id) => {
+    const r = await mutate("post", `/api/admin/users/${encodeURIComponent(id)}/reset-code`, {}, ["users"]);
+    return r.ok ? { ...r.data, ok: true } : r;
+  };
   const settleCash = (id) => mutate("post", `/api/admin/couriers/${encodeURIComponent(id)}/settle`, {}, ["couriers"]);
   const toggleBlocked = (id) => {
     const c = byId(state.customers, id);
@@ -398,7 +431,7 @@ const Store = (() => {
       update(next);
       const body = {};
       if (next.acceptingOrders !== state.settings.acceptingOrders) body.paused = !next.acceptingOrders;
-      for (const key of ["deliveryOn", "dispatchMode", "defaultPrep", "maxDeliveryKm", "restaurant", "hours", "notif"]) {
+      for (const key of ["deliveryOn", "dispatchMode", "defaultPrep", "freeDelivery", "restaurant", "hours", "notif"]) {
         if (JSON.stringify(next[key]) !== JSON.stringify(state.settings[key])) body[key] = next[key];
       }
       const opsKeys = ["paused", "dispatchMode", "defaultPrep"];
@@ -408,6 +441,21 @@ const Store = (() => {
       await refreshOne("settings");
       return { ok: true, data: response };
     } catch (error) { return asFailure(error); }
+  }
+  async function getCloture() {
+    try {
+      const data = await request("get", `/api/admin/cloture?dayStart=${state.clotureDayStart}`);
+      return { ok: true, data };
+    } catch (error) { return asFailure(error); }
+  }
+  async function setClotureDay(ts) {
+    const start = dayStart(ts);
+    const today = dayStart(Date.now());
+    const min = today - 400 * 86400000;
+    state.clotureDayStart = Math.min(today, Math.max(min, start));
+    state.cloture = null;
+    await refreshOne("cloture");
+    return { ok: true, data: state.cloture };
   }
   const saveRestaurant = (d) => saveSettings((s) => { s.restaurant = d; }, "Informations du restaurant mises à jour");
   const saveHours = (hours) => saveSettings((s) => { s.hours = hours; }, "Horaires d'ouverture mis à jour");
@@ -423,9 +471,9 @@ const Store = (() => {
     setBranch,
     advanceOrder, refuseOrder, adjustPrep, assignCourier, cancelOrder, nextStatus, flowFor, statusLabel,
     saveProduct, toggleAvailability, deleteProduct, saveCategory, deleteCategory, saveZone, toggleZone, deleteZone,
-    savePromo, togglePromo, deletePromo, saveUser, toggleUserActive, deleteUser, addCourier, setCourierActive, saveCourier, deleteCourier, resetCourierPin,
-    settleCash, toggleBlocked, saveSettings, saveRestaurant, saveHours,
+    savePromo, togglePromo, deletePromo, saveUser, toggleUserActive, deleteUser, addCourier, setCourierActive, saveCourier, deleteCourier, resetCourierPin, resetStaffCode,
+    settleCash, toggleBlocked, saveSettings, saveRestaurant, saveHours, getCloture, setClotureDay,
     byId, dayStats, revenueSeries, statusCounts, topProducts, courierStatus, courierToday, customerStats,
-    alerts, dayStart
+    alerts, dayStart, printerPrefs, setPrinterPrefs
   };
 })();

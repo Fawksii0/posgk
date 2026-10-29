@@ -4,7 +4,7 @@ const WAITER_ROLES = ["waiter", "manager", "admin", "owner"];
 
 const defaultState = () => ({
   session: null,
-  prefs: { sound: true }
+  prefs: { sound: true, paper: 80, lastPrinter: "" }
 });
 
 function sessionUser(session) {
@@ -39,9 +39,14 @@ function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ prefs: state.prefs })); } catch { /* ignore */ }
 }
 
+function enablePhonePush(prompt) {
+  try { void window.GKPush?.enable({ api: window.GKApi, scope: API_SCOPE, app: "serveur", prompt }); } catch { /* optional */ }
+}
+
 function setSession(result) {
   const session = window.GKApi.setSession(API_SCOPE, result);
   state.session = sessionUser(session);
+  if (state.session && !state.session.mustChange) enablePhonePush(true);
   return state.session;
 }
 

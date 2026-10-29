@@ -44,7 +44,8 @@ function formatItems(items) {
     const quantity = Number(item.qty) || 1;
     const size = item.size ? ` (${item.size})` : "";
     const extras = Array.isArray(item.extras) && item.extras.length ? ` + ${item.extras.join(", ")}` : "";
-    return `${quantity > 1 ? `${quantity}× ` : ""}${item.name || ""}${size}${extras}`.trim();
+    const name = typeof GKItemName !== "undefined" ? GKItemName.fromItem(item) : (item.name || "");
+    return `${quantity > 1 ? `${quantity}× ` : ""}${name}${size}${extras}`.trim();
   }).filter(Boolean).join(", ");
 }
 
@@ -68,7 +69,7 @@ function missionFromOrder(order) {
     rawAddress: String(order.address || order.address_label || "").trim(),
     coords: coordsOf(order.lat ?? order.latitude ?? order.dest_lat, order.lng ?? order.lon ?? order.longitude ?? order.dest_lng),
     pickupAddress: String(order.pickup_address || order.restaurant_address || order.branch_address || "").trim(),
-    pickupCoords: coordsOf(order.pickup_lat ?? order.restaurant_lat ?? order.branch_lat, order.pickup_lng ?? order.restaurant_lng ?? order.branch_lng),
+    pickupCoords: coordsOf(order.pickup_lat ?? order.restaurant_lat ?? order.branch_lat, order.pickup_lng ?? order.restaurant_lng ?? order.branch_lng) || "33.7895,-7.1597",
     items: formatItems(order.items),
     total: Number(order.total) || 0,
     payment: String(order.payment || "").toLowerCase() === "cash" ? "cash" : "online",
@@ -187,6 +188,9 @@ async function login(rawPhone, pin) {
   const currentSession = API.setSession(SCOPE, result);
   state.session = currentSession.user;
   state.mustChange = currentSession.mustChange;
+  if (!state.mustChange) {
+    try { void window.GKPush?.enable({ api: API, scope: SCOPE, app: "courier", prompt: true }); } catch { /* optional */ }
+  }
   state.profile = null;
   state.online = false;
   state.missions = [];
@@ -206,6 +210,9 @@ async function changeSecret(current, next) {
   const currentSession = API.setSession(SCOPE, response);
   state.session = currentSession.user;
   state.mustChange = currentSession.mustChange;
+  if (!state.mustChange) {
+    try { void window.GKPush?.enable({ api: API, scope: SCOPE, app: "courier", prompt: true }); } catch { /* optional */ }
+  }
   state.profile = null;
   state.profileLoaded = false;
   state.historyLoaded = false;
@@ -272,12 +279,25 @@ async function advanceMission() {
   await refreshOffers();
 }
 
+function parseDeliveryToken(value) {
+  const text = String(value || "").trim();
+  const qr = text.match(/GK1\|([^|\s]+)\|(\d{2,8})/i);
+  if (qr) return { orderId: qr[1], code: qr[2] };
+  const digits = text.replace(/[^\d]/g, "");
+  if (/^\d{2,8}$/.test(digits)) return { code: digits };
+  return null;
+}
+
 async function completeMission(code, cashCollected) {
   const mission = state.active;
   if (!mission || mission.step !== 4) throw new Error("Mission introuvable.");
-  if (!/^\d{4,6}$/.test(code)) throw new Error("Saisissez le code de livraison du client.");
+  const parsed = parseDeliveryToken(code);
+  if (!parsed) throw new Error("Saisissez le code imprimé sur le ticket.");
+  if (parsed.orderId && parsed.orderId !== mission.id && parsed.orderId !== String(mission.seq || "")) {
+    throw new Error("Ce QR appartient à une autre commande.");
+  }
   if (mission.payment === "cash" && !cashCollected) throw new Error("Confirmez l’encaissement des espèces.");
-  await API.post(`/api/courier/orders/${encodeURIComponent(mission.id)}/delivered`, { code }, SCOPE);
+  await API.post(`/api/courier/orders/${encodeURIComponent(mission.id)}/delivered`, { code: parsed.code }, SCOPE);
   await refreshOffers();
   await refreshHistory();
   await refreshProfile();

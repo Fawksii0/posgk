@@ -19,7 +19,10 @@ const state = {
   branches: [],
   branch: null,
   table: Number(params.get("table")) || Number(sessionStorage.getItem(TABLE_KEY)) || 0,
-  tableCount: 24,
+  lockedTable: false,
+  tableCount: 17,
+  opsMode: "live",
+  opsMessage: "",
   category: "all",
   products: [],
   categories: [],
@@ -64,6 +67,13 @@ function tableFromScan() {
   return hashPath ? Number(hashPath[1]) : 0;
 }
 
+function tableAllowed(n) {
+  const table = Number(n);
+  if (!table) return false;
+  if (window.GKTables) return window.GKTables.has(state.branch?.id || DINEIN_BRANCH, table, state.tableCount);
+  return table >= 1 && table <= 80;
+}
+
 function readStoredOrder() {
   try { return JSON.parse(sessionStorage.getItem(ORDER_KEY) || "null"); } catch { return null; }
 }
@@ -84,16 +94,22 @@ function orderCopy(order) {
       : (order.promised_at ? `Prête vers ${clock(order.promised_at)} · ${countdown(order.promised_at)}` : "Le serveur prépare votre commande.") };
   }
   if (order.status === "ready") return { title: "Prête", lede: "Votre commande est prête. Le serveur arrive." };
-  if (order.status === "delivered") return { title: "Servie", lede: "Bon appétit." };
+  if (order.status === "delivered") return { title: "Servie", lede: "Bon appétit. Ajoutez un plat ou appelez le serveur." };
   if (order.status === "refused") return { title: "Refusée", lede: order.refused_reason || "La cuisine n'a pas pu prendre cette commande." };
   if (order.status === "cancelled") return { title: "Annulée", lede: "Cette commande a été annulée." };
   return { title: order.status, lede: "" };
 }
 
+function menuAssetBase() {
+  const host = location.hostname;
+  if (/(^|\.)gkfood\.store$/.test(host) || host.endsWith("pages.dev")) return "./assets/menu";
+  return "../GKMobile/assets/menu";
+}
+
 function localDishImage(item, category) {
   const folder = LOCAL_DISH_FOLDERS[slugKey(category?.name)];
   const name = slugKey(item.name);
-  return folder && name ? `../GKMobile/assets/menu/${folder}/${name}.png` : "";
+  return folder && name ? `${menuAssetBase()}/${folder}/${name}.webp` : "";
 }
 
 function showToast(message) {
@@ -144,7 +160,9 @@ async function loadBranches() {
 async function loadMenu() {
   const menu = await GKApi.get("/api/menu");
   const categoryMap = new Map((menu.categories || []).map(category => [category.id, category]));
-  state.tableCount = Number(menu.settings?.tableCount) || 24;
+  state.tableCount = Number(menu.settings?.tableCount) || 17;
+  state.opsMode = menu.settings?.opsMode || "live";
+  state.opsMessage = menu.settings?.opsMessage || "";
   const hidden = name => slugKey(name) === "tajines";
   const visibleCategories = (menu.categories || []).filter(category => !hidden(category.name));
   state.categories = [{ id: "all", name: "Tout" }, ...visibleCategories];
@@ -153,6 +171,7 @@ async function loadMenu() {
     const category = categoryMap.get(item.categoryId);
     return {
       ...item,
+      name: typeof GKItemName !== "undefined" ? GKItemName.labeledName(item.name, category?.name) : item.name,
       categoryName: category?.name || "",
       price: Number(item.dinePrice ?? item.price) || 0,
       sizes: Array.isArray(item.sizes) ? item.sizes : [],
@@ -174,16 +193,18 @@ function renderBranches() {
     <div class="branch-list">${state.branches.map(branch => `<button class="branch-card" type="button" data-branch="${escapeHtml(branch.id)}"><strong>${escapeHtml(branch.name)}</strong><small>${escapeHtml(branch.address || "")}</small></button>`).join("")}</div>`;
 }
 
+function tableGroups() {
+  return window.GKTables?.groups(state.branch?.id || "gk-food", state.tableCount) || [];
+}
+
 function renderTables() {
-  const count = Math.max(1, Math.min(80, state.tableCount));
-  const buttons = Array.from({ length: count }, (_, index) => {
-    const n = index + 1;
-    return `<button type="button" class="${state.table === n ? "active" : ""}" data-table="${n}">${n}</button>`;
-  }).join("");
+  const pad = tableGroups().map(row => `<div class="table-row n${row.length}">${row.map(n =>
+    `<button type="button" class="${state.table === n ? "active" : ""}" data-table="${n}">${n}</button>`
+  ).join("")}</div>`).join("");
   return `<p class="eyebrow">${escapeHtml(state.branch?.name || "G&K Food")}</p>
     <h1 class="screen-title">Quelle table ?</h1>
     <p class="lede">Sélectionnez le numéro de votre table pour ouvrir le menu.</p>
-    <div class="table-pad">${buttons}</div>`;
+    <div class="table-pad">${pad}</div>`;
 }
 
 function productCard(product) {
@@ -215,40 +236,67 @@ function renderTrack() {
     order.created_at ? `${icon("clock")}<span>Envoyée à <b>${clock(order.created_at)}</b> · ${minutesSince(order.created_at) ? `${minutesSince(order.created_at)} min` : "à l'instant"}</span>` : "",
     accepted ? `${icon("check")}<span>Acceptée à <b>${clock(accepted)}</b>${order.prep_minutes ? ` · ${order.prep_minutes} min de préparation` : ""}</span>` : "",
     order.status === "preparing" && order.promised_at ? `${icon("sparkles")}<span>Prête vers <b>${clock(order.promised_at)}</b></span>` : "",
-    order.ready_at ? `${icon("bag")}<span>Prête à <b>${clock(order.ready_at)}</b></span>` : ""
+    order.ready_at ? `${icon("bag")}<span>Prête à <b>${clock(order.ready_at)}</b></span>` : "",
+    order.delivered_at ? `${icon("check")}<span>Servie à <b>${clock(order.delivered_at)}</b></span>` : ""
   ].filter(Boolean);
+  const servedActions = order.status === "delivered"
+    ? `<div class="track-actions">
+        <button class="gold-button" type="button" data-action="add-more">${icon("plus")}Ajouter un plat</button>
+        <button class="outline-button track-call" type="button" data-action="call-waiter">${icon("bell")}Appeler le serveur</button>
+      </div>`
+    : "";
   return `<article class="track-card" aria-live="polite">
     <div class="track-card-top"><small>Commande #${escapeHtml(order.seq || order.id)}</small><strong>Table ${escapeHtml(order.table_no || state.table)}</strong></div>
     <p class="track-status">${escapeHtml(copy.title)}</p>
     <p class="track-lede">${escapeHtml(copy.lede)}</p>
     ${times.length ? `<div class="track-times">${times.map(row => `<p>${row}</p>`).join("")}</div>` : ""}
     <div class="track-steps" aria-hidden="true">${TRACK_STEPS.map((step, index) => `<span class="track-step ${stepIndex > index ? "on" : stepIndex === index ? "current" : ""}"></span>`).join("")}</div>
+    ${servedActions}
   </article>`;
 }
 
 function renderMenu() {
   const products = filteredProducts();
-  return `${renderTrack()}<p class="eyebrow table-chip">Table ${state.table}</p>
+  return `${renderTrack()}<p class="eyebrow table-chip" id="carte">Table ${state.table}</p>
     <h1 class="screen-title">La carte</h1>
-    <p class="lede">Installez-vous. On s'occupe du reste.</p>
+    <p class="lede">${state.order?.status === "delivered" ? "Choisissez un autre plat pour une nouvelle commande." : "Installez-vous. On s'occupe du reste."}</p>
     <div class="category-strip">${state.categories.map(category => `<button class="category-chip ${state.category === category.id ? "active" : ""}" type="button" data-category="${escapeHtml(category.id)}">${escapeHtml(category.name)}</button>`).join("")}</div>
     ${products.length ? `<div class="product-grid">${products.map(productCard).join("")}</div>` : `<p class="empty-state">Aucun plat dans cette catégorie.</p>`}`;
 }
 
 function render() {
-  dock.hidden = state.view !== "menu";
-  changeTableBtn.hidden = state.view !== "menu";
+  const construction = state.opsMode === "construction";
+  document.body.classList.toggle("is-construction", construction);
+  dock.hidden = construction || state.view !== "menu";
+  changeTableBtn.hidden = construction || state.view !== "menu" || state.lockedTable;
   changeTableBtn.textContent = state.table ? `Table ${state.table}` : "Table";
   document.querySelector("#header-kicker").textContent = state.view === "menu" ? "Menu sur place" : "G&K Food";
   document.querySelector("#header-title").textContent = state.branch?.name || "G&K Food";
   const count = cartCount();
   const label = document.querySelector("#cart-label");
-  if (label) label.textContent = count ? `Commander · ${count}` : "Commander";
-  if (state.loading) main.innerHTML = `<p class="empty-state">Chargement…</p>`;
-  else if (state.error && state.view === "boot") main.innerHTML = `<p class="empty-state">${escapeHtml(state.error)}</p>`;
-  else if (state.view === "branches") main.innerHTML = renderBranches();
-  else if (state.view === "table") main.innerHTML = renderTables();
-  else main.innerHTML = renderMenu();
+  if (label) {
+    const served = state.order?.status === "delivered";
+    label.textContent = count ? `Commander · ${count}` : served ? "Ajouter un plat" : "Commander";
+  }
+  if (construction) {
+    overlay.hidden = true;
+    main.innerHTML = `<section class="construction-gate" role="status">
+      <img src="./assets/emblem-reference.png" alt="G&amp;K Food" width="88" height="88">
+      <p class="construction-kicker">En travaux</p>
+      <h1>Nous revenons bientôt</h1>
+      <p>${escapeHtml(state.opsMessage || "G&K Food est en construction. Le menu sur place est temporairement fermé.")}</p>
+    </section>`;
+  }
+  else {
+    const incidentBanner = state.opsMode === "incident"
+      ? `<div class="pause-banner" role="alert">${escapeHtml(state.opsMessage || "Incident en cours — le service peut être ralenti.")}</div>`
+      : "";
+    if (state.loading) main.innerHTML = `${incidentBanner}<p class="empty-state">Chargement…</p>`;
+    else if (state.error && state.view === "boot") main.innerHTML = `${incidentBanner}<p class="empty-state">${escapeHtml(state.error)}</p>`;
+    else if (state.view === "branches") main.innerHTML = incidentBanner + renderBranches();
+    else if (state.view === "table") main.innerHTML = incidentBanner + renderTables();
+    else main.innerHTML = incidentBanner + renderMenu();
+  }
   hydrateIcons(document);
   window.gkMotion?.enterView(main, state.view);
 }
@@ -323,12 +371,14 @@ async function placeOrder() {
   state.submitting = true;
   renderCartSheet();
   try {
+    const table = Number(state.table) || tableFromScan();
+    if (!tableAllowed(table)) throw new Error("Numéro de table invalide.");
     const result = await GKApi.post("/api/dinein/orders", {
-      table: state.table,
+      table,
       note: state.note,
       items: state.cart.map(line => ({
-        id: line.product.id,
-        qty: line.quantity,
+        id: String(line.product.id),
+        qty: Number(line.quantity) || 1,
         size: line.size?.name || "",
         extras: line.extras.map(extra => extra.name)
       }))
@@ -391,7 +441,9 @@ async function boot() {
   const scanned = tableFromScan();
   if (scanned) {
     state.table = scanned;
+    state.lockedTable = true;
     sessionStorage.setItem(TABLE_KEY, String(scanned));
+    GKApi.setBranch(DINEIN_BRANCH);
   }
   const stored = readStoredOrder();
   if (stored?.id) state.order = stored;
@@ -403,9 +455,19 @@ async function boot() {
       state.view = "branches";
     } else {
       await loadMenu();
-      if (!state.table) {
+      if (state.opsMode === "construction") {
+        state.loading = false;
+        render();
+        return;
+      }
+      if (scanned && tableAllowed(scanned)) {
+        state.table = scanned;
+        state.lockedTable = true;
+        sessionStorage.setItem(TABLE_KEY, String(scanned));
+        state.view = "menu";
+      } else if (!state.table) {
         state.view = "table";
-      } else if (state.table > state.tableCount) {
+      } else if (!tableAllowed(state.table)) {
         state.table = 0;
         sessionStorage.removeItem(TABLE_KEY);
         state.view = "table";
@@ -476,6 +538,10 @@ document.addEventListener("click", event => {
   }
   if (action === "place-order") return void placeOrder();
   if (action === "call-waiter") return void callWaiter();
+  if (action === "add-more") {
+    document.querySelector("#carte")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
 });
 
 changeTableBtn.addEventListener("click", () => {
@@ -492,5 +558,10 @@ sheet.addEventListener("input", event => {
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
   navigator.serviceWorker.register("./sw.js").catch(() => {});
 }
+
+setInterval(() => {
+  if (document.hidden) return;
+  void loadMenu().then(() => render());
+}, 20000);
 
 void boot();

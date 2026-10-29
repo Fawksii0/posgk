@@ -1,5 +1,5 @@
-const VERSION = "gk-menu-v10";
-const SHELL = ["./", "./index.html", "./styles.css", "./data.js", "./app.js", "./motion-ui.js", "./manifest.webmanifest", "./assets/emblem-reference.png"];
+const VERSION = "gk-menu-v23";
+const SHELL = ["./", "./index.html", "./styles.css", "./data.js", "./app.js", "./motion-ui.js", "./manifest.webmanifest", "./assets/emblem-reference.png", "../shared/gk-tables.js"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(VERSION).then(cache => cache.addAll(SHELL.map(u => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
@@ -18,6 +18,10 @@ self.addEventListener("fetch", event => {
   if (request.method !== "GET" || !request.url.startsWith("http")) return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin || url.pathname.includes("/api/") || url.pathname.includes("/shared/")) return;
+  if (request.mode === "navigate") {
+    event.respondWith(fetch(request).catch(() => caches.match("./index.html")));
+    return;
+  }
   event.respondWith(
     caches.open(VERSION).then(async cache => {
       const cached = await cache.match(request);

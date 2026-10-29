@@ -1,5 +1,7 @@
 const STORE_KEY = "gk-mobile-v2";
-const STORE_COORDS = window.GKDelivery?.STORE || { lat: 33.7895, lng: -7.1597 };
+const FREE_DELIVERY_DEFAULT = 150;
+const STORE_COORDS = { lat: 33.7895, lng: -7.1597 };
+const MAX_DELIVERY_KM = 12;
 const stageTemplates = {
   delivery: [
     { title: "En attente de confirmation", detail: "La cuisine va valider votre commande", icon: "clock" },
@@ -60,7 +62,8 @@ const state = {
   afterAuth: "home",
   orderPhone: "",
   phoneOverride: false,
-  locating: false
+  locating: false,
+  locateError: ""
 };
 
 function hydrateCart(raw) {
@@ -83,11 +86,7 @@ function loadState() {
     localStorage.removeItem("gk-mobile-v1");
     const saved = JSON.parse(localStorage.getItem(STORE_KEY));
     if (!saved || typeof saved !== "object") return;
-    state.addresses = Array.isArray(saved.addresses) ? saved.addresses.map(row => ({
-      ...row,
-      lat: Number.isFinite(Number(row.lat)) ? Number(row.lat) : null,
-      lng: Number.isFinite(Number(row.lng)) ? Number(row.lng) : null
-    })) : [];
+    state.addresses = Array.isArray(saved.addresses) ? saved.addresses : [];
     state.addressId = saved.addressId || null;
     state.favorites = new Set(saved.favorites || []);
     state.delivery = saved.delivery === "pickup" ? "pickup" : "delivery";
@@ -142,44 +141,48 @@ const lineUnit = line => line.product.price + line.size.delta + line.extras.redu
 const cartCount = () => state.cart.reduce((total, line) => total + line.quantity, 0);
 const cartSubtotal = () => state.cart.reduce((total, line) => total + lineUnit(line) * line.quantity, 0);
 const currentAddress = () => state.addresses.find(address => address.id === state.addressId) ?? state.addresses[0] ?? null;
-const hasGps = address => Number.isFinite(Number(address?.lat)) && Number.isFinite(Number(address?.lng));
+const zoneOf = address => address ? (zones.find(zone => zone.id === address.zone) ?? zones[0] ?? null) : null;
 function kmFromStore(address) {
-  if (!hasGps(address)) return Infinity;
-  if (window.GKDelivery) return window.GKDelivery.haversineKm(STORE_COORDS, { lat: Number(address.lat), lng: Number(address.lng) });
-  return Infinity;
+  const lat = Number(address?.lat), lng = Number(address?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return Infinity;
+  const rad = x => (x * Math.PI) / 180;
+  const dLat = rad(lat - STORE_COORDS.lat), dLng = rad(lng - STORE_COORDS.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(STORE_COORDS.lat)) * Math.cos(rad(lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(h));
 }
-const maxDeliveryKm = () => window.GKDelivery?.maxKm(state.settings, zones) || Number(state.settings.maxDeliveryKm) || 15;
-const zoneOf = address => {
-  if (!hasGps(address)) return null;
-  return window.GKDelivery?.ringOf(zones, kmFromStore(address)) || null;
-};
+function hasGps(address) {
+  return Number.isFinite(Number(address?.lat)) && Number.isFinite(Number(address?.lng));
+}
 const currentPayment = () => ({ id: "cash", type: "cash", label: "Espèces à la réception" });
 const isPaused = () => !!state.settings.paused;
 const isConstruction = () => state.settings.opsMode === "construction";
 const opsBanner = () => String(state.settings.opsMessage || "").trim();
 const isSoldOut = productId => products.find(product => product.id === productId)?.available === false;
+const freeDeliveryFrom = () => Number(state.settings.freeDelivery ?? FREE_DELIVERY_DEFAULT);
 
 function deliveryFee() {
   if (!state.cart.length || state.delivery !== "delivery") return 0;
-  return Number(zoneOf(currentAddress())?.fee) || 0;
+  const address = currentAddress();
+  const zone = zoneOf(address);
+  if (!zone) return 0;
+  return cartSubtotal() >= Number(zone.freeFrom ?? freeDeliveryFrom()) ? 0 : zone.fee;
 }
 const cartTotal = () => Math.max(0, cartSubtotal() + deliveryFee() - Number(state.promo?.discount || 0));
 
 function checkoutIssue() {
   if (state.menuStatus !== "loaded") return "Le menu n'est pas disponible. Réessayez après le chargement.";
   if (!state.cart.length) return "Votre panier est vide.";
-  if (isConstruction()) return opsBanner() || "G&K Food is temporarily unavailable for maintenance.";
+  if (isConstruction()) return opsBanner() || "G&K Food est en travaux. Revenez bientôt.";
   if (isPaused()) return PAUSE_MESSAGE;
   const soldOut = state.cart.find(line => isSoldOut(line.product.id));
   if (soldOut) return `${soldOut.product.name} n'est plus disponible : retirez-le de votre panier.`;
   if (state.delivery === "delivery") {
-    if (state.settings.deliveryOn === false) return "La livraison est indisponible pour le moment.";
     const address = currentAddress();
-    if (!address || !hasGps(address)) return "Localisez-vous sur la carte pour la livraison.";
-    if (kmFromStore(address) > maxDeliveryKm()) return "Cette position est hors zone de livraison.";
+    if (!hasGps(address)) return "Autorisez la localisation pour que le livreur vous trouve.";
+    if (kmFromStore(address) > MAX_DELIVERY_KM) return "Cette position est hors zone de livraison.";
     const zone = zoneOf(address);
-    if (!zone) return "Cette position est hors zone de livraison.";
-    if (zone.min > 0 && cartSubtotal() < zone.min) return `Commande minimum de ${zone.min} MAD pour ${zone.name}.`;
+    if (!zone) return "Aucune zone de livraison n'est ouverte.";
+    if (cartSubtotal() < zone.min) return `Commande minimum de ${zone.min} MAD pour la zone ${zone.name}.`;
   }
   return "";
 }

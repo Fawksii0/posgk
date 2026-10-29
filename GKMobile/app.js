@@ -28,7 +28,7 @@ function slugKey(text) {
 function localDishImage(item, category) {
   const folder = LOCAL_DISH_FOLDERS[slugKey(category?.name)];
   const name = slugKey(item.name);
-  return folder && name ? `./assets/menu/${folder}/${name}.png?v=37` : "";
+  return folder && name ? `./assets/menu/${folder}/${name}.webp?v=38` : "";
 }
 
 function cutoutClass(src) {
@@ -37,10 +37,12 @@ function cutoutClass(src) {
 
 function normalizeProduct(item, categoryMap) {
   const category = categoryMap.get(item.categoryId);
+  const categoryName = category?.name || "";
   return {
     ...item,
-    category: category?.name || "",
-    categoryName: category?.name || "",
+    name: typeof GKItemName !== "undefined" ? GKItemName.labeledName(item.name, categoryName) : item.name,
+    category: categoryName,
+    categoryName,
     price: Number(item.price) || 0,
     sizes: Array.isArray(item.sizes) ? item.sizes.map(size => ({ ...size, delta: Number(size.delta) || 0 })) : [],
     extras: Array.isArray(item.extras) ? item.extras.map(extra => ({ ...extra, price: Number(extra.price) || 0 })) : [],
@@ -52,12 +54,12 @@ function normalizeProduct(item, categoryMap) {
 
 async function refreshOpsSettings() {
   if (!GKApi.getBranch()) {
-    try { GKApi.setBranch("gk-food"); } catch { /* keep the current branch state */ }
+    try { GKApi.setBranch("gk-food"); } catch { /* ignore */ }
   }
   try {
-    const response = await GKApi.get("/api/settings/public");
-    if (response?.settings) state.settings = { ...state.settings, ...response.settings };
-  } catch { /* keep the last known mode if the network is unavailable */ }
+    const pub = await GKApi.get("/api/settings/public");
+    if (pub?.settings) state.settings = { ...state.settings, ...pub.settings };
+  } catch { /* keep last known mode */ }
 }
 
 async function loadMenu() {
@@ -72,7 +74,6 @@ async function loadMenu() {
     products = [];
     zones = [];
     categories = [{ id: "All", label: "Tout", icon: "sparkles" }, { id: "Favoris", label: "Favoris", icon: "heart" }];
-    state.settings = {};
     state.menuStatus = "loaded";
     state.menuError = "";
     render();
@@ -245,7 +246,7 @@ function renderHomeTile(product) {
   return `<article class="home-tile">
     <button class="home-food" type="button" data-product="${escapeHtml(product.id)}" aria-label="Voir ${escapeHtml(product.name)}${soldOut ? " (indisponible)" : ""}">
       <span class="home-blob">${product.image ? `<img class="${cutoutClass(product.image).trim()}" src="${escapeHtml(product.image)}" alt="" />` : `<span aria-hidden="true">${icon("utensils")}</span>`}</span>
-      <span class="home-food-copy"><strong>${escapeHtml(product.name)}</strong><em>${escapeHtml(product.categoryName || "")}</em></span>
+      <span class="home-food-copy"><strong>${escapeHtml(product.name)}</strong></span>
     </button>
     <button class="home-add" type="button" data-product="${escapeHtml(product.id)}" ${soldOut ? "disabled" : ""} aria-label="${soldOut ? `${escapeHtml(product.name)} indisponible` : `Personnaliser et ajouter ${escapeHtml(product.name)}, ${price} DH`}">${soldOut ? "—" : `${price} DH`}</button>
   </article>`;
@@ -624,19 +625,17 @@ function renderCart() {
   if (!state.cart.length) {
     return `<section class="cart-empty"><div class="empty-basket-icon" aria-hidden="true">${icon("bag")}</div><h1>Votre panier est vide</h1><p>Ajoutez quelques bons plats et votre prochaine pause G&K commence ici.</p><button class="gold-button" type="button" data-view="menu">Explorer le menu</button></section>`;
   }
+  if (state.settings.deliveryOn === false) return "La livraison est indisponible pour le moment.";
   const address = currentAddress();
   const zone = zoneOf(address);
   const issue = checkoutIssue();
   const subtotal = cartSubtotal();
-  const km = hasGps(address) ? kmFromStore(address) : null;
+  const freeFrom = zone ? Number(zone.freeFrom ?? freeDeliveryFrom()) : freeDeliveryFrom();
+  const freeHint = state.delivery === "delivery" && address && subtotal < freeFrom
+    ? `Plus que ${formatPrice(freeFrom - subtotal)} pour la livraison offerte.` : "";
   const eta = state.delivery === "delivery" && zone ? [zone.etaMin, zone.etaMax] : null;
-  const feeLabel = state.delivery !== "delivery" ? "" : !hasGps(address) ? "À calculer" : zone ? formatPrice(deliveryFee()) : "Hors zone";
+  const feeLabel = !address || !zone ? "À calculer" : deliveryFee() ? formatPrice(deliveryFee()) : "Offerte";
   const payment = currentPayment();
-  const pinHint = !hasGps(address)
-    ? "Touchez la carte ou localisez-vous. Les frais dépendent de la distance."
-    : zone
-      ? `${km.toFixed(1)} km · ${zone.name} · ${formatPrice(zone.fee)}`
-      : `${km.toFixed(1)} km · hors zone (max ${maxDeliveryKm()} km)`;
   return `<section aria-labelledby="cart-heading">
     <h1 class="screen-title" id="cart-heading">Mon panier</h1>
     <div class="cart-list">${state.cart.map((line, index) => `<article class="cart-line">
@@ -650,12 +649,10 @@ function renderCart() {
     </article>`).join("")}</div>
     <h2 class="block-title">Type de commande</h2>
     <div class="delivery-toggle" role="group" aria-label="Type de commande">
-      <button class="delivery-choice ${state.delivery === "delivery" ? "active" : ""}" type="button" data-delivery="delivery" aria-pressed="${state.delivery === "delivery"}" ${state.settings.deliveryOn === false ? "disabled" : ""}>${icon("bike")}Livraison<small>${zone ? `${zone.etaMin}–${zone.etaMax} min` : "Selon distance"}</small></button>
+      <button class="delivery-choice ${state.delivery === "delivery" ? "active" : ""}" type="button" data-delivery="delivery" aria-pressed="${state.delivery === "delivery"}" ${state.settings.deliveryOn === false ? "disabled" : ""}>${icon("bike")}Livraison<small>${zone ? `${zone.etaMin}–${zone.etaMax} min` : "Choisir une adresse"}</small></button>
       <button class="delivery-choice ${state.delivery === "pickup" ? "active" : ""}" type="button" data-delivery="pickup" aria-pressed="${state.delivery === "pickup"}">${icon("store")}À emporter<small>Retrait au restaurant</small></button>
     </div>
-    ${state.delivery === "delivery" ? `<div class="delivery-map-card"><div class="gk-rings-map" id="delivery-map" role="img" aria-label="Zone de livraison"></div><p class="delivery-map-hint">${escapeHtml(pinHint)}</p>
-    <div class="address-card"><span class="address-icon">${icon("pin")}</span><div><strong>${hasGps(address) ? escapeHtml(address.street || "Position GPS") : "Position de livraison"}</strong><small>${hasGps(address) ? `${escapeHtml(address.label || "GPS")} · ${escapeHtml(zone?.name || "Hors zone")}` : "Autorisez la localisation ou touchez la carte"}</small></div><button class="text-button" type="button" data-action="locate">${state.locating ? "Recherche…" : hasGps(address) ? "Actualiser" : "Localiser"}</button></div>
-    <div class="address-card"><span class="address-icon">${icon("home")}</span><div><strong>${address?.street && address.street !== "Position GPS" ? escapeHtml(address.street) : "Compléter l’adresse"}</strong><small>Immeuble, étage, indication pour le livreur</small></div><button class="text-button" type="button" data-action="addresses">${address ? "Modifier" : "Ajouter"}</button></div></div>` : `<div class="address-card"><span class="address-icon">${icon("store")}</span><div><strong>${escapeHtml((state.settings.restaurant && typeof state.settings.restaurant === "object" && state.settings.restaurant.name) || state.settings.restaurant || "G&K Food")}</strong><small>Retrait au restaurant</small></div></div>`}
+    <div class="address-card"><span class="address-icon">${icon("pin")}</span><div><strong>${state.delivery === "delivery" ? (hasGps(address) ? escapeHtml(address.street) : "Position GPS") : escapeHtml((state.settings.restaurant && typeof state.settings.restaurant === "object" && state.settings.restaurant.name) || state.settings.restaurant || "G&K Food")}</strong><small>${state.delivery === "delivery" ? (hasGps(address) ? `Localisation détectée · ${escapeHtml(zone?.name || "")}` : "Autorisez la localisation pour guider le livreur") : "Retrait au restaurant"}</small></div>${state.delivery === "delivery" ? `<button class="text-button" type="button" data-action="locate">${state.locating ? "Recherche…" : hasGps(address) ? "Actualiser" : "Localiser"}</button>` : ""}</div>
     ${renderCartPhone()}
     <div class="address-card"><span class="address-icon">${icon("cash")}</span><div><strong>${escapeHtml(payment.label)}</strong><small>Le paiement par carte n'est pas disponible. Aucun numéro de carte n'est collecté.</small></div></div>
     <form class="promo-box" id="promo-form"><span class="promo-icon" aria-hidden="true">${icon("tag")}</span><input class="promo-input" id="promo-code" type="text" placeholder="Code promo" aria-label="Code promo" ${state.promo ? `value="${escapeHtml(state.promo.code)}"` : ""} /><button class="outline-button" type="submit">${state.promo ? `Appliqué ${icon("check")}` : "Appliquer"}</button></form>
@@ -664,7 +661,7 @@ function renderCart() {
     ${state.orderError ? `<p class="cart-notice" role="alert">${escapeHtml(state.orderError)}</p>` : ""}
     <label class="note-box"><span>Note pour la cuisine <small>· optionnel</small></span><textarea id="cart-note" rows="2" maxlength="140" placeholder="Ex. sans oignons, bien cuit…">${escapeHtml(state.cartNote || "")}</textarea></label>
     <div class="bill-card"><div class="bill-row"><span>Sous-total</span><span>${formatPrice(subtotal)}</span></div>${state.delivery === "delivery" ? `<div class="bill-row"><span>Frais de livraison</span><span>${feeLabel}</span></div>` : ""}${state.promo ? `<div class="bill-row promo"><span>${escapeHtml(state.promo.code)}</span><span>-${formatPrice(state.promo.discount)}</span></div>` : ""}<div class="bill-row total"><span>Total</span><strong>${formatPrice(cartTotal())}</strong></div></div>
-    ${issue ? `<p class="cart-notice">${escapeHtml(issue)}</p>` : ""}
+    ${issue ? `<p class="cart-notice">${escapeHtml(issue)}</p>` : freeHint ? `<p class="cart-notice soft">${freeHint}</p>` : ""}
     <button class="gold-button full-width" type="button" data-action="checkout" ${state.orderSubmitting ? "disabled" : ""}>${state.orderSubmitting ? "Envoi en cours…" : state.user ? "Passer la commande" : "Se connecter pour commander"} · ${formatPrice(cartTotal())}</button>
     ${eta ? `<p class="fineprint">Délai de livraison estimé : ${eta[0]}–${eta[1]} min</p>` : ""}
   </section>`;
@@ -759,7 +756,7 @@ function renderOrders() {
 
 function renderProfile() {
   const items = [
-    ["orders", "receipt", "Mes commandes"], ["addresses", "pin", "Mes adresses"], ["payments", "card", "Moyens de paiement"],
+    ["orders", "receipt", "Mes commandes"], ["addresses", "pin", "Ma position"], ["payments", "card", "Moyens de paiement"],
     ["favorites", "heart", "Mes favoris"], ["support", "help", "Aide & contact"]
   ];
   if (installPrompt) items.push(["install", "download", "Installer l'application"]);
@@ -776,10 +773,8 @@ function renderProfile() {
 
 function updateChrome() {
   const address = currentAddress();
-  const ring = zoneOf(address);
-  const locLabel = hasGps(address) ? (ring ? `${ring.name} · ${formatPrice(ring.fee)}` : "Hors zone") : (address?.street || "Choisir une adresse");
-  document.querySelector("#location-label").textContent = locLabel;
-  document.querySelector("#location-button").setAttribute("aria-label", `Adresse de livraison : ${locLabel}`);
+  document.querySelector("#location-label").textContent = hasGps(address) ? address.street : "Ma position";
+  document.querySelector("#location-button").setAttribute("aria-label", hasGps(address) ? `Position : ${address.street}` : "Détecter ma position");
   const unread = state.notifications.some(note => !note.read);
   document.querySelector("#notif-button .dot").style.display = unread ? "" : "none";
   const count = document.querySelector("#nav-cart-count");
@@ -791,9 +786,9 @@ function updateChrome() {
 function constructionGate() {
   return `<section class="construction-gate" role="status">
     <img src="./assets/emblem-reference.png" alt="G&amp;K Food" width="88" height="88">
-    <p class="construction-kicker">Maintenance</p>
-    <h1>We will be back soon</h1>
-    <p>${escapeHtml(opsBanner() || "G&K Food is temporarily unavailable while we prepare the restaurant.")}</p>
+    <p class="construction-kicker">En travaux</p>
+    <h1>Nous revenons bientôt</h1>
+    <p>${escapeHtml(opsBanner() || "G&K Food est en construction. L’application commande est temporairement fermée.")}</p>
   </section>`;
 }
 
@@ -809,7 +804,7 @@ function render() {
     if (overlayEl) overlayEl.hidden = true;
     return;
   }
-  const banner = (incident || (state.menuStatus === "loaded" && isPaused())) && ["home", "menu", "cart", "orders"].includes(state.view)
+  const banner = (incident || (state.menuStatus === "loaded" && isPaused()))
     ? `<div class="pause-banner" role="alert">${icon("clock")}<span>${escapeHtml(incident && opsBanner() ? opsBanner() : PAUSE_MESSAGE)}</span></div>` : "";
   main.innerHTML = banner + views[state.view]();
   document.querySelectorAll(".nav-button").forEach(button => {
@@ -823,7 +818,6 @@ function render() {
   const filter = document.querySelector(".category-chip.active")?.textContent || "";
   window.gkMotion?.enterView(main, `${state.view}:${state.category}:${filter}:${state.query}`);
   window.gkMotionLive?.playLiveScenes(main);
-  mountDeliveryMap();
 }
 
 function goTo(view, { top = true } = {}) {
@@ -909,17 +903,15 @@ function pickRow({ attr, id, active, icon: ico, title, sub, removable }) {
 function renderPanel() {
   let body = "";
   switch (state.panel) {
-    case "addresses":
-      body = `${panelHead("Mes adresses")}<div class="panel-body">${state.addresses.length ? state.addresses.map(address => pickRow({ attr: "data-pick-address", id: address.id, active: address.id === state.addressId, icon: labelIcon(address.label), title: address.label, sub: `${address.street} · ${hasGps(address) ? `${kmFromStore(address).toFixed(1)} km` : "Sans GPS"}`, removable: true })).join("") : `<p class="empty-state">Aucune adresse enregistrée.</p>`}<button class="outline-button full-width" type="button" data-panel-go="address-new">${icon("plus")}Ajouter une adresse</button></div>`;
+    case "addresses": {
+      const gps = currentAddress();
+      body = `${panelHead("Ma position")}<div class="panel-body">
+        <article class="note"><strong>${hasGps(gps) ? escapeHtml(gps.street) : "Position non détectée"}</strong><p>${hasGps(gps) ? "Le livreur ouvrira Maps directement sur ce point GPS." : "Autorisez la localisation : le système détecte votre position via GPS (Google Maps / Apple Plans)."}</p></article>
+        <button class="gold-button full-width" type="button" data-action="locate" ${state.locating ? "disabled" : ""}>${state.locating ? "Recherche de la position…" : hasGps(gps) ? `${icon("navigate")} Actualiser ma position` : `${icon("navigate")} Autoriser la localisation`}</button>
+        ${state.locateError ? `<p class="form-error" role="alert">${escapeHtml(state.locateError)}</p>` : ""}
+      </div>`;
       break;
-    case "address-new":
-      body = `${panelHead("Nouvelle adresse")}<form class="panel-body" id="address-form" novalidate>
-        <label class="field"><span>Nom</span><select name="label"><option>Maison</option><option>Travail</option><option>Autre</option></select></label>
-        <label class="field"><span>Adresse</span><input name="street" autocomplete="street-address" placeholder="Rue, numéro, immeuble" /></label>
-        <p class="fineprint">Placez le pin sur la carte du panier : les frais suivent la distance, pas un quartier.</p>
-        <p class="form-error" role="alert"></p>
-        <button class="gold-button full-width" type="submit">Enregistrer</button></form>`;
-      break;
+    }
     case "payments":
       body = `${panelHead("Moyen de paiement")}<div class="panel-body"><article class="note"><strong>Espèces à la réception</strong><p>Le paiement par carte n'est pas disponible pour le moment. Aucun numéro de carte n'est demandé ni enregistré.</p></article></div>`;
       break;
@@ -956,6 +948,7 @@ function setPanel(name) {
 function panelClick(event) {
   const target = event.target;
   let el;
+  if (target.closest('[data-action="locate"]')) return locateFromGps();
   if ((el = target.closest("[data-panel-go]"))) return setPanel(el.dataset.panelGo);
   if ((el = target.closest("[data-remove-address]"))) {
     state.addresses = state.addresses.filter(address => address.id !== el.dataset.removeAddress);
@@ -975,74 +968,74 @@ function formError(form, message) {
   form.querySelector(".form-error").textContent = message;
 }
 
-function submitAddress(form) {
-  const data = new FormData(form);
-  const street = String(data.get("street")).trim();
-  if (street.length < 5) return formError(form, "Saisissez une adresse complète (5 caractères minimum).");
-  const current = currentAddress();
+function saveGpsAddress({ lat, lng, street }) {
+  const zone = zones[0];
   const address = {
-    id: `a${Date.now()}`,
-    label: String(data.get("label")),
-    street,
-    lat: hasGps(current) ? Number(current.lat) : null,
-    lng: hasGps(current) ? Number(current.lng) : null
+    id: "gps",
+    label: "GPS",
+    street: String(street || "Position GPS").slice(0, 200),
+    zone: zone?.id || "",
+    lat: Number(lat),
+    lng: Number(lng)
   };
-  state.addresses.push(address);
-  state.addressId = address.id;
-  render();
-  closeOverlay();
-  showToast("Adresse ajoutée.");
+  const idx = state.addresses.findIndex(entry => entry.id === "gps");
+  if (idx >= 0) state.addresses[idx] = address;
+  else state.addresses.unshift(address);
+  state.addressId = "gps";
+  state.locateError = "";
+  saveState();
+}
+
+async function reverseGeocode(lat, lng) {
+  try {
+    const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=fr`);
+    if (!res.ok) throw new Error("geo");
+    const data = await res.json();
+    const street = [data.locality, data.principalSubdivision, data.countryName].filter(Boolean).join(", ");
+    return street.length >= 5 ? street : `Position GPS ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  } catch {
+    return `Position GPS ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  }
+}
+
+function locateFromGps() {
+  if (state.locating) return;
+  if (!navigator.geolocation) {
+    state.locateError = "La géolocalisation n'est pas disponible sur cet appareil.";
+    showToast(state.locateError);
+    if (state.panel === "addresses") renderPanel();
+    return;
+  }
+  state.locating = true;
+  state.locateError = "";
+  if (state.view === "cart") render();
+  if (state.panel === "addresses") renderPanel();
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const lat = pos.coords.latitude;
+    const lng = pos.coords.longitude;
+    const street = await reverseGeocode(lat, lng);
+    saveGpsAddress({ lat, lng, street });
+    state.locating = false;
+    if (kmFromStore(currentAddress()) > MAX_DELIVERY_KM) {
+      state.locateError = "Cette position est hors zone de livraison.";
+      showToast(state.locateError);
+    } else {
+      showToast("Position détectée. Le livreur suivra cet itinéraire.");
+    }
+    render();
+    if (state.panel === "addresses") renderPanel();
+  }, err => {
+    state.locating = false;
+    state.locateError = err.code === 1
+      ? "Autorisez la localisation dans les réglages du téléphone pour continuer."
+      : "Impossible de détecter la position. Réessayez à l'extérieur.";
+    showToast(state.locateError);
+    render();
+    if (state.panel === "addresses") renderPanel();
+  }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
 }
 
 /* ---------- Cart & orders logic ---------- */
-
-function applyDeliveryPin(lat, lng, street) {
-  let address = currentAddress();
-  if (!address) {
-    address = { id: `gps${Date.now()}`, label: "GPS", street: street || "Position GPS", lat, lng };
-    state.addresses.unshift(address);
-    state.addressId = address.id;
-  } else {
-    address.lat = lat;
-    address.lng = lng;
-    if (!address.street) address.street = street || "Position GPS";
-  }
-  saveState();
-  render();
-}
-
-function locateDelivery() {
-  if (!navigator.geolocation) return showToast("La géolocalisation n'est pas disponible.");
-  state.locating = true;
-  render();
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      state.locating = false;
-      applyDeliveryPin(pos.coords.latitude, pos.coords.longitude);
-      const ring = zoneOf(currentAddress());
-      showToast(ring ? `${ring.name} · ${formatPrice(ring.fee)}` : "Hors zone de livraison.");
-    },
-    () => {
-      state.locating = false;
-      render();
-      showToast("Impossible de lire la position. Autorisez la localisation.");
-    },
-    { enableHighAccuracy: true, timeout: 12000, maximumAge: 10000 }
-  );
-}
-
-function mountDeliveryMap() {
-  const el = document.querySelector("#delivery-map");
-  if (!el || !window.GKDelivery) return;
-  const address = currentAddress();
-  window.GKDelivery.mount(el, {
-    store: STORE_COORDS,
-    zones,
-    lat: hasGps(address) ? Number(address.lat) : null,
-    lng: hasGps(address) ? Number(address.lng) : null,
-    onPick: (lat, lng) => applyDeliveryPin(lat, lng)
-  });
-}
 
 function addToCart(product, size, extras, quantity) {
   const key = line => `${line.product.id}|${line.size.name}|${line.extras.map(extra => extra.name).sort().join(",")}`;
@@ -1061,6 +1054,10 @@ function startCheckout() {
     state.authStep = "form";
     showToast("Connectez-vous pour finaliser votre commande.");
     return goTo("auth");
+  }
+  if (state.delivery === "delivery" && !hasGps(currentAddress())) {
+    locateFromGps();
+    return showToast("Autorisez la localisation pour que le livreur vous trouve.");
   }
   const issue = checkoutIssue();
   if (issue) return showToast(issue);
@@ -1090,7 +1087,7 @@ function placeOrder() {
     note: (state.cartNote || "").trim(),
     payment: "cash"
   };
-  if (delivery) payload.address = { street: address.street, label: address.label, lat: address.lat, lng: address.lng };
+  if (delivery) payload.address = { zone: address.zone, street: address.street, label: address.label || "GPS", lat: address.lat, lng: address.lng };
   if (state.promo?.code) payload.promo = state.promo.code;
   payload.customer = { phone: checkoutPhone() };
   GKApi.post("/api/orders", payload, "client").then(result => {
@@ -1122,7 +1119,10 @@ document.querySelector(".bottom-nav").addEventListener("click", event => {
 });
 document.querySelector("#home-brand").addEventListener("click", () => setView("home"));
 document.querySelector("#notif-button").addEventListener("click", () => openPanel("notifications"));
-document.querySelector("#location-button").addEventListener("click", () => openPanel("addresses"));
+document.querySelector("#location-button").addEventListener("click", () => {
+  openPanel("addresses");
+  locateFromGps();
+});
 
 const actionMessages = {
   directions: "L'itinéraire n'est pas disponible dans l'application."
@@ -1196,8 +1196,11 @@ main.addEventListener("click", event => {
       state.phoneOverride = false;
       state.orderError = "";
       return render();
+    case "locate":
+      if (state.panel !== "addresses") openPanel("addresses");
+      locateFromGps();
+      return;
     case "checkout": return startCheckout();
-    case "locate": return locateDelivery();
     case "reload-menu": return void loadMenu();
     case "reload-branches": return void loadBranches();
     case "choose-branch":
@@ -1332,6 +1335,7 @@ main.addEventListener("submit", async event => {
       const result = await GKApi.post(path, body);
       const session = GKApi.setSession("client", result);
       state.user = session.user;
+      try { void window.GKPush?.enable({ api: GKApi, scope: "client", app: "client", prompt: true }); } catch { /* optional */ }
       const target = state.afterAuth || "home";
       state.afterAuth = "home";
       if (!state.selectedBranchId) {
@@ -1380,7 +1384,6 @@ overlay.addEventListener("click", event => {
 
 overlay.addEventListener("submit", event => {
   event.preventDefault();
-  if (event.target.id === "address-form") submitAddress(event.target);
 });
 
 document.addEventListener("keydown", event => {
@@ -1429,14 +1432,15 @@ document.querySelectorAll("[data-icon]").forEach(slot => { slot.innerHTML = icon
 async function boot() {
   await refreshOpsSettings();
   if (isConstruction()) {
-    document.querySelector("#splash")?.remove();
+    const splash = document.querySelector("#splash");
+    if (splash) splash.remove();
     render();
     return;
   }
   render();
   void dismissSplash();
   await loadBranches();
-  if (state.selectedBranchId) void loadMenu();
+  await loadMenu();
   if (state.user && state.selectedBranchId) void refreshOrders();
   void syncNotifications();
 }
@@ -1460,5 +1464,11 @@ main.addEventListener("input", event => {
 });
 
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-  navigator.serviceWorker.register("./sw.js").catch(() => {});
+  navigator.serviceWorker.register("./sw.js")
+    .then(() => {
+      if (state.user) {
+        try { void window.GKPush?.enable({ api: GKApi, scope: "client", app: "client", prompt: true }); } catch { /* optional */ }
+      }
+    })
+    .catch(() => {});
 }

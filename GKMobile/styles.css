@@ -339,8 +339,12 @@ body[data-construction] #splash { display: none !important; }
 body[data-construction] { background: #120e0a; }
 body[data-construction] .app-frame { background: #120e0a; box-shadow: none; }
 body[data-construction] #app-main {
-  display: grid; min-height: 100dvh; place-items: center; padding: 32px 24px;
-  color: #f4ead8; background: #120e0a;
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: 32px 24px;
+  background: #120e0a;
+  color: #f4ead8;
 }
 .construction-gate { max-width: 360px; text-align: center; }
 .construction-gate img { display: block; width: 88px; height: 88px; margin: 0 auto 20px; }
@@ -540,7 +544,3 @@ body.has-live-bar #app-main { padding-bottom: calc(150px + var(--safe-bottom)); 
   .splash, .splash.is-playing .splash-mark, .splash.is-leaving { animation: none; }
   .splash { display: none; }
 }
-
-.delivery-map-card { display: grid; gap: 10px; margin: 0 0 12px; }
-.gk-rings-map { height: 240px; width: 100%; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: #e9e6df; }
-.delivery-map-hint { margin: 0; color: var(--muted); font-size: 13px; font-weight: 600; }

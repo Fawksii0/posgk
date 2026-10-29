@@ -50,7 +50,7 @@
   ];
 
   const ui = {
-    route: "dashboard", soft: false, bell: false, user: false, drawer: null, catEdit: null, returnFocus: null,
+    route: "dashboard", soft: false, bell: false, user: false, drawer: null, catEdit: null, returnFocus: null, holdRender: false,
     orders: { q: "", status: "all", mode: "all", range: "all", page: 1 },
     invoices: { q: "", range: "month", payment: "all", page: 1 },
     menu: { q: "", cat: "all", view: "grid" },
@@ -289,7 +289,6 @@
     if (status.error) { view.innerHTML = `<div class="card">${emptyState("alert", "Impossible de charger les données", status.error)}<div style="text-align:center;margin:12px"><button class="btn-gold" data-action="retry-page">Réessayer</button></div></div>`; return; }
     view.innerHTML = pages[ui.route].render();
     if (ui.route === "carte") attachLiveMap();
-    if (ui.route === "zones") attachRingsMap();
   }
 
   /* ---------- Live map ---------- */
@@ -315,6 +314,7 @@
   }
 
   function renderAll() {
+    if (ui.holdRender) return;
     const user = Store.currentUser();
     $("#login-view").hidden = !!user; $("#shell").hidden = !user;
     if (!user) {
@@ -416,8 +416,32 @@
     const productList = (items, empty) => items.length
       ? `<ol class="today-product-list">${items.map((item, i) => `<li><span class="today-rank">${i + 1}</span><b>${esc(item.name)}</b><span>${nf.format(item.qty)} vendu(s)</span></li>`).join("")}</ol>`
       : `<p class="today-panel-empty">${empty}</p>`;
+    const cloture = S().cloture;
+    const clotureDay = S().clotureDayStart || Store.dayStart(Date.now());
+    const isoDay = (ts) => {
+      const d = new Date(ts);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
+    const todayIso = isoDay(Date.now());
+    const minIso = isoDay(Store.dayStart(Date.now()) - 400 * 86400000);
+    const clotureLabel = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" }).format(clotureDay);
+    const emptyDay = cloture && !cloture.orders;
+    const cloturePanel = Store.can("stats") ? `<section class="today-panel today-cloture"><div class="today-panel-head"><h3>Ticket de clôture</h3>
+        <div class="cloture-day-row">
+          <button class="btn btn-sm" type="button" data-action="cloture-shift" data-dir="-1" aria-label="Jour précédent">${icon("chevronLeft")}</button>
+          <label class="cloture-day">Jour à clôturer
+            <input type="date" data-action="cloture-day" value="${isoDay(clotureDay)}" min="${minIso}" max="${todayIso}">
+          </label>
+          <button class="btn btn-sm" type="button" data-action="cloture-shift" data-dir="1" aria-label="Jour suivant" ${isoDay(clotureDay) >= todayIso ? "disabled" : ""}>${icon("chevronRight")}</button>
+          <button class="btn-gold" type="button" data-action="print-cloture" ${emptyDay ? "disabled" : ""}>${icon("printer")} Imprimer</button>
+        </div>
+      </div>
+      <p class="today-date">${esc(clotureLabel)}</p>
+      ${emptyDay ? `<p class="today-panel-empty">Aucune vente ce jour. Choisissez la veille si vous clôturez après minuit.</p>` : ""}
+      ${cloture ? `<div class="receipt-preview cloture-preview">${GKReceipt.previewCloture(cloture, receiptOpts())}</div>` : `<p class="today-panel-empty">Chargement du ticket…</p>`}</section>` : "";
     return `<div class="today-dashboard">
-      <div class="today-intro"><div><p class="today-eyebrow">Résumé de l'activité</p><h2>Aujourd'hui</h2></div><span class="today-date">${esc(new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" }).format(Date.now()))}</span></div>
+      <div class="today-intro"><div><p class="today-eyebrow">Résumé de l'activité</p><h2>Aujourd'hui</h2></div><div class="today-intro-actions"><span class="today-date">${esc(new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" }).format(Date.now()))}</span>${Store.can("stats") ? `<button class="btn-gold" type="button" data-action="print-cloture">${icon("printer")} Imprimer la clôture</button>` : ""}</div></div>
+      ${cloturePanel}
       ${todayOrders.length ? "" : `<p class="today-empty-note" role="status">Aucune commande aujourd'hui</p>`}
       <section class="today-kpis" aria-label="Indicateurs du jour">
         ${kpi("Ventes du jour", `${nf.format(Math.round(revenue * 100) / 100)} <span>DH</span>`, deltaHTML(revenue, y.revenue))}
@@ -715,29 +739,15 @@
   }
 
   /* ---------- Zones ---------- */
-  function attachRingsMap() {
-    const el = document.querySelector("#zones-map");
-    if (!el || !window.GKDelivery) return;
-    window.GKDelivery.mount(el, {
-      zones: S().zones.filter((z) => z.enabled && Number(z.toKm) > 0),
-      interactive: false
-    });
-  }
-
   function zonesPage() {
     const canWrite = Store.can("zones");
     const canDelete = Store.can("settings");
-    const rings = S().zones.filter((z) => Number(z.toKm) > 0).slice().sort((a, b) => Number(a.fromKm) - Number(b.fromKm));
-    const leftover = S().zones.filter((z) => !(Number(z.toKm) > 0));
-    const card = (z) => `<form class="card zone-card ${z.enabled ? "" : "disabled"}" data-form="zone" data-id="${esc(z.id)}" novalidate><div class="zone-head"><h3>${esc(z.name)}</h3><span style="display:flex;align-items:center;gap:8px"><span class="small muted">${z.enabled ? "Active" : "Désactivée"}</span>${switchHTML(z.enabled, `data-action="toggle-zone" data-id="${esc(z.id)}" ${canWrite ? "" : "disabled"}`, `Zone ${z.name} active`)}</span></div>
-        <div class="row2">${field("fromKm", "De (km)", input("fromKm", z.fromKm ?? 0, "number", `min="0" step="0.1" ${canWrite ? "" : "disabled"}`))}${field("toKm", "À (km)", input("toKm", z.toKm ?? 0, "number", `min="0.1" step="0.1" ${canWrite ? "" : "disabled"}`))}</div>
-        <div class="row2">${field("fee", "Frais (MAD)", input("fee", z.fee, "number", `min="0" step="0.5" ${canWrite ? "" : "disabled"}`))}${field("etaMin", "ETA min", input("etaMin", z.etaMin, "number", `min="1" step="1" ${canWrite ? "" : "disabled"}`))}</div>
-        ${field("etaMax", "ETA max", input("etaMax", z.etaMax, "number", `min="1" step="1" ${canWrite ? "" : "disabled"}`))}
-        <div class="head-actions">${canWrite ? `<button class="btn-gold full" type="submit">Enregistrer</button>` : ""}${canDelete ? `<button type="button" class="btn btn-ghost-danger" data-action="delete-zone" data-id="${esc(z.id)}">Supprimer</button>` : ""}</div></form>`;
-    return `<div class="page-head"><div><h2>Zones de livraison</h2><p>Cercles autour du restaurant. Le prix suit la distance GPS, jamais un quartier. Livraison jamais offerte.</p></div></div>
-      <div class="card" style="padding:0;overflow:hidden;margin-bottom:16px"><div class="gk-rings-map" id="zones-map"></div></div>
-      <div class="grid grid-3">${rings.map(card).join("")}</div>
-      ${leftover.length ? `<p class="muted small" style="margin:16px 0 8px">Anciennes zones (désactivées)</p><div class="grid grid-3">${leftover.map(card).join("")}</div>` : ""}`;
+    return `<div class="page-head"><div><h2>Zones de livraison</h2><p>Frais, minimum de commande, délais et seuil de livraison offerte.</p></div></div>
+      <div class="grid grid-3">${S().zones.map((z) => `<form class="card zone-card ${z.enabled ? "" : "disabled"}" data-form="zone" data-id="${esc(z.id)}" novalidate><div class="zone-head"><h3>${esc(z.name)}</h3><span style="display:flex;align-items:center;gap:8px"><span class="small muted">${z.enabled ? "Active" : "Désactivée"}</span>${switchHTML(z.enabled, `data-action="toggle-zone" data-id="${esc(z.id)}" ${canWrite ? "" : "disabled"}`, `Zone ${z.name} active`)}</span></div>
+        <div class="row2">${field("fee", "Frais (MAD)", input("fee", z.fee, "number", `min="0" step="0.5" ${canWrite ? "" : "disabled"}`))}${field("min", "Minimum (MAD)", input("min", z.min, "number", `min="0" step="1" ${canWrite ? "" : "disabled"}`))}</div>
+        <div class="row2">${field("etaMin", "ETA min (min)", input("etaMin", z.etaMin, "number", `min="1" step="1" ${canWrite ? "" : "disabled"}`))}${field("etaMax", "ETA max (min)", input("etaMax", z.etaMax, "number", `min="1" step="1" ${canWrite ? "" : "disabled"}`))}</div>
+        ${field("freeFrom", "Livraison offerte dès (MAD)", input("freeFrom", z.freeFrom, "number", `min="0" step="1" ${canWrite ? "" : "disabled"}`))}
+        <div class="head-actions">${canWrite ? `<button class="btn-gold full" type="submit">Enregistrer</button>` : ""}${canDelete ? `<button type="button" class="btn btn-ghost-danger" data-action="delete-zone" data-id="${esc(z.id)}">Supprimer</button>` : ""}</div></form>`).join("")}</div>`;
   }
 
   /* ---------- Promotions ---------- */
@@ -761,10 +771,11 @@
   /* ---------- Users ---------- */
   function usersPage() {
     const me = Store.currentUser();
-    const rows = S().users.map((u) => `<tr><td class="cell-first"><div class="cell-with-thumb"><span class="avatar">${esc(initials(u.name))}</span><div class="cell-main"><b>${esc(u.name)}</b><small>${esc(u.email || "")}</small></div></div></td><td data-label="Rôle">${roleBadge(u.role)}</td><td data-label="Statut">${u.active ? '<span class="pill green">Actif</span>' : '<span class="pill grey">Désactivé</span>'}</td><td data-label=""><div class="actions">${u.role === "owner" ? '<span class="muted small">Compte propriétaire</span>' : `<button class="btn btn-sm" data-action="edit-user" data-id="${esc(u.id)}">${icon("edit")} Modifier</button><button class="btn btn-sm ${u.active ? "btn-ghost-danger" : ""}" data-action="toggle-staff" data-id="${esc(u.id)}" ${u.id === me.id ? 'disabled title="Votre propre compte"' : ""}>${u.active ? "Désactiver" : "Activer"}</button>${u.id === me.id ? "" : `<button class="btn btn-sm btn-ghost-danger" data-action="delete-user" data-id="${esc(u.id)}">${icon("trash")} Supprimer</button>`}`}</div></td></tr>`).join("");
+    const floor = ["cashier", "waiter", "chef"];
+    const rows = S().users.map((u) => `<tr><td class="cell-first"><div class="cell-with-thumb"><span class="avatar">${esc(initials(u.name))}</span><div class="cell-main"><b>${esc(u.name)}</b><small>${esc(u.email || "")}</small></div></div></td><td data-label="Rôle">${roleBadge(u.role)}</td><td data-label="Code">${floor.includes(u.role) ? `<b class="num">${esc(u.loginCode || "—")}</b>` : '<span class="muted">—</span>'}</td><td data-label="Statut">${u.active ? '<span class="pill green">Actif</span>' : '<span class="pill grey">Désactivé</span>'}</td><td data-label=""><div class="actions">${u.role === "owner" ? '<span class="muted small">Compte propriétaire</span>' : `${floor.includes(u.role) ? `<button class="btn btn-sm" data-action="reset-staff-code" data-id="${esc(u.id)}">${icon("key")} Code</button>` : ""}<button class="btn btn-sm" data-action="edit-user" data-id="${esc(u.id)}">${icon("edit")} Modifier</button><button class="btn btn-sm ${u.active ? "btn-ghost-danger" : ""}" data-action="toggle-staff" data-id="${esc(u.id)}" ${u.id === me.id ? 'disabled title="Votre propre compte"' : ""}>${u.active ? "Désactiver" : "Activer"}</button>${u.id === me.id ? "" : `<button class="btn btn-sm btn-ghost-danger" data-action="delete-user" data-id="${esc(u.id)}">${icon("trash")} Supprimer</button>`}`}</div></td></tr>`).join("");
     const matrix = `<div class="matrix-wrap"><table class="matrix"><thead><tr><th scope="col">Capacité</th>${ROLES.map((r) => `<th scope="col">${esc(r.label)}</th>`).join("")}</tr></thead><tbody>${PERMISSION_MATRIX.map((row) => `<tr><td>${esc(row.label)}</td>${ROLES.map((r) => row.roles.includes(r.id) ? `<td class="yes" aria-label="Oui">✓</td>` : `<td class="no" aria-label="Non">–</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
     return `<div class="page-head"><div><h2>Comptes du personnel</h2><p>Les comptes livreurs et personnel sont créés ici ; les clients s'inscrivent dans l'application.</p></div><div class="head-actions"><button class="btn-gold" data-action="new-user">${icon("plus")} Nouvel utilisateur</button></div></div>
-      <div class="table-wrap" style="margin-bottom:16px"><table class="tbl stack"><thead><tr><th>Utilisateur</th><th>Rôle</th><th>Statut</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="table-wrap" style="margin-bottom:16px"><table class="tbl stack"><thead><tr><th>Utilisateur</th><th>Rôle</th><th>Code</th><th>Statut</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
       <div class="card"><div class="card-head"><h3>Rôles et permissions</h3><small>Les autorisations sont appliquées par l'API pour les rôles du personnel.</small></div>${matrix}</div>`;
   }
 
@@ -780,12 +791,44 @@
   }
 
   /* ---------- Settings ---------- */
+  function printerCard() {
+    const prefs = Store.printerPrefs();
+    const printer = typeof GKPrinter !== "undefined" ? GKPrinter : null;
+    const connected = !!printer?.connected();
+    const bleOk = !!printer?.bleSupported();
+    const serialOk = !!printer?.serialSupported();
+    const where = printer?.platform?.() || { iOS: false, android: false, desktop: true };
+    const status = !printer
+      ? "Module d'impression indisponible."
+      : connected
+        ? `Connectée : ${esc(printer.name())}`
+        : where.iOS
+          ? "iPhone / iPad : Apple n'autorise pas le Bluetooth dans le navigateur. Le ticket s'ouvre en aperçu (AirPrint). Pour une imprimante thermique G&K, utilisez Chrome sur Android ou un PC."
+          : where.android
+            ? "Android : ouvrez Admin dans Chrome. Allumez le Bluetooth, acceptez Localisation / Appareils à proximité, puis Bluetooth (BLE)."
+            : bleOk
+              ? "PC : Bluetooth (BLE) ouvre le sélecteur Chrome. Port série = imprimante déjà couplée dans Windows (COM / USB)."
+              : "Bluetooth web indisponible. Chrome ou Edge, en https.";
+    const seg = (action, value, label, current) => `<button type="button" class="btn btn-sm ${String(current) === String(value) ? "btn-dark" : ""}" data-action="${action}" data-${action}="${value}">${label}</button>`;
+    return `<div class="card" style="margin-bottom:16px"><div class="card-head"><h3>Imprimante Bluetooth</h3></div>
+      <p class="hint" style="margin-bottom:12px">${status}</p>
+      <div class="head-actions" style="margin-bottom:14px">
+        ${where.iOS || !printer ? "" : `<button type="button" class="btn-gold" data-action="printer-connect">${icon("bluetooth")} Bluetooth (BLE)</button>`}
+        ${serialOk ? `<button type="button" class="btn" data-action="printer-serial">${icon("printer")} Port série USB / COM</button>` : ""}
+        ${connected ? `<button type="button" class="btn" data-action="printer-disconnect">Déconnecter</button>` : ""}
+        <button type="button" class="btn" data-action="printer-test">${icon("printer")} ${where.iOS ? "Aperçu / AirPrint" : "Ticket de test"}</button>
+      </div>
+      <div class="setting-row"><div><b>Largeur du papier</b><span class="hint">58 mm ou 80 mm, comme en cuisine.</span></div><div class="head-actions">${seg("paper", 58, "58 mm", prefs.paper)}${seg("paper", 80, "80 mm", prefs.paper)}</div></div>
+      ${serialOk ? `<div class="setting-row"><div><b>Vitesse port série</b><span class="hint">Doit correspondre à l'imprimante.</span></div><div class="head-actions">${[9600, 19200, 115200].map((baud) => seg("baud", baud, String(baud), prefs.baud)).join("")}</div></div>` : ""}
+    </div>`;
+  }
+
   function settingsPage() {
     const s = S().settings; const r = s.restaurant;
     const canWrite = Store.can("settings");
     const canOperate = Store.can("settingsOps");
     const row = (title, hint, ctl) => `<div class="setting-row"><div><b>${title}</b><span class="hint">${hint}</span></div>${ctl}</div>`;
-    return `<div class="grid grid-even">
+    return `${printerCard()}<div class="grid grid-even">
       <form class="card" data-form="restaurant" novalidate><div class="card-head"><h3>Restaurant</h3></div>${field("name", "Nom", input("name", r.name, "text", canWrite ? "" : "disabled"))}${field("phone", "Téléphone", input("phone", r.phone, "tel", canWrite ? "" : "disabled"))}${field("email", "E-mail", input("email", r.email, "email", canWrite ? "" : "disabled"))}${field("address", "Adresse", input("address", r.address, "text", canWrite ? "" : "disabled"))}${canWrite ? `<button class="btn-gold" type="submit">Enregistrer</button>` : ""}</form>
       <div class="card"><div class="card-head"><h3>Service</h3></div>
         ${row("Livraison", "Désactivée : seules les commandes à emporter sont possibles.", switchHTML(s.deliveryOn, `data-action="toggle-setting" data-key="deliveryOn" ${canWrite ? "" : "disabled"}`, "Livraison activée"))}
@@ -797,7 +840,7 @@
         ${row("Rapport quotidien", "Résumé des ventes envoyé chaque soir.", switchHTML(s.notif.dailyReport, `data-action="toggle-setting" data-key="notif.dailyReport" ${canWrite ? "" : "disabled"}`, "Rapport quotidien"))}</div></div>
       <div class="grid grid-even" style="margin-bottom:16px">
         <form class="card" data-form="operations" novalidate><div class="card-head"><h3>Préparation et dispatch</h3></div>${field("dispatchMode", "Affectation des livreurs", `<select name="dispatchMode" id="f-dispatchMode" ${canOperate ? "" : "disabled"}><option value="rotation" ${s.dispatchMode === "rotation" ? "selected" : ""}>Rotation</option><option value="proximity" ${s.dispatchMode === "proximity" ? "selected" : ""}>Proximité</option></select>`)}${field("defaultPrep", "Préparation par défaut (minutes)", input("defaultPrep", s.defaultPrep, "number", `min="5" max="90" step="1" ${canOperate ? "" : "disabled"}`))}${canOperate ? `<button class="btn-gold" type="submit">Enregistrer</button>` : ""}</form>
-        ${canWrite ? `<form class="card" data-form="delivery-radius" novalidate><div class="card-head"><h3>Livraison</h3></div>${field("maxDeliveryKm", "Distance maximale (km)", input("maxDeliveryKm", s.maxDeliveryKm, "number", 'min="1" max="80" step="0.1"'), "Les positions au-delà de cette distance sont refusées.")}<button class="btn-gold" type="submit">Enregistrer</button></form>` : `<div></div>`}
+        ${canWrite ? `<form class="card" data-form="free-delivery" novalidate><div class="card-head"><h3>Livraison</h3></div>${field("freeDelivery", "Seuil global de livraison offerte (MAD)", input("freeDelivery", s.freeDelivery, "number", 'min="0" step="1"'))}<button class="btn-gold" type="submit">Enregistrer</button></form>` : `<div></div>`}
       </div>
       <form class="card" data-form="hours" novalidate style="margin-bottom:16px"><div class="card-head"><h3>Horaires d'ouverture</h3></div>${DAYS.map((d) => { const h = s.hours[d.id]; return `<div class="field" data-field="${d.id}"><div style="display:grid;grid-template-columns:minmax(80px,1fr) auto auto auto;gap:8px;align-items:center"><b>${d.label}</b><label class="small" style="display:flex;gap:5px;align-items:center"><input type="checkbox" name="closed-${d.id}" ${h.closed ? "checked" : ""} ${canWrite ? "" : "disabled"}> Fermé</label><input class="input" style="min-height:38px;width:100px" type="time" name="open-${d.id}" value="${esc(h.open)}" aria-label="${d.label} ouverture" ${canWrite ? "" : "disabled"}><input class="input" style="min-height:38px;width:100px" type="time" name="close-${d.id}" value="${esc(h.close)}" aria-label="${d.label} fermeture" ${canWrite ? "" : "disabled"}></div></div>`; }).join("")}${canWrite ? `<button class="btn-gold" type="submit">Enregistrer les horaires</button>` : ""}</form>`;
   }
@@ -893,10 +936,9 @@
       closeDrawer(); toast("Livreur mis à jour");
     },
     async zone(form) {
-      const r = await Store.saveZone(form.dataset.id, { fromKm: num(form.fromKm.value), toKm: num(form.toKm.value), fee: num(form.fee.value), min: 0, etaMin: num(form.etaMin.value), etaMax: num(form.etaMax.value), freeFrom: null });
+      const r = await Store.saveZone(form.dataset.id, { fee: num(form.fee.value), min: num(form.min.value), etaMin: num(form.etaMin.value), etaMax: num(form.etaMax.value), freeFrom: num(form.freeFrom.value) });
       if (!r.ok) { toast(r.error, "error"); return showErrors(form, r.errors); }
       toast("Zone mise à jour");
-      renderAll();
     },
     async promo(form) {
       const r = await Store.savePromo(form.dataset.id || null, { code: form.code.value, type: form.type.value, value: num(form.value.value), min: String(form.min.value).trim() === "" ? 0 : num(form.min.value), expiry: form.expiry.value, active: form.active.checked });
@@ -907,7 +949,10 @@
       const self = form.role.disabled;
       const r = await Store.saveUser(form.dataset.id || null, { name: form.name.value, email: form.email.value, role: form.role.value, password: form.password?.value || "", active: self ? true : form.active.checked });
       if (!r.ok) { toast(r.error, "error"); return showErrors(form, r.errors); }
-      closeDrawer(); toast("Utilisateur enregistré"); renderAll();
+      closeDrawer();
+      if (r.data?.code) setTimeout(() => pinModal("Code personnel", `Communiquez ce code à ${form.name.value} pour la caisse ou le serveur.`, r.data.code), 0);
+      else toast("Utilisateur enregistré");
+      renderAll();
     },
     async restaurant(form) {
       const r = await Store.saveRestaurant({ name: form.name.value, phone: form.phone.value, email: form.email.value, address: form.address.value });
@@ -922,12 +967,12 @@
       if (!r.ok) { toast(r.error, "error"); return showErrors(form, r.errors); }
       toast("Réglages opérationnels enregistrés");
     },
-    async "delivery-radius"(form) {
-      const distance = num(form.maxDeliveryKm.value);
-      if (!Number.isFinite(distance) || distance < 1 || distance > 80) return showErrors(form, { maxDeliveryKm: "Saisissez une distance entre 1 et 80 km." });
-      const r = await Store.saveSettings((s) => { s.maxDeliveryKm = distance; }, "Distance maximale de livraison mise à jour");
+    async "free-delivery"(form) {
+      const amount = num(form.freeDelivery.value);
+      if (!Number.isFinite(amount) || amount < 0) return showErrors(form, { freeDelivery: "Saisissez un seuil valide." });
+      const r = await Store.saveSettings((s) => { s.freeDelivery = amount; }, "Seuil de livraison offerte mis à jour");
       if (!r.ok) { toast(r.error, "error"); return showErrors(form, r.errors); }
-      toast("Distance enregistrée");
+      toast("Seuil enregistré");
     },
     async hours(form) {
       const hours = {};
@@ -1023,6 +1068,103 @@
     "open-invoice": (el) => { const o = Store.byId(S().orders, el.dataset.id); if (o) openInvoiceModal(o); },
     "print-invoice": (el) => { const o = Store.byId(S().orders, el.dataset.id); if (o) GKReceipt.printInvoice(receiptDoc(o), receiptOpts()); },
     "print-ticket": (el) => { const o = Store.byId(S().orders, el.dataset.id); if (o) GKReceipt.printTicket(receiptDoc(o), receiptOpts()); },
+    "open-cloture": () => ACTIONS["print-cloture"](),
+    paper(el) { Store.setPrinterPrefs({ paper: Number(el.dataset.paper) === 58 ? 58 : 80 }); },
+    baud(el) { Store.setPrinterPrefs({ baud: Number(el.dataset.baud) || 9600 }); },
+    async "printer-connect"() {
+      if (typeof GKPrinter === "undefined") return;
+      ui.holdRender = true;
+      try {
+        const name = await GKPrinter.connect();
+        Store.setPrinterPrefs({ lastPrinter: name });
+        toast(`Imprimante connectée : ${name}`);
+      } catch (error) {
+        toast(error?.name === "NotFoundError"
+          ? (GKPrinter.platform().android
+            ? "Aucune imprimante BLE choisie. Autorisez Localisation / Appareils à proximité, et vérifiez que l'imprimante est BLE."
+            : "Fenêtre fermée, ou aucune imprimante BLE. Sur PC, essayez Port série si elle est déjà couplée dans Windows.")
+          : `Bluetooth : ${error.message || "erreur"}`, "error");
+      } finally {
+        ui.holdRender = false;
+        renderAll();
+      }
+    },
+    async "printer-serial"() {
+      if (typeof GKPrinter === "undefined") return;
+      ui.holdRender = true;
+      try {
+        const name = await GKPrinter.connectSerial(Store.printerPrefs().baud || 9600);
+        Store.setPrinterPrefs({ lastPrinter: name });
+        toast(`Imprimante connectée : ${name}`);
+      } catch (error) {
+        toast(error?.name === "NotFoundError"
+          ? "Aucun port choisi. Couplez d'abord l'imprimante dans les paramètres Bluetooth de Windows."
+          : `Port série : ${error.message || "erreur"}`, "error");
+      } finally {
+        ui.holdRender = false;
+        renderAll();
+      }
+    },
+    "printer-disconnect"() {
+      if (typeof GKPrinter !== "undefined") GKPrinter.disconnect();
+      renderView();
+    },
+    async "printer-test"() {
+      const paper = Store.printerPrefs().paper;
+      const order = {
+        id: "TEST", createdAt: Date.now(), mode: "pickup", customer: { name: "Ticket de test" },
+        items: [{ qty: 1, name: "Impression OK", size: "Éàç œ 123", extras: [], price: 0 }],
+        subtotal: 0, fee: 0, total: 0, payment: "-", paymentType: "card"
+      };
+      if (typeof GKPrinter !== "undefined" && GKPrinter.connected()) {
+        try {
+          await ensureTicketArt();
+          await GKPrinter.write(buildTestTicket(paper));
+          toast("Ticket de test envoyé à l'imprimante");
+        } catch (error) {
+          toast(error.message || "Impression impossible.", "error");
+        }
+        return;
+      }
+      printEscposHtml(order, { paper, kind: "original" });
+    },
+    "cloture-day": (el) => {
+      const value = el.value;
+      if (!value) return;
+      const [y, m, d] = value.split("-").map(Number);
+      return Store.setClotureDay(new Date(y, m - 1, d).getTime()).then((r) => {
+        if (!r.ok) toast(r.error || "Impossible de charger ce jour.", "error");
+      });
+    },
+    "cloture-shift": (el) => {
+      const dir = Number(el.dataset.dir) || -1;
+      const current = S().clotureDayStart || Store.dayStart(Date.now());
+      return Store.setClotureDay(current + dir * 86400000).then((r) => {
+        if (!r.ok) toast(r.error || "Impossible de charger ce jour.", "error");
+      });
+    },
+    "print-cloture": async () => {
+      let report = S().cloture;
+      if (!report) {
+        const r = await Store.getCloture();
+        if (!r.ok) { toast(r.error || "Impossible de charger la clôture.", "error"); return; }
+        report = r.data;
+      }
+      if (!report?.orders) { toast("Aucune vente à clôturer pour ce jour. Sélectionnez une autre date.", "error"); return; }
+      const paper = Store.printerPrefs().paper;
+      if (typeof GKPrinter !== "undefined" && GKPrinter.connected()) {
+        try {
+          await ensureTicketArt();
+          await GKPrinter.write(buildClotureTicket(report, { paper }));
+          toast("Clôture envoyée à l'imprimante");
+        } catch (error) {
+          toast(error.message || "Impression thermique impossible, aperçu navigateur.", "error");
+          GKReceipt.printCloture(report, receiptOpts());
+        }
+        return;
+      }
+      GKReceipt.printCloture(report, receiptOpts());
+    },
     "export-invoices": () => exportInvoicesCsv(),
     "new-product": () => openDrawer("product"),
     "edit-product": (el) => openDrawer("product", el.dataset.id),
@@ -1053,6 +1195,14 @@
     "reset-pin": (el) => {
       const c = Store.byId(S().couriers, el.dataset.id);
       confirmDialog("Réinitialiser le PIN ?", `Un nouveau PIN temporaire sera généré pour ${c.name}.`, "Réinitialiser", async () => { const r = await Store.resetCourierPin(c.id); if (r.ok) setTimeout(() => pinModal("PIN réinitialisé", `Communiquez ce PIN temporaire à ${c.name}.`, r.pin), 0); else toast(r.error, "error"); }, false);
+    },
+    "reset-staff-code": (el) => {
+      const u = Store.byId(S().users, el.dataset.id);
+      confirmDialog("Nouveau code ?", `Un nouveau code 4 chiffres sera généré pour ${u.name}. L'ancien ne fonctionnera plus.`, "Générer", async () => {
+        const r = await Store.resetStaffCode(u.id);
+        if (r.ok) setTimeout(() => pinModal("Code personnel", `Communiquez ce code à ${u.name}.`, r.code), 0);
+        else toast(r.error, "error");
+      }, false);
     },
     "settle-cash": (el) => { result(Store.settleCash(el.dataset.id), "Caisse remise"); },
     "open-customer": (el) => openDrawer("customer", el.dataset.id),
@@ -1116,6 +1266,9 @@
     }
     if (t.matches('input[type="checkbox"][data-action]')) { Promise.resolve(ACTIONS[t.dataset.action](t)).catch((error) => toast(error.message || "Une erreur est survenue.", "error")); return; }
     if (t.matches("select[data-filter]")) { const [ns, key] = t.dataset.filter.split("."); ui[ns][key] = t.value; if ("page" in ui[ns]) ui[ns].page = 1; refreshResults(); }
+    if (t.matches("input[data-action=cloture-day]")) {
+      Promise.resolve(ACTIONS["cloture-day"](t)).catch((error) => toast(error.message || "Une erreur est survenue.", "error"));
+    }
   });
 
   document.addEventListener("input", (e) => {
@@ -1182,5 +1335,16 @@
   });
   onRoute();
   renderAll();
-  Store.load().then(() => { onRoute(); renderAll(); });
+  Store.load().then(() => {
+    onRoute();
+    renderAll();
+    if (typeof GKPrinter !== "undefined") {
+      GKPrinter.reconnect(Store.printerPrefs().lastPrinter).catch(() => {});
+    }
+  });
+  try {
+    if (typeof GKPrinter !== "undefined") {
+      GKPrinter.onChange(() => { if (!ui.holdRender && ui.route === "reglages") renderView(); });
+    }
+  } catch { /* printer optional */ }
 })();
