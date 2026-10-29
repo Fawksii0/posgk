@@ -10,7 +10,7 @@ const TRACK_STEPS = ["pending", "preparing", "ready", "delivered"];
 const LOCAL_DISH_FOLDERS = {
   salades: "salades", sandwichs: "sandwichs", tacos: "tacos", pasticcio: "pasticcio",
   pates: "pates", burgers: "burgers", plats: "plats", pizzas: "pizza",
-  desserts: "desserts", boissons: "boissons", jus: "jus"
+  desserts: "desserts", boissons: "boissons", jus: "jus", tajines: "tajines"
 };
 
 const params = new URLSearchParams(location.search);

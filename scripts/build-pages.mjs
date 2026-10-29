@@ -18,6 +18,14 @@ if (!existsSync(resolve(root, app))) throw new Error(`${app} folder not found.`)
 
 rmSync(out, { recursive: true, force: true });
 cpSync(resolve(root, app), out, { recursive: true, filter: (src) => !/README\.md$/i.test(src) && !/[\\/]references([\\/]|$)/.test(src) });
+// GKMenu reads its dish photos from ./assets/menu on the deployed site; keep a single copy in GKMobile.
+if (app === "GKMenu") {
+  const menuAssets = resolve(root, "GKMobile", "assets", "menu");
+  if (existsSync(menuAssets)) {
+    mkdirSync(resolve(out, "assets"), { recursive: true });
+    cpSync(menuAssets, resolve(out, "assets", "menu"), { recursive: true });
+  }
+}
 mkdirSync(resolve(out, "shared"), { recursive: true });
 cpSync(resolve(root, "shared"), resolve(out, "shared"), { recursive: true });
 
