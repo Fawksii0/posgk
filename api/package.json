@@ -13,9 +13,10 @@
     "create-owner": "node scripts/create-owner.mjs",
     "deploy": "supabase functions deploy gk-api --no-verify-jwt --workdir supabase",
     "test": "node --test",
-    "check": "node --check src/index.js && node --check src/auth.js && node --check src/admin.js && node --check src/core.js && node --check src/lib.js && node --check src/orders.js && node --check src/postgres-sql.js && node --check scripts/create-staff.mjs && node --check scripts/create-owner.mjs && node --check tests/branch-contract.test.js"
+    "check": "node --check src/index.js && node --check src/auth.js && node --check src/admin.js && node --check src/core.js && node --check src/database.js && node --check src/chat.js && node --check src/lib.js && node --check src/ops.js && node --check src/orders.js && node --check src/postgres-sql.js && node --check src/push.js && node --check scripts/apply-launch-migrations.mjs && node --check scripts/audit-schema.mjs && node --check scripts/create-staff.mjs && node --check scripts/create-owner.mjs && node --check tests/branch-contract.test.js"
   },
   "dependencies": {
-    "postgres": "^3.4.7"
+    "postgres": "^3.4.7",
+    "web-push": "^3.6.7"
   }
 }

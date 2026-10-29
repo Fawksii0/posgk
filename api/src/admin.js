@@ -10,11 +10,11 @@ export const zoneOut = (r) => ({ id: r.id, name: r.name, fee: r.fee, min: r.min_
 const promoOut = (r) => ({ id: r.id, code: r.code, type: r.type, value: r.value, min: r.min_order, expiry: r.expiry, active: !!r.active, uses: r.uses });
 const catOut = (r) => ({ id: r.id, name: r.name, position: r.position });
 
-const PUBLIC_SETTINGS = ["paused", "deliveryOn", "restaurant", "hours", "tableCount", "maxDeliveryKm"];
+const PUBLIC_SETTINGS = ["paused", "deliveryOn", "restaurant", "hours", "tableCount", "maxDeliveryKm", "opsMode", "opsMessage"];
 const HIDDEN_SETTINGS = ["rotationPointer"];
 
 export async function publicMenu(c) {
-  const defaults = { paused: false, deliveryOn: true, tableCount: 24, maxDeliveryKm: 15 };
+  const defaults = { paused: false, deliveryOn: true, tableCount: 24, maxDeliveryKm: 15, opsMode: "live", opsMessage: "" };
   const [cats, items, zones, rows] = await Promise.all([
     all(c.env, "SELECT * FROM menu_categories ORDER BY position, name"),
     all(c.env, "SELECT * FROM menu_items WHERE visible = 1 ORDER BY created_at"),

@@ -5,7 +5,7 @@ import { cpSync, rmSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const apps = ["GKMobile", "GKAdmin", "GKCuisine", "GKCourier", "GKServeur", "GKMenu", "GKOps"];
+const apps = ["GKMobile", "GKAdmin", "GKCuisine", "GKCourier", "GKServeur", "GKMenu", "GKCaisse", "GKOps"];
 const app = process.argv[2];
 if (!apps.includes(app)) {
   console.error(`Usage: node scripts/build-pages.mjs <${apps.join("|")}>`);
@@ -23,10 +23,13 @@ cpSync(resolve(root, "shared"), resolve(out, "shared"), { recursive: true });
 
 writeFileSync(resolve(out, "ok.txt"), "ok\n");
 writeFileSync(resolve(out, "_headers"), `/*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://gk-api-paris.fly.dev https://api.gkfood.store https://*.supabase.co; frame-src https://maps.google.com; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
+  Cross-Origin-Opener-Policy: same-origin
   Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: camera=(), microphone=(), payment=()
+  Permissions-Policy: camera=(), microphone=(), geolocation=(self), payment=()
 
 /sw.js
   Cache-Control: no-cache
@@ -37,10 +40,13 @@ RewriteCond %{HTTPS} off
 RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
 <IfModule mod_headers.c>
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://gk-api-paris.fly.dev https://api.gkfood.store https://*.supabase.co; frame-src https://maps.google.com; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'"
   Header always set X-Content-Type-Options "nosniff"
   Header always set X-Frame-Options "DENY"
+  Header always set Cross-Origin-Opener-Policy "same-origin"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
-  Header always set Permissions-Policy "camera=(), microphone=(), payment=()"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(self), payment=()"
   <Files "sw.js">
     Header set Cache-Control "no-cache"
   </Files>

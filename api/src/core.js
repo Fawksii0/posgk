@@ -63,8 +63,15 @@ export async function audit(env, actor, action, detail = "", target = null) {
   await run(env, "INSERT INTO audit_log (at, actor_id, actor_name, actor_role, action, detail, target_id, target_role) VALUES (?,?,?,?,?,?,?,?)",
     now(), actor?.id || null, actor?.name || "Système", actor?.role || "system", action, String(detail).slice(0, 300), target?.id || null, target?.role || null);
 }
-export const notify = (env, { audience, userId = null, title, text = "", orderId = null }) =>
-  run(env, "INSERT INTO notifications (audience, user_id, title, text, order_id, created_at) VALUES (?,?,?,?,?,?)", audience, userId, title, text, orderId, now());
+export async function notify(env, { audience, userId = null, title, text = "", orderId = null }) {
+  await run(env, "INSERT INTO notifications (audience, user_id, title, text, order_id, created_at) VALUES (?,?,?,?,?,?)", audience, userId, title, text, orderId, now());
+  try {
+    const { sendPush } = await import("./push.js");
+    await sendPush(env, { audience, userId, title, text, orderId });
+  } catch {
+    // Push is optional; the in-app notification remains the source of truth.
+  }
+}
 
 /* ---------- login throttling ---------- */
 const DAY = 86400000;

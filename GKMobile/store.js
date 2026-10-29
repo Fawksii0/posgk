@@ -155,6 +155,8 @@ const zoneOf = address => {
 };
 const currentPayment = () => ({ id: "cash", type: "cash", label: "Espèces à la réception" });
 const isPaused = () => !!state.settings.paused;
+const isConstruction = () => state.settings.opsMode === "construction";
+const opsBanner = () => String(state.settings.opsMessage || "").trim();
 const isSoldOut = productId => products.find(product => product.id === productId)?.available === false;
 
 function deliveryFee() {
@@ -166,6 +168,7 @@ const cartTotal = () => Math.max(0, cartSubtotal() + deliveryFee() - Number(stat
 function checkoutIssue() {
   if (state.menuStatus !== "loaded") return "Le menu n'est pas disponible. Réessayez après le chargement.";
   if (!state.cart.length) return "Votre panier est vide.";
+  if (isConstruction()) return opsBanner() || "G&K Food is temporarily unavailable for maintenance.";
   if (isPaused()) return PAUSE_MESSAGE;
   const soldOut = state.cart.find(line => isSoldOut(line.product.id));
   if (soldOut) return `${soldOut.product.name} n'est plus disponible : retirez-le de votre panier.`;

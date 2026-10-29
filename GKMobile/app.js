@@ -50,7 +50,24 @@ function normalizeProduct(item, categoryMap) {
   };
 }
 
+async function refreshOpsSettings() {
+  if (!GKApi.getBranch()) {
+    try { GKApi.setBranch("gk-food"); } catch { /* keep the current branch state */ }
+  }
+  try {
+    const response = await GKApi.get("/api/settings/public");
+    if (response?.settings) state.settings = { ...state.settings, ...response.settings };
+  } catch { /* keep the last known mode if the network is unavailable */ }
+}
+
 async function loadMenu() {
+  await refreshOpsSettings();
+  if (isConstruction()) {
+    state.menuStatus = "loaded";
+    state.menuError = "";
+    render();
+    return;
+  }
   if (!state.selectedBranchId) {
     products = [];
     zones = [];
@@ -771,11 +788,29 @@ function updateChrome() {
   updateLiveBar();
 }
 
+function constructionGate() {
+  return `<section class="construction-gate" role="status">
+    <img src="./assets/emblem-reference.png" alt="G&amp;K Food" width="88" height="88">
+    <p class="construction-kicker">Maintenance</p>
+    <h1>We will be back soon</h1>
+    <p>${escapeHtml(opsBanner() || "G&K Food is temporarily unavailable while we prepare the restaurant.")}</p>
+  </section>`;
+}
+
 function render() {
   const views = { auth: renderAuth, branches: renderBranches, home: renderHome, menu: renderMenu, cart: renderCart, orders: renderOrders, profile: renderProfile };
-  document.body.toggleAttribute("data-bare", BARE_VIEWS.includes(state.view));
-  const banner = state.menuStatus === "loaded" && isPaused() && ["home", "menu", "cart", "orders"].includes(state.view)
-    ? `<div class="pause-banner" role="alert">${icon("clock")}<span>${PAUSE_MESSAGE}</span></div>` : "";
+  const construction = isConstruction();
+  const incident = state.settings.opsMode === "incident";
+  document.body.toggleAttribute("data-construction", construction);
+  document.body.toggleAttribute("data-bare", construction || BARE_VIEWS.includes(state.view));
+  if (construction) {
+    main.innerHTML = constructionGate();
+    const overlayEl = document.getElementById("overlay");
+    if (overlayEl) overlayEl.hidden = true;
+    return;
+  }
+  const banner = (incident || (state.menuStatus === "loaded" && isPaused())) && ["home", "menu", "cart", "orders"].includes(state.view)
+    ? `<div class="pause-banner" role="alert">${icon("clock")}<span>${escapeHtml(incident && opsBanner() ? opsBanner() : PAUSE_MESSAGE)}</span></div>` : "";
   main.innerHTML = banner + views[state.view]();
   document.querySelectorAll(".nav-button").forEach(button => {
     const active = button.dataset.view === state.view || (button.dataset.view === "home" && state.view === "branches");
@@ -1390,13 +1425,24 @@ if (!state.user) {
   state.view = "home";
 }
 document.querySelectorAll("[data-icon]").forEach(slot => { slot.innerHTML = icon(slot.dataset.icon); });
-render();
-void dismissSplash();
-void loadBranches().then(() => {
+
+async function boot() {
+  await refreshOpsSettings();
+  if (isConstruction()) {
+    document.querySelector("#splash")?.remove();
+    render();
+    return;
+  }
+  render();
+  void dismissSplash();
+  await loadBranches();
   if (state.selectedBranchId) void loadMenu();
   if (state.user && state.selectedBranchId) void refreshOrders();
   void syncNotifications();
-});
+}
+
+void boot();
+setInterval(() => { if (!document.hidden) void refreshOpsSettings().then(render); }, 20000);
 setInterval(() => { if (!document.hidden) void syncNotifications(); }, 15000);
 setInterval(() => {
   if (state.view === "orders" && state.trackingId) void pollChatUnread();

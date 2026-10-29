@@ -185,6 +185,33 @@ test("branch-scoped public menu calls require an active X-GK-Branch", async () =
   assert.equal((await response.json()).error.code, "branch_required");
 });
 
+test("public settings expose safe OPS mode defaults", async () => {
+  const env = { ALLOWED_ORIGINS: "", DB: mockDb() };
+  const response = await app.fetch(new Request("https://api.test/api/settings/public", {
+    headers: { "X-GK-Branch": "gk-food" }
+  }), env);
+  assert.equal(response.status, 200);
+  const { settings } = await response.json();
+  assert.equal(settings.opsMode, "live");
+  assert.equal(settings.opsMessage, "");
+});
+
+test("push public key is public but subscriptions require authentication", async () => {
+  const env = {
+    ALLOWED_ORIGINS: "", DB: mockDb(),
+    VAPID_PUBLIC_KEY: "public-test-key", VAPID_PRIVATE_KEY: "private-test-key"
+  };
+  const keyResponse = await app.fetch(new Request("https://api.test/api/push/vapid"), env);
+  assert.equal(keyResponse.status, 200);
+  assert.equal((await keyResponse.json()).publicKey, "public-test-key");
+
+  const subscribeResponse = await app.fetch(new Request("https://api.test/api/push/subscribe", {
+    method: "POST", headers: { "Content-Type": "application/json", "X-GK-Branch": "gk-food" },
+    body: JSON.stringify({ endpoint: "https://push.example/subscription", keys: { p256dh: "x".repeat(30), auth: "x".repeat(12) } })
+  }), env);
+  assert.equal(subscribeResponse.status, 401);
+});
+
 test("branch-bound staff cannot switch branches with a request header", async () => {
   const user = { id: "staff-1", role: "manager", token_version: 0, active: 1, blocked: 0, branch_id: "gk-food", name: "Manager" };
   const { response } = await signedInRequest(user, "/api/me", "gk-shawarma-crispy");

@@ -4,6 +4,7 @@ import * as auth from "./auth.js";
 import * as admin from "./admin.js";
 import * as orders from "./orders.js";
 import * as chat from "./chat.js";
+import * as push from "./push.js";
 import * as ops from "./ops.js";
 
 const routes = [];
@@ -108,6 +109,9 @@ route("GET", "/api/admin/clients", admin.clientsList);
 route("PATCH", "/api/admin/clients/(?<id>[^/]+)/block", admin.clientBlock, { body: true });
 route("GET", "/api/notifications", admin.notificationsList);
 route("POST", "/api/notifications/read", admin.notificationsRead, { body: true });
+route("GET", "/api/push/vapid", (c) => push.vapidPublic(c), { public: true, branchScoped: false });
+route("POST", "/api/push/subscribe", (c) => push.subscribe(c), { body: true });
+route("POST", "/api/push/unsubscribe", (c) => push.unsubscribe(c), { body: true });
 route("GET", "/api/admin/audit", admin.auditList);
 route("GET", "/api/owner/audit", admin.ownerAuditList, { branchScoped: false });
 route("GET", "/api/admin/stats", admin.stats);
