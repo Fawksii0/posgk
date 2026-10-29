@@ -28,23 +28,40 @@
 
   function session(scope) {
     try {
-      const stored = sessionStorage.getItem(`${SESSION_PREFIX}${scope}`);
+      const key = `${SESSION_PREFIX}${scope}`;
+      let stored = localStorage.getItem(key);
+      if (!stored) {
+        stored = sessionStorage.getItem(key);
+        // Migrate sessions created by older releases so closing the browser no longer logs users out.
+        if (stored) {
+          localStorage.setItem(key, stored);
+          sessionStorage.removeItem(key);
+        }
+      }
       return stored ? JSON.parse(stored) : null;
     } catch (error) {
       throw new ApiError("Impossible de lire la session dans ce navigateur.", 0, "storage_error", { cause: error });
     }
   }
 
-  function setSession(scope, result) {
+  function setSession(scope, result, { persistent = true } = {}) {
     if (!result?.token || !result?.user) throw new ApiError("Réponse de connexion invalide.", 0, "invalid_session");
     const previous = session(scope);
     try {
-      sessionStorage.setItem(`${SESSION_PREFIX}${scope}`, JSON.stringify({
+      const key = `${SESSION_PREFIX}${scope}`;
+      const value = JSON.stringify({
         token: result.token,
         refreshToken: result.refreshToken || previous?.refreshToken || null,
         user: result.user,
         mustChange: !!result.mustChange
-      }));
+      });
+      if (persistent) {
+        localStorage.setItem(key, value);
+        sessionStorage.removeItem(key);
+      } else {
+        sessionStorage.setItem(key, value);
+        localStorage.removeItem(key);
+      }
     } catch (error) {
       throw new ApiError("Impossible d'enregistrer la session dans ce navigateur.", 0, "storage_error", { cause: error });
     }
@@ -53,6 +70,7 @@
 
   function clearSession(scope) {
     try {
+      localStorage.removeItem(`${SESSION_PREFIX}${scope}`);
       sessionStorage.removeItem(`${SESSION_PREFIX}${scope}`);
     } catch (error) {
       throw new ApiError("Impossible d'effacer la session dans ce navigateur.", 0, "storage_error", { cause: error });
@@ -61,7 +79,15 @@
 
   function getBranch() {
     try {
-      return sessionStorage.getItem(BRANCH_KEY) || "";
+      let branch = localStorage.getItem(BRANCH_KEY) || "";
+      if (!branch) {
+        branch = sessionStorage.getItem(BRANCH_KEY) || "";
+        if (branch) {
+          localStorage.setItem(BRANCH_KEY, branch);
+          sessionStorage.removeItem(BRANCH_KEY);
+        }
+      }
+      return branch;
     } catch (error) {
       throw new ApiError("Impossible de lire le restaurant sélectionné.", 0, "storage_error", { cause: error });
     }
@@ -70,7 +96,8 @@
   function setBranch(branchId) {
     if (typeof branchId !== "string" || !branchId) throw new ApiError("Restaurant sélectionné invalide.", 0, "invalid_branch");
     try {
-      sessionStorage.setItem(BRANCH_KEY, branchId);
+      localStorage.setItem(BRANCH_KEY, branchId);
+      sessionStorage.removeItem(BRANCH_KEY);
     } catch (error) {
       throw new ApiError("Impossible d'enregistrer le restaurant sélectionné.", 0, "storage_error", { cause: error });
     }
@@ -79,6 +106,7 @@
 
   function clearBranch() {
     try {
+      localStorage.removeItem(BRANCH_KEY);
       sessionStorage.removeItem(BRANCH_KEY);
     } catch (error) {
       throw new ApiError("Impossible d'effacer le restaurant sélectionné.", 0, "storage_error", { cause: error });
@@ -178,8 +206,9 @@
       const normalized = match[1].replace(/-/g, "+").replace(/_/g, "/");
       const data = JSON.parse(decodeURIComponent(escape(atob(normalized + "=".repeat((4 - normalized.length % 4) % 4)))));
       if (!["client", "courier", "cuisine"].includes(data.scope) || !data.token || !data.user) return;
-      sessionStorage.removeItem(`${SESSION_PREFIX}${data.scope}`);
-      setSession(data.scope, { token: data.token, user: data.user, mustChange: false });
+      clearSession(data.scope);
+      // Owner impersonation remains tab-scoped even though normal sign-ins are persistent.
+      setSession(data.scope, { token: data.token, user: data.user, mustChange: false }, { persistent: false });
       if (typeof data.branchId === "string" && data.branchId) setBranch(data.branchId);
     } catch { /* an invalid hand-off is ignored; the normal sign-in screen appears */ }
   })();

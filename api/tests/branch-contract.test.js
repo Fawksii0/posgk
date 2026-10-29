@@ -196,6 +196,48 @@ test("public settings expose safe OPS mode defaults", async () => {
   assert.equal(settings.opsMessage, "");
 });
 
+test("a client can cancel only their own pending order", async () => {
+  const client = { id: "client-cancel", role: "client", token_version: 0, active: 1, blocked: 0, branch_id: null, name: "Client" };
+  let order = {
+    id: "order-cancel", seq: 42, client_id: client.id, branch_id: "gk-food", mode: "delivery",
+    status: "pending", history: "[]", items: "[]", total: 50, created_at: Date.now(), updated_at: Date.now()
+  };
+  const db = {
+    context: {},
+    async setContext(next) { this.context = { ...this.context, ...next }; },
+    prepare(sql) {
+      let values = [];
+      const query = {
+        bind(...args) { values = args; return query; },
+        async first() {
+          if (sql.includes("FROM users WHERE id = ?")) return values[0] === client.id ? client : null;
+          if (sql.includes("FROM branches WHERE id = ?")) return branches.find((branch) => branch.id === values[0]) || null;
+          if (sql.includes("SELECT * FROM orders WHERE id = ?")) return values[0] === order.id ? order : null;
+          if (sql.includes("UPDATE orders SET") && sql.includes("RETURNING *")) {
+            order = { ...order, status: values[0], updated_at: values[1], history: values[2], cancel_reason: values[3] };
+            return order;
+          }
+          return null;
+        },
+        async all() { return { results: [] }; },
+        async run() { return { success: true }; }
+      };
+      return query;
+    },
+    async batch() { return []; }
+  };
+  const env = { SESSION_SECRET: "test-session-secret", ALLOWED_ORIGINS: "", DB: db };
+  const iat = Math.floor(Date.now() / 1000);
+  const token = await signToken(env, { sub: client.id, role: client.role, tv: 0, iat, exp: iat + 3600 });
+  const response = await app.fetch(new Request(`https://api.test/api/orders/${order.id}/cancel`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "X-GK-Branch": "gk-food" },
+    body: JSON.stringify({ reason: "Client request" })
+  }), env);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).order.status, "cancelled");
+});
+
 test("push public key is public but subscriptions require authentication", async () => {
   const env = {
     ALLOWED_ORIGINS: "", DB: mockDb(),

@@ -681,7 +681,7 @@ function renderOrderCard(order) {
   let actions;
   if (order.status === "active") {
     const cancellable = order.status === "active" && order.stage === 0;
-    actions = `${cancellable ? `<button class="outline-button" type="button" data-cancel-order="${escapeHtml(order.id)}">Annuler</button>` : ""}<button class="gold-button" type="button" data-track-order="${escapeHtml(order.id)}">Suivre ${icon("navigate")}</button>`;
+    actions = `${cancellable ? `<button class="outline-button" type="button" data-cancel-order="${escapeHtml(order.id)}">Annuler la commande</button>` : ""}<button class="gold-button" type="button" data-track-order="${escapeHtml(order.id)}">Suivre ${icon("navigate")}</button>`;
   } else {
     actions = "";
   }
@@ -1172,6 +1172,7 @@ main.addEventListener("click", event => {
   if ((el = closest("[data-chat-order]"))) { openChat(el.dataset.chatOrder); return; }
   if ((el = closest("[data-cancel-order]"))) {
     const orderId = el.dataset.cancelOrder;
+    if (!window.confirm("Annuler cette commande ? Cette action est définitive.")) return;
     GKApi.post(`/api/orders/${encodeURIComponent(orderId)}/cancel`, { reason: "Annulation demandée par le client." }, "client")
       .then(result => {
         const updated = normalizeOrder(result.order);

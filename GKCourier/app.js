@@ -644,7 +644,7 @@ window.addEventListener("gk-api-session-expired", event => {
 
 setInterval(() => {
   if (state.session) void pollServer();
-}, 6000);
+}, 5000);
 
 setInterval(() => {
   document.querySelectorAll(".offer-timer").forEach(el => {

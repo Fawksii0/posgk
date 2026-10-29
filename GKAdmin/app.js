@@ -1325,7 +1325,15 @@
   window.addEventListener("hashchange", onRoute);
 
   /* ---------- Boot ---------- */
-  Store.subscribe(() => renderAll());
+  async function ensureAdminPush() {
+    if (!Store.currentUser() || Store.changeRequired() || !("serviceWorker" in navigator)) return;
+    try {
+      await navigator.serviceWorker.ready;
+      await window.GKPush?.require({ api: window.GKApi, scope: Store.get().scope, app: "admin" });
+    } catch { /* the shared required-notification gate handles retry instructions */ }
+  }
+
+  Store.subscribe(() => { renderAll(); void ensureAdminPush(); });
   window.addEventListener("gk-api-session-expired", (event) => {
     if (event.detail?.scope !== Store.get().scope) return;
     Store.logout().then(() => {
@@ -1338,6 +1346,7 @@
   Store.load().then(() => {
     onRoute();
     renderAll();
+    void ensureAdminPush();
     if (typeof GKPrinter !== "undefined") {
       GKPrinter.reconnect(Store.printerPrefs().lastPrinter).catch(() => {});
     }
@@ -1347,4 +1356,9 @@
       GKPrinter.onChange(() => { if (!ui.holdRender && ui.route === "reglages") renderView(); });
     }
   } catch { /* printer optional */ }
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" })
+      .then(() => ensureAdminPush())
+      .catch(() => {});
+  }
 })();

@@ -6,38 +6,20 @@
   <meta name="theme-color" content="#e3a81f">
   <title>G&amp;K Admin</title>
   <link rel="icon" href="assets/emblem-reference.png">
-  <script>
-    if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      const appPath = new URL(".", location.href).pathname;
-      navigator.serviceWorker.getRegistrations().then((registrations) => {
-        const stale = registrations.filter((registration) =>
-          [registration.active, registration.waiting, registration.installing].some((worker) =>
-            worker && new URL(worker.scriptURL).pathname.startsWith(appPath)
-          )
-        );
-        return Promise.all(stale.map((registration) => registration.unregister())).then(() => {
-          const controller = navigator.serviceWorker.controller;
-          if (controller && new URL(controller.scriptURL).pathname.startsWith(appPath)) location.reload();
-        });
-      }).catch(() => {});
-      if ("caches" in window) {
-        caches.keys().then((keys) => Promise.all(keys.filter((key) => /^gk-admin-/i.test(key)).map((key) => caches.delete(key)))).catch(() => {});
-      }
-    }
-  </script>
   <link rel="stylesheet" href="styles.css?v=api-5">
   <link rel="stylesheet" href="../shared/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="../shared/gk-map.css?v=2">
   <script src="../shared/vendor/leaflet/leaflet.js" defer></script>
   <script src="../shared/gk-map.js?v=2" defer></script>
-  <script src="../shared/gk-api.js?v=api4" defer></script>
+  <script src="../shared/gk-api.js?v=api5" defer></script>
+  <script src="../shared/gk-push.js?v=2" defer></script>
   <script src="../shared/gk-item-name.js?v=2" defer></script>
   <script src="../shared/gk-receipt.js?v=10" defer></script>
   <script src="data.js?v=api-3" defer></script>
   <script src="store.js?v=api-11" defer></script>
   <script src="../shared/vendor/qrcode.min.js" defer></script>
   <script src="escpos.js?v=23" defer></script>
-  <script src="app.js?v=api-11" defer></script>
+  <script src="app.js?v=api-12" defer></script>
 </head>
 <body>
   <div id="login-view" class="login-view" hidden></div>
