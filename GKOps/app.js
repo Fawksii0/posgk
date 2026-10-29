@@ -6,6 +6,14 @@
   const state = { user: api.session(SCOPE)?.user || null, overview: null, probes: {}, busy: false, error: "", toast: "", pendingMode: "" };
   let timer = 0;
 
+  async function ensureOpsPush() {
+    if (!state.user || !("serviceWorker" in navigator)) return;
+    try {
+      await navigator.serviceWorker.ready;
+      await window.GKPush?.require({ api, scope: SCOPE, app: "ops" });
+    } catch { /* the shared required-notification gate handles retries */ }
+  }
+
   const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
   const fmtTime = (ms) => {
     const value = Number(ms);
@@ -233,6 +241,7 @@
       state.user = result.user;
       state.error = "";
       await load();
+      void ensureOpsPush();
     } catch (error) {
       state.error = error.message || "Sign-in failed.";
       render();
@@ -291,6 +300,11 @@
   }
   render();
   void load();
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" })
+      .then(() => ensureOpsPush())
+      .catch(() => {});
+  }
   timer = setInterval(() => { if (state.user) void load(); }, 20000);
   window.addEventListener("beforeunload", () => clearInterval(timer));
 })();

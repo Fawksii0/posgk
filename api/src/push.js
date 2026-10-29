@@ -11,7 +11,8 @@ const APP_URL = {
   caisse: "https://caisse.gkfood.store/",
   cuisine: "https://kitchen.gkfood.store/",
   kitchen: "https://kitchen.gkfood.store/",
-  admin: "https://admin.gkfood.store/"
+  admin: "https://admin.gkfood.store/",
+  ops: "https://ops.gkfood.store/"
 };
 
 function vapid(env) {
