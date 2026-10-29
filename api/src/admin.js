@@ -6,19 +6,19 @@ import { tickDispatch, retryFailedOrders, releaseOfferedTo, STORE } from "./orde
 
 /* ---------- serializers ---------- */
 export const itemOut = (r) => ({ id: r.id, categoryId: r.category_id, name: r.name, description: r.description, price: r.price, dinePrice: r.dine_price == null ? r.price : r.dine_price, discount: r.discount, sizes: jparse(r.sizes, []), extras: jparse(r.extras, []), image: r.image_url, available: !!r.available, visible: !!r.visible });
-export const zoneOut = (r) => ({ id: r.id, name: r.name, fee: r.fee, min: r.min_order, etaMin: r.eta_min, etaMax: r.eta_max, freeFrom: r.free_from, enabled: !!r.enabled });
+export const zoneOut = (r) => ({ id: r.id, name: r.name, fee: r.fee, min: r.min_order, etaMin: r.eta_min, etaMax: r.eta_max, freeFrom: r.free_from, enabled: !!r.enabled, fromKm: Number(r.radius_from_km ?? 0), toKm: Number(r.radius_to_km ?? 0) });
 const promoOut = (r) => ({ id: r.id, code: r.code, type: r.type, value: r.value, min: r.min_order, expiry: r.expiry, active: !!r.active, uses: r.uses });
 const catOut = (r) => ({ id: r.id, name: r.name, position: r.position });
 
-const PUBLIC_SETTINGS = ["paused", "deliveryOn", "restaurant", "hours", "freeDelivery", "tableCount"];
+const PUBLIC_SETTINGS = ["paused", "deliveryOn", "restaurant", "hours", "tableCount", "maxDeliveryKm"];
 const HIDDEN_SETTINGS = ["rotationPointer"];
 
 export async function publicMenu(c) {
-  const defaults = { paused: false, deliveryOn: true, freeDelivery: 150, tableCount: 24 };
+  const defaults = { paused: false, deliveryOn: true, tableCount: 24, maxDeliveryKm: 15 };
   const [cats, items, zones, rows] = await Promise.all([
     all(c.env, "SELECT * FROM menu_categories ORDER BY position, name"),
     all(c.env, "SELECT * FROM menu_items WHERE visible = 1 ORDER BY created_at"),
-    all(c.env, "SELECT * FROM zones WHERE enabled = 1 ORDER BY fee, name"),
+    all(c.env, "SELECT * FROM zones WHERE enabled = 1 ORDER BY radius_from_km, fee"),
     all(c.env, `SELECT key, value FROM settings WHERE key IN (${PUBLIC_SETTINGS.map(() => "?").join(",")})`, ...PUBLIC_SETTINGS)
   ]);
   const stored = new Map(rows.map((r) => [r.key, r.value]));
@@ -26,6 +26,7 @@ export async function publicMenu(c) {
   for (const k of PUBLIC_SETTINGS) settings[k] = stored.has(k) ? jparse(stored.get(k), defaults[k] ?? null) : (defaults[k] ?? null);
   settings.paused = !!settings.paused; settings.deliveryOn = !!settings.deliveryOn;
   settings.tableCount = Number(settings.tableCount) || 24;
+  settings.maxDeliveryKm = Number(settings.maxDeliveryKm) || 15;
   return { categories: cats.map(catOut), items: items.map(itemOut), zones: zones.map(zoneOut), settings };
 }
 
@@ -122,22 +123,26 @@ function readZone(b) {
   const etaMin = numv(b.etaMin, { min: 1, max: 300, int: true, field: "ETA min" });
   const etaMax = numv(b.etaMax, { min: 1, max: 300, int: true, field: "ETA max" });
   if (etaMax < etaMin) fail(400, "invalid", "ETA max doit être supérieur à ETA min.");
-  return { name: str(b.name, { max: 40, min: 1, field: "Nom" }), fee: numv(b.fee, { max: 1000, field: "Frais" }), min: numv(b.min, { max: 10000, def: 0, field: "Minimum" }), etaMin, etaMax, freeFrom: b.freeFrom === null || b.freeFrom === "" || b.freeFrom === undefined ? null : numv(b.freeFrom, { max: 100000, field: "Seuil" }) };
+  const fromKm = numv(b.fromKm ?? b.radius_from_km, { min: 0, max: 80, field: "Rayon min" });
+  const toKm = numv(b.toKm ?? b.radius_to_km, { min: 0.1, max: 80, field: "Rayon max" });
+  if (toKm <= fromKm) fail(400, "invalid", "Le rayon max doit dépasser le rayon min.");
+  const name = b.name ? str(b.name, { max: 40, min: 1, field: "Nom" }) : `${fromKm}–${toKm} km`;
+  return { name, fee: numv(b.fee, { max: 1000, field: "Frais" }), min: numv(b.min, { max: 10000, def: 0, field: "Minimum" }), etaMin, etaMax, freeFrom: null, fromKm, toKm };
 }
-export async function zonesList(c) { need(c.user, "orders.view"); return { zones: (await all(c.env, "SELECT * FROM zones ORDER BY fee, name")).map(zoneOut) }; }
+export async function zonesList(c) { need(c.user, "orders.view"); return { zones: (await all(c.env, "SELECT * FROM zones ORDER BY radius_from_km, fee, name")).map(zoneOut) }; }
 export async function zoneSave(c) {
   need(c.user, "zones.write");
   if (c.params.id) {
     const cur = await first(c.env, "SELECT * FROM zones WHERE id = ?", c.params.id); if (!cur) fail(404, "not_found", "Zone introuvable.");
-    const merged = { name: cur.name, fee: cur.fee, min: cur.min_order, etaMin: cur.eta_min, etaMax: cur.eta_max, freeFrom: cur.free_from, ...c.body };
+    const merged = { name: cur.name, fee: cur.fee, min: cur.min_order, etaMin: cur.eta_min, etaMax: cur.eta_max, fromKm: cur.radius_from_km, toKm: cur.radius_to_km, ...c.body };
     const v = readZone(merged);
     const enabled = c.body.enabled === undefined ? cur.enabled : bool(c.body.enabled);
-    await run(c.env, "UPDATE zones SET name=?, fee=?, min_order=?, eta_min=?, eta_max=?, free_from=?, enabled=? WHERE id=?", v.name, v.fee, v.min, v.etaMin, v.etaMax, v.freeFrom, enabled, cur.id);
+    await run(c.env, "UPDATE zones SET name=?, fee=?, min_order=?, eta_min=?, eta_max=?, free_from=?, enabled=?, radius_from_km=?, radius_to_km=? WHERE id=?", v.name, v.fee, v.min, v.etaMin, v.etaMax, v.freeFrom, enabled, v.fromKm, v.toKm, cur.id);
     await audit(c.env, c.user, "Zone modifiée", v.name);
     return zoneOut(await first(c.env, "SELECT * FROM zones WHERE id = ?", cur.id));
   }
   const v = readZone(c.body); const id = randomId("z_");
-  await run(c.env, "INSERT INTO zones (id, name, fee, min_order, eta_min, eta_max, free_from, enabled) VALUES (?,?,?,?,?,?,?,1)", id, v.name, v.fee, v.min, v.etaMin, v.etaMax, v.freeFrom);
+  await run(c.env, "INSERT INTO zones (id, name, fee, min_order, eta_min, eta_max, free_from, enabled, radius_from_km, radius_to_km) VALUES (?,?,?,?,?,?,?,1,?,?)", id, v.name, v.fee, v.min, v.etaMin, v.etaMax, v.freeFrom, v.fromKm, v.toKm);
   await audit(c.env, c.user, "Zone créée", v.name);
   return zoneOut(await first(c.env, "SELECT * FROM zones WHERE id = ?", id));
 }
@@ -208,6 +213,7 @@ export async function settingsGet(c) {
   out.paused = !!out.paused; out.deliveryOn = out.deliveryOn === undefined ? true : !!out.deliveryOn;
   if (out.freeDelivery === undefined) out.freeDelivery = 150;
   if (out.tableCount === undefined) out.tableCount = 24;
+  if (out.maxDeliveryKm === undefined) out.maxDeliveryKm = 15;
   if (out.defaultPrep === undefined) out.defaultPrep = 20;
   if (out.dispatchMode === undefined) out.dispatchMode = "rotation";
   return out;
@@ -224,6 +230,7 @@ async function applySettings(c, body, keys) {
       case "dispatchMode": val = oneOf(v, ["rotation", "proximity"], "Mode"); break;
       case "defaultPrep": val = numv(v, { min: 5, max: 90, int: true, field: "Préparation" }); break;
       case "freeDelivery": val = numv(v, { max: 100000, field: "Seuil" }); break;
+      case "maxDeliveryKm": val = numv(v, { min: 1, max: 80, field: "Rayon max" }); break;
       case "tableCount": val = numv(v, { min: 1, max: 80, int: true, field: "Tables" }); break;
       case "restaurant": val = { name: str(v?.name, { max: 60, min: 1, field: "Nom" }), phone: str(v?.phone, { max: 30 }), email: str(v?.email, { max: 120 }), address: str(v?.address, { max: 160 }) }; break;
       case "hours": {
@@ -239,7 +246,7 @@ async function applySettings(c, body, keys) {
   if (done.length) await audit(c.env, c.user, "Réglages modifiés", done.join(", "));
   return done;
 }
-export async function settingsPut(c) { need(c.user, "settings.write"); await applySettings(c, c.body, ["paused", "deliveryOn", "dispatchMode", "defaultPrep", "freeDelivery", "restaurant", "hours", "notif"]); return settingsGet(c); }
+export async function settingsPut(c) { need(c.user, "settings.write"); await applySettings(c, c.body, ["paused", "deliveryOn", "dispatchMode", "defaultPrep", "freeDelivery", "maxDeliveryKm", "restaurant", "hours", "notif"]); return settingsGet(c); }
 export async function settingsOps(c) { need(c.user, "settings.ops"); await applySettings(c, c.body, ["paused", "dispatchMode", "defaultPrep"]); return settingsGet(c); }
 
 /* ---------- staff users ---------- */

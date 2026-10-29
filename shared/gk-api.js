@@ -2,7 +2,7 @@
   "use strict";
 
   const SUPABASE_PROJECT_URL = "https://oxqfnhnxdnwnftduikkh.supabase.co";
-  const FLY_API_URL = "https://api.gkfood.store";
+  const FLY_API_URL = "https://gk-api-paris.fly.dev";
   const API_URL = window.GK_API_URL || (
     window.GK_SUPABASE_URL
       ? `${String(window.GK_SUPABASE_URL).replace(/\/+$/, "")}/functions/v1/gk-api`

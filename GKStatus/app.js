@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const API_URL = window.GK_API_URL || "https://api.gkfood.store";
+  const API_URL = window.GK_API_URL || "https://gk-api-paris.fly.dev";
 
   const CHECKS = [
     { id: "api", name: "G&K API", hint: "Always-on Node · /health", kind: "health" },

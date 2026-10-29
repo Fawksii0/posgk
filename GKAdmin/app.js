@@ -289,6 +289,7 @@
     if (status.error) { view.innerHTML = `<div class="card">${emptyState("alert", "Impossible de charger les données", status.error)}<div style="text-align:center;margin:12px"><button class="btn-gold" data-action="retry-page">Réessayer</button></div></div>`; return; }
     view.innerHTML = pages[ui.route].render();
     if (ui.route === "carte") attachLiveMap();
+    if (ui.route === "zones") attachRingsMap();
   }
 
   /* ---------- Live map ---------- */
@@ -714,15 +715,29 @@
   }
 
   /* ---------- Zones ---------- */
+  function attachRingsMap() {
+    const el = document.querySelector("#zones-map");
+    if (!el || !window.GKDelivery) return;
+    window.GKDelivery.mount(el, {
+      zones: S().zones.filter((z) => z.enabled && Number(z.toKm) > 0),
+      interactive: false
+    });
+  }
+
   function zonesPage() {
     const canWrite = Store.can("zones");
     const canDelete = Store.can("settings");
-    return `<div class="page-head"><div><h2>Zones de livraison</h2><p>Frais, minimum de commande, délais et seuil de livraison offerte.</p></div></div>
-      <div class="grid grid-3">${S().zones.map((z) => `<form class="card zone-card ${z.enabled ? "" : "disabled"}" data-form="zone" data-id="${esc(z.id)}" novalidate><div class="zone-head"><h3>${esc(z.name)}</h3><span style="display:flex;align-items:center;gap:8px"><span class="small muted">${z.enabled ? "Active" : "Désactivée"}</span>${switchHTML(z.enabled, `data-action="toggle-zone" data-id="${esc(z.id)}" ${canWrite ? "" : "disabled"}`, `Zone ${z.name} active`)}</span></div>
-        <div class="row2">${field("fee", "Frais (MAD)", input("fee", z.fee, "number", `min="0" step="0.5" ${canWrite ? "" : "disabled"}`))}${field("min", "Minimum (MAD)", input("min", z.min, "number", `min="0" step="1" ${canWrite ? "" : "disabled"}`))}</div>
-        <div class="row2">${field("etaMin", "ETA min (min)", input("etaMin", z.etaMin, "number", `min="1" step="1" ${canWrite ? "" : "disabled"}`))}${field("etaMax", "ETA max (min)", input("etaMax", z.etaMax, "number", `min="1" step="1" ${canWrite ? "" : "disabled"}`))}</div>
-        ${field("freeFrom", "Livraison offerte dès (MAD)", input("freeFrom", z.freeFrom, "number", `min="0" step="1" ${canWrite ? "" : "disabled"}`))}
-        <div class="head-actions">${canWrite ? `<button class="btn-gold full" type="submit">Enregistrer</button>` : ""}${canDelete ? `<button type="button" class="btn btn-ghost-danger" data-action="delete-zone" data-id="${esc(z.id)}">Supprimer</button>` : ""}</div></form>`).join("")}</div>`;
+    const rings = S().zones.filter((z) => Number(z.toKm) > 0).slice().sort((a, b) => Number(a.fromKm) - Number(b.fromKm));
+    const leftover = S().zones.filter((z) => !(Number(z.toKm) > 0));
+    const card = (z) => `<form class="card zone-card ${z.enabled ? "" : "disabled"}" data-form="zone" data-id="${esc(z.id)}" novalidate><div class="zone-head"><h3>${esc(z.name)}</h3><span style="display:flex;align-items:center;gap:8px"><span class="small muted">${z.enabled ? "Active" : "Désactivée"}</span>${switchHTML(z.enabled, `data-action="toggle-zone" data-id="${esc(z.id)}" ${canWrite ? "" : "disabled"}`, `Zone ${z.name} active`)}</span></div>
+        <div class="row2">${field("fromKm", "De (km)", input("fromKm", z.fromKm ?? 0, "number", `min="0" step="0.1" ${canWrite ? "" : "disabled"}`))}${field("toKm", "À (km)", input("toKm", z.toKm ?? 0, "number", `min="0.1" step="0.1" ${canWrite ? "" : "disabled"}`))}</div>
+        <div class="row2">${field("fee", "Frais (MAD)", input("fee", z.fee, "number", `min="0" step="0.5" ${canWrite ? "" : "disabled"}`))}${field("etaMin", "ETA min", input("etaMin", z.etaMin, "number", `min="1" step="1" ${canWrite ? "" : "disabled"}`))}</div>
+        ${field("etaMax", "ETA max", input("etaMax", z.etaMax, "number", `min="1" step="1" ${canWrite ? "" : "disabled"}`))}
+        <div class="head-actions">${canWrite ? `<button class="btn-gold full" type="submit">Enregistrer</button>` : ""}${canDelete ? `<button type="button" class="btn btn-ghost-danger" data-action="delete-zone" data-id="${esc(z.id)}">Supprimer</button>` : ""}</div></form>`;
+    return `<div class="page-head"><div><h2>Zones de livraison</h2><p>Cercles autour du restaurant. Le prix suit la distance GPS, jamais un quartier. Livraison jamais offerte.</p></div></div>
+      <div class="card" style="padding:0;overflow:hidden;margin-bottom:16px"><div class="gk-rings-map" id="zones-map"></div></div>
+      <div class="grid grid-3">${rings.map(card).join("")}</div>
+      ${leftover.length ? `<p class="muted small" style="margin:16px 0 8px">Anciennes zones (désactivées)</p><div class="grid grid-3">${leftover.map(card).join("")}</div>` : ""}`;
   }
 
   /* ---------- Promotions ---------- */
@@ -782,7 +797,7 @@
         ${row("Rapport quotidien", "Résumé des ventes envoyé chaque soir.", switchHTML(s.notif.dailyReport, `data-action="toggle-setting" data-key="notif.dailyReport" ${canWrite ? "" : "disabled"}`, "Rapport quotidien"))}</div></div>
       <div class="grid grid-even" style="margin-bottom:16px">
         <form class="card" data-form="operations" novalidate><div class="card-head"><h3>Préparation et dispatch</h3></div>${field("dispatchMode", "Affectation des livreurs", `<select name="dispatchMode" id="f-dispatchMode" ${canOperate ? "" : "disabled"}><option value="rotation" ${s.dispatchMode === "rotation" ? "selected" : ""}>Rotation</option><option value="proximity" ${s.dispatchMode === "proximity" ? "selected" : ""}>Proximité</option></select>`)}${field("defaultPrep", "Préparation par défaut (minutes)", input("defaultPrep", s.defaultPrep, "number", `min="5" max="90" step="1" ${canOperate ? "" : "disabled"}`))}${canOperate ? `<button class="btn-gold" type="submit">Enregistrer</button>` : ""}</form>
-        ${canWrite ? `<form class="card" data-form="free-delivery" novalidate><div class="card-head"><h3>Livraison</h3></div>${field("freeDelivery", "Seuil global de livraison offerte (MAD)", input("freeDelivery", s.freeDelivery, "number", 'min="0" step="1"'))}<button class="btn-gold" type="submit">Enregistrer</button></form>` : `<div></div>`}
+        ${canWrite ? `<form class="card" data-form="delivery-radius" novalidate><div class="card-head"><h3>Livraison</h3></div>${field("maxDeliveryKm", "Distance maximale (km)", input("maxDeliveryKm", s.maxDeliveryKm, "number", 'min="1" max="80" step="0.1"'), "Les positions au-delà de cette distance sont refusées.")}<button class="btn-gold" type="submit">Enregistrer</button></form>` : `<div></div>`}
       </div>
       <form class="card" data-form="hours" novalidate style="margin-bottom:16px"><div class="card-head"><h3>Horaires d'ouverture</h3></div>${DAYS.map((d) => { const h = s.hours[d.id]; return `<div class="field" data-field="${d.id}"><div style="display:grid;grid-template-columns:minmax(80px,1fr) auto auto auto;gap:8px;align-items:center"><b>${d.label}</b><label class="small" style="display:flex;gap:5px;align-items:center"><input type="checkbox" name="closed-${d.id}" ${h.closed ? "checked" : ""} ${canWrite ? "" : "disabled"}> Fermé</label><input class="input" style="min-height:38px;width:100px" type="time" name="open-${d.id}" value="${esc(h.open)}" aria-label="${d.label} ouverture" ${canWrite ? "" : "disabled"}><input class="input" style="min-height:38px;width:100px" type="time" name="close-${d.id}" value="${esc(h.close)}" aria-label="${d.label} fermeture" ${canWrite ? "" : "disabled"}></div></div>`; }).join("")}${canWrite ? `<button class="btn-gold" type="submit">Enregistrer les horaires</button>` : ""}</form>`;
   }
@@ -878,9 +893,10 @@
       closeDrawer(); toast("Livreur mis à jour");
     },
     async zone(form) {
-      const r = await Store.saveZone(form.dataset.id, { fee: num(form.fee.value), min: num(form.min.value), etaMin: num(form.etaMin.value), etaMax: num(form.etaMax.value), freeFrom: num(form.freeFrom.value) });
+      const r = await Store.saveZone(form.dataset.id, { fromKm: num(form.fromKm.value), toKm: num(form.toKm.value), fee: num(form.fee.value), min: 0, etaMin: num(form.etaMin.value), etaMax: num(form.etaMax.value), freeFrom: null });
       if (!r.ok) { toast(r.error, "error"); return showErrors(form, r.errors); }
       toast("Zone mise à jour");
+      renderAll();
     },
     async promo(form) {
       const r = await Store.savePromo(form.dataset.id || null, { code: form.code.value, type: form.type.value, value: num(form.value.value), min: String(form.min.value).trim() === "" ? 0 : num(form.min.value), expiry: form.expiry.value, active: form.active.checked });
@@ -906,12 +922,12 @@
       if (!r.ok) { toast(r.error, "error"); return showErrors(form, r.errors); }
       toast("Réglages opérationnels enregistrés");
     },
-    async "free-delivery"(form) {
-      const amount = num(form.freeDelivery.value);
-      if (!Number.isFinite(amount) || amount < 0) return showErrors(form, { freeDelivery: "Saisissez un seuil valide." });
-      const r = await Store.saveSettings((s) => { s.freeDelivery = amount; }, "Seuil de livraison offerte mis à jour");
+    async "delivery-radius"(form) {
+      const distance = num(form.maxDeliveryKm.value);
+      if (!Number.isFinite(distance) || distance < 1 || distance > 80) return showErrors(form, { maxDeliveryKm: "Saisissez une distance entre 1 et 80 km." });
+      const r = await Store.saveSettings((s) => { s.maxDeliveryKm = distance; }, "Distance maximale de livraison mise à jour");
       if (!r.ok) { toast(r.error, "error"); return showErrors(form, r.errors); }
-      toast("Seuil enregistré");
+      toast("Distance enregistrée");
     },
     async hours(form) {
       const hours = {};

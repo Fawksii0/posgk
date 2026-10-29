@@ -68,7 +68,7 @@ route("POST", "/api/admin/categories", admin.categorySave, { body: true });
 route("PUT", "/api/admin/categories/(?<id>[^/]+)", admin.categorySave, { body: true });
 route("DELETE", "/api/admin/categories/(?<id>[^/]+)", admin.categoryDelete);
 route("GET", "/api/zones", async (c) => ({
-  zones: (await all(c.env, 'SELECT id, name, fee, min_order AS "min", eta_min AS "etaMin", eta_max AS "etaMax", free_from AS "freeFrom" FROM zones WHERE enabled = 1 ORDER BY fee, name'))
+  zones: (await all(c.env, 'SELECT id, name, fee, min_order AS "min", eta_min AS "etaMin", eta_max AS "etaMax", free_from AS "freeFrom", radius_from_km AS "fromKm", radius_to_km AS "toKm" FROM zones WHERE enabled = 1 ORDER BY radius_from_km, fee'))
 }), { public: true });
 route("GET", "/api/admin/zones", admin.zonesList);
 route("POST", "/api/admin/zones", admin.zoneSave, { body: true });

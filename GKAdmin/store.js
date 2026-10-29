@@ -52,7 +52,7 @@ const Store = (() => {
     restaurant: { name: "", phone: "", email: "", address: "" },
     hours: Object.fromEntries(DAYS.map((d) => [d.id, { closed: false, open: "11:00", close: "23:00" }])),
     notif: { newOrder: true, unassigned: true, lowStock: true, dailyReport: false },
-    deliveryOn: false, acceptingOrders: true, dispatchMode: "rotation", defaultPrep: 20, freeDelivery: 0
+    deliveryOn: false, acceptingOrders: true, dispatchMode: "rotation", defaultPrep: 20, maxDeliveryKm: 15
   });
   let state = {
     user: null, scope: "admin", mustChange: false, orders: [], products: [], categories: [], zones: [], promos: [],
@@ -106,7 +106,8 @@ const Store = (() => {
       hours: { ...def.hours, ...(raw.hours || {}) }, notif: { ...def.notif, ...(raw.notif || {}) },
       deliveryOn: !!raw.deliveryOn, acceptingOrders: !raw.paused,
       dispatchMode: raw.dispatchMode || def.dispatchMode,
-      defaultPrep: Number(raw.defaultPrep || def.defaultPrep), freeDelivery: Number(raw.freeDelivery || 0)
+      defaultPrep: Number(raw.defaultPrep || def.defaultPrep),
+      maxDeliveryKm: Number(raw.maxDeliveryKm || def.maxDeliveryKm)
     };
   }
   function sessionScope() {
@@ -397,7 +398,7 @@ const Store = (() => {
       update(next);
       const body = {};
       if (next.acceptingOrders !== state.settings.acceptingOrders) body.paused = !next.acceptingOrders;
-      for (const key of ["deliveryOn", "dispatchMode", "defaultPrep", "freeDelivery", "restaurant", "hours", "notif"]) {
+      for (const key of ["deliveryOn", "dispatchMode", "defaultPrep", "maxDeliveryKm", "restaurant", "hours", "notif"]) {
         if (JSON.stringify(next[key]) !== JSON.stringify(state.settings[key])) body[key] = next[key];
       }
       const opsKeys = ["paused", "dispatchMode", "defaultPrep"];

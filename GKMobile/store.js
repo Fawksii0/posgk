@@ -1,5 +1,5 @@
 const STORE_KEY = "gk-mobile-v2";
-const FREE_DELIVERY_DEFAULT = 150;
+const STORE_COORDS = window.GKDelivery?.STORE || { lat: 33.7895, lng: -7.1597 };
 const stageTemplates = {
   delivery: [
     { title: "En attente de confirmation", detail: "La cuisine va valider votre commande", icon: "clock" },
@@ -59,7 +59,8 @@ const state = {
   pendingUser: null,
   afterAuth: "home",
   orderPhone: "",
-  phoneOverride: false
+  phoneOverride: false,
+  locating: false
 };
 
 function hydrateCart(raw) {
@@ -82,7 +83,11 @@ function loadState() {
     localStorage.removeItem("gk-mobile-v1");
     const saved = JSON.parse(localStorage.getItem(STORE_KEY));
     if (!saved || typeof saved !== "object") return;
-    state.addresses = Array.isArray(saved.addresses) ? saved.addresses : [];
+    state.addresses = Array.isArray(saved.addresses) ? saved.addresses.map(row => ({
+      ...row,
+      lat: Number.isFinite(Number(row.lat)) ? Number(row.lat) : null,
+      lng: Number.isFinite(Number(row.lng)) ? Number(row.lng) : null
+    })) : [];
     state.addressId = saved.addressId || null;
     state.favorites = new Set(saved.favorites || []);
     state.delivery = saved.delivery === "pickup" ? "pickup" : "delivery";
@@ -137,18 +142,24 @@ const lineUnit = line => line.product.price + line.size.delta + line.extras.redu
 const cartCount = () => state.cart.reduce((total, line) => total + line.quantity, 0);
 const cartSubtotal = () => state.cart.reduce((total, line) => total + lineUnit(line) * line.quantity, 0);
 const currentAddress = () => state.addresses.find(address => address.id === state.addressId) ?? state.addresses[0] ?? null;
-const zoneOf = address => zones.find(zone => zone.id === address?.zone) ?? null;
+const hasGps = address => Number.isFinite(Number(address?.lat)) && Number.isFinite(Number(address?.lng));
+function kmFromStore(address) {
+  if (!hasGps(address)) return Infinity;
+  if (window.GKDelivery) return window.GKDelivery.haversineKm(STORE_COORDS, { lat: Number(address.lat), lng: Number(address.lng) });
+  return Infinity;
+}
+const maxDeliveryKm = () => window.GKDelivery?.maxKm(state.settings, zones) || Number(state.settings.maxDeliveryKm) || 15;
+const zoneOf = address => {
+  if (!hasGps(address)) return null;
+  return window.GKDelivery?.ringOf(zones, kmFromStore(address)) || null;
+};
 const currentPayment = () => ({ id: "cash", type: "cash", label: "Espèces à la réception" });
 const isPaused = () => !!state.settings.paused;
 const isSoldOut = productId => products.find(product => product.id === productId)?.available === false;
-const freeDeliveryFrom = () => Number(state.settings.freeDelivery ?? FREE_DELIVERY_DEFAULT);
 
 function deliveryFee() {
   if (!state.cart.length || state.delivery !== "delivery") return 0;
-  const address = currentAddress();
-  const zone = zoneOf(address);
-  if (!zone) return 0;
-  return cartSubtotal() >= Number(zone.freeFrom ?? freeDeliveryFrom()) ? 0 : zone.fee;
+  return Number(zoneOf(currentAddress())?.fee) || 0;
 }
 const cartTotal = () => Math.max(0, cartSubtotal() + deliveryFee() - Number(state.promo?.discount || 0));
 
@@ -159,11 +170,13 @@ function checkoutIssue() {
   const soldOut = state.cart.find(line => isSoldOut(line.product.id));
   if (soldOut) return `${soldOut.product.name} n'est plus disponible : retirez-le de votre panier.`;
   if (state.delivery === "delivery") {
+    if (state.settings.deliveryOn === false) return "La livraison est indisponible pour le moment.";
     const address = currentAddress();
-    if (!address) return "Ajoutez une adresse de livraison.";
+    if (!address || !hasGps(address)) return "Localisez-vous sur la carte pour la livraison.";
+    if (kmFromStore(address) > maxDeliveryKm()) return "Cette position est hors zone de livraison.";
     const zone = zoneOf(address);
-    if (!zone) return "Choisissez une zone de livraison valide.";
-    if (cartSubtotal() < zone.min) return `Commande minimum de ${zone.min} MAD pour la zone ${zone.name}.`;
+    if (!zone) return "Cette position est hors zone de livraison.";
+    if (zone.min > 0 && cartSubtotal() < zone.min) return `Commande minimum de ${zone.min} MAD pour ${zone.name}.`;
   }
   return "";
 }

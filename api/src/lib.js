@@ -170,3 +170,16 @@ export function haversineKm(a, b) {
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(h));
 }
+
+export function matchDeliveryRing(zones, km) {
+  const rings = [...(zones || [])]
+    .filter((zone) => Number(zone.enabled ?? 1) && Number(zone.radius_to_km ?? zone.toKm) > 0)
+    .sort((a, b) => Number(a.radius_from_km ?? a.fromKm) - Number(b.radius_from_km ?? b.fromKm));
+  for (let i = 0; i < rings.length; i++) {
+    const from = Number(rings[i].radius_from_km ?? rings[i].fromKm ?? 0);
+    const to = Number(rings[i].radius_to_km ?? rings[i].toKm ?? 0);
+    const last = i === rings.length - 1;
+    if (Number.isFinite(km) && km >= from && (last ? km <= to : km < to)) return rings[i];
+  }
+  return null;
+}

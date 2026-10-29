@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { can } from "../src/core.js";
 import { webcrypto } from "node:crypto";
 import app from "../src/index.js";
-import { signToken } from "../src/lib.js";
+import { haversineKm, matchDeliveryRing, signToken } from "../src/lib.js";
 import { numberedParameters } from "../src/postgres-sql.js";
 
 globalThis.crypto ||= webcrypto;
@@ -86,6 +86,96 @@ test("Postgres adapter numbers positional parameters without rewriting quoted te
     numberedParameters("SELECT '?' AS literal, \"?\" AS quoted, value FROM settings WHERE key = ? AND branch_id = ?"),
     "SELECT '?' AS literal, \"?\" AS quoted, value FROM settings WHERE key = $1 AND branch_id = $2"
   );
+});
+
+test("delivery rings select deterministic boundary prices", () => {
+  const rings = [
+    { id: "near", enabled: 1, radius_from_km: 0, radius_to_km: 3, fee: 10 },
+    { id: "mid", enabled: 1, radius_from_km: 3, radius_to_km: 6, fee: 15 },
+    { id: "far", enabled: 1, radius_from_km: 6, radius_to_km: 10, fee: 20 }
+  ];
+  assert.equal(matchDeliveryRing(rings, 0)?.id, "near");
+  assert.equal(matchDeliveryRing(rings, 2.999)?.id, "near");
+  assert.equal(matchDeliveryRing(rings, 3)?.id, "mid");
+  assert.equal(matchDeliveryRing(rings, 10)?.id, "far");
+  assert.equal(matchDeliveryRing(rings, 10.001), null);
+  assert.ok(haversineKm({ lat: 33.7895, lng: -7.1597 }, { lat: 33.7895, lng: -7.1597 }) < 0.001);
+});
+
+test("delivery order derives its ring, fee, and destination from GPS coordinates", async () => {
+  const client = {
+    id: "client-gps", role: "client", token_version: 0, active: 1, blocked: 0,
+    branch_id: null, name: "Client GPS", phone: "0612345678"
+  };
+  let storedOrder = null;
+  const db = {
+    context: {},
+    async setContext(next) { this.context = { ...this.context, ...next }; },
+    prepare(sql) {
+      let values = [];
+      const query = {
+        bind(...args) { values = args; return query; },
+        async first() {
+          if (sql.includes("FROM users WHERE id = ?")) return values[0] === client.id ? client : null;
+          if (sql.includes("FROM branches WHERE id = ?")) return branches.find((branch) => branch.id === values[0]) || null;
+          if (sql.includes("INSERT INTO order_counters")) return { value: 1001 };
+          if (sql.includes("FROM orders WHERE id = ?")) return storedOrder?.id === values[0] ? storedOrder : null;
+          return null;
+        },
+        async all() {
+          if (sql.includes("FROM settings WHERE key IN")) return { results: [
+            { key: "paused", value: "false" },
+            { key: "deliveryOn", value: "true" },
+            { key: "defaultPrep", value: "20" },
+            { key: "maxDeliveryKm", value: "15" }
+          ] };
+          if (sql.includes("FROM menu_items")) return { results: [{
+            id: "pizza", name: "Pizza", price: 50, sizes: "[]", extras: "[]",
+            image_url: "", visible: 1, available: 1
+          }] };
+          if (sql.includes("FROM zones WHERE enabled = 1")) return { results: [
+            { id: "ring-0-3", name: "0–3 km", fee: 10, min_order: 0, eta_min: 15, enabled: 1, radius_from_km: 0, radius_to_km: 3 },
+            { id: "ring-3-6", name: "3–6 km", fee: 15, min_order: 0, eta_min: 20, enabled: 1, radius_from_km: 3, radius_to_km: 6 }
+          ] };
+          return { results: [] };
+        },
+        async run() {
+          if (sql.includes("INSERT INTO orders")) {
+            storedOrder = {
+              id: values[0], seq: values[1], client_id: values[2], customer_name: values[3], customer_phone: values[4],
+              mode: values[5], status: "pending", items: values[6], subtotal: values[7], fee: values[8],
+              service_fee: values[9], discount: values[10], promo: values[11], total: values[12], payment: values[13],
+              zone_id: values[14], zone_name: values[15], address: values[16], address_label: values[17], note: values[18],
+              delivery_code: values[19], eta_min: values[20], prep_minutes: values[21], promised_at: values[22],
+              dispatch_state: "none", history: values[23], created_at: values[24], updated_at: values[25],
+              dest_lat: values[26], dest_lng: values[27], branch_id: "gk-food"
+            };
+          }
+          return { success: true };
+        }
+      };
+      return query;
+    },
+    async batch() { return []; }
+  };
+  const env = { SESSION_SECRET: "test-session-secret", ALLOWED_ORIGINS: "", DB: db };
+  const iat = Math.floor(Date.now() / 1000);
+  const token = await signToken(env, { sub: client.id, role: client.role, tv: 0, iat, exp: iat + 3600 });
+  const response = await app.fetch(new Request("https://api.test/api/orders", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "X-GK-Branch": "gk-food" },
+    body: JSON.stringify({
+      mode: "delivery", items: [{ id: "pizza", qty: 1, size: "", extras: [] }], payment: "cash",
+      address: { street: "Position GPS", label: "GPS", lat: 33.7895, lng: -7.1597 }
+    })
+  }), env);
+  assert.equal(response.status, 200);
+  const order = (await response.json()).order;
+  assert.equal(order.zone_id, "ring-0-3");
+  assert.equal(order.fee, 10);
+  assert.equal(order.total, 60);
+  assert.equal(order.dest_lat, 33.7895);
+  assert.equal(order.dest_lng, -7.1597);
 });
 
 test("branch-scoped public menu calls require an active X-GK-Branch", async () => {

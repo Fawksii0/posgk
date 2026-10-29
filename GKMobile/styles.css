@@ -524,3 +524,7 @@ body.has-live-bar #app-main { padding-bottom: calc(150px + var(--safe-bottom)); 
   .splash, .splash.is-playing .splash-mark, .splash.is-leaving { animation: none; }
   .splash { display: none; }
 }
+
+.delivery-map-card { display: grid; gap: 10px; margin: 0 0 12px; }
+.gk-rings-map { height: 240px; width: 100%; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: #e9e6df; }
+.delivery-map-hint { margin: 0; color: var(--muted); font-size: 13px; font-weight: 600; }

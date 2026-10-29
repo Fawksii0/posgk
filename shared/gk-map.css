@@ -22,4 +22,6 @@
 .gkm-dot.stale { background: #8a867d; }
 .gkm-empty { color: #777; font-size: 12px; margin: 4px; }
 @media (max-width: 700px) { .gkm-list { width: auto; right: 12px; max-height: 38%; } }
+.gk-rings-map { height: 280px; width: 100%; border-radius: 16px; overflow: hidden; background: #e9e6df; }
+.gk-pin { width: 18px; height: 18px; margin: 4px auto 0; border-radius: 50% 50% 50% 4px; transform: rotate(-45deg); background: #e3a81f; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
 

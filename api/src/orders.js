@@ -1,10 +1,10 @@
-import { fail, now, randomDigits, randomId, str, numv, jparse, haversineKm, normPhone, safeEqual } from "./lib.js";
+import { fail, now, randomDigits, randomId, str, numv, jparse, haversineKm, matchDeliveryRing, normPhone, safeEqual } from "./lib.js";
 import { all, first, run, stmt, batch, getSetting, setSetting, audit, notify, need } from "./core.js";
 import { courierContact } from "./chat.js";
 
 export const STORE = { lat: 33.7895, lng: -7.1597 };
 const ACTIVE = ["preparing", "ready", "enroute"];
-const ITEM_FIELDS = ["id", "seq", "customer_name", "customer_phone", "mode", "status", "items", "subtotal", "fee", "service_fee", "discount", "promo", "total", "payment", "zone_id", "zone_name", "address", "address_label", "table_no", "note", "delivery_code", "eta_min", "prep_minutes", "promised_at", "accepted_at", "ready_at", "picked_up_at", "delivered_at", "courier_id", "dispatch_state", "offered_to", "offer_expires", "dispatch_km", "dispatch_manual", "courier_step", "courier_earning", "cash_settled", "refused_reason", "cancel_reason", "history", "created_at", "updated_at"];
+const ITEM_FIELDS = ["id", "seq", "customer_name", "customer_phone", "mode", "status", "items", "subtotal", "fee", "service_fee", "discount", "promo", "total", "payment", "zone_id", "zone_name", "address", "address_label", "table_no", "note", "delivery_code", "eta_min", "prep_minutes", "promised_at", "accepted_at", "ready_at", "picked_up_at", "delivered_at", "courier_id", "dispatch_state", "offered_to", "offer_expires", "dispatch_km", "dispatch_manual", "courier_step", "courier_earning", "cash_settled", "refused_reason", "cancel_reason", "history", "created_at", "updated_at", "dest_lat", "dest_lng"];
 
 export function orderOut(row, { revealCode = false } = {}) {
   if (!row) return null;
@@ -192,7 +192,7 @@ export async function orderCreate(c) {
   if (!Array.isArray(body.items) || !body.items.length || body.items.length > 30) fail(400, "invalid", "Panier invalide.");
   const lineIds = body.items.map((line) => str(line.id, { max: 80, min: 1, field: "Produit" }));
   const [settingRows, productRows] = await Promise.all([
-    all(c.env, "SELECT key, value FROM settings WHERE key IN ('paused', 'freeDelivery', 'deliveryOn', 'defaultPrep')"),
+    all(c.env, "SELECT key, value FROM settings WHERE key IN ('paused', 'deliveryOn', 'defaultPrep', 'maxDeliveryKm')"),
     all(c.env, `SELECT * FROM menu_items WHERE visible = 1 AND available = 1 AND id IN (${lineIds.map(() => "?").join(",")})`, ...lineIds)
   ]);
   const setting = (key, def) => { const r = settingRows.find((x) => x.key === key); return r ? jparse(r.value, def) : def; };
@@ -211,18 +211,22 @@ export async function orderCreate(c) {
     subtotal += price;
     normalized.push({ id: product.id, name: product.name, qty, size: size?.name || "", extras: extras.map((item) => item.name), unit, price, image: product.image_url });
   }
-  const settings = setting("freeDelivery", 150);
-  let fee = 0, zoneId = null, zoneName = "", address = "", addressLabel = "", etaMin = null;
+  let fee = 0, zoneId = null, zoneName = "", address = "", addressLabel = "", etaMin = null, destLat = null, destLng = null;
   if (body.mode === "delivery") {
     if (!setting("deliveryOn", true)) fail(409, "delivery_paused", "La livraison est indisponible.");
-    zoneId = str(body.address?.zone, { max: 40, min: 1, field: "Zone" });
-    const zone = await first(c.env, "SELECT * FROM zones WHERE id = ? AND enabled = 1", zoneId);
-    if (!zone) fail(400, "invalid_zone", "Zone de livraison invalide.");
-    if (subtotal < zone.min_order) fail(400, "minimum_order", `Commande minimum de ${zone.min_order} MAD.`);
-    address = str(body.address?.street, { max: 200, min: 5, field: "Adresse" });
-    addressLabel = str(body.address?.label, { max: 30 });
-    zoneName = zone.name; etaMin = zone.eta_min;
-    fee = subtotal >= (zone.free_from ?? settings) ? 0 : zone.fee;
+    destLat = numv(body.address?.lat, { min: -90, max: 90, field: "Latitude" });
+    destLng = numv(body.address?.lng, { min: -180, max: 180, field: "Longitude" });
+    const km = haversineKm(STORE, { lat: destLat, lng: destLng });
+    const maxKm = Number(setting("maxDeliveryKm", 15)) || 15;
+    if (km > maxKm) fail(400, "out_of_zone", "Cette position est hors zone de livraison.");
+    const zones = await all(c.env, "SELECT * FROM zones WHERE enabled = 1 ORDER BY radius_from_km, fee");
+    const zone = matchDeliveryRing(zones, km);
+    if (!zone) fail(400, "out_of_zone", "Cette position est hors zone de livraison.");
+    if (zone.min_order > 0 && subtotal < zone.min_order) fail(400, "minimum_order", `Commande minimum de ${zone.min_order} MAD.`);
+    address = str(body.address?.street || "Position GPS", { max: 200, min: 5, field: "Adresse" });
+    addressLabel = str(body.address?.label || "GPS", { max: 30 });
+    zoneId = zone.id; zoneName = zone.name; etaMin = zone.eta_min;
+    fee = zone.fee;
   }
   let discount = 0, promo = null;
   if (body.promo) {
@@ -241,12 +245,12 @@ export async function orderCreate(c) {
   const history = JSON.stringify([{ status: "pending", at: t, by: c.user.id }]);
   const total = Math.max(0, Math.round((subtotal + fee - discount) * 100) / 100);
   await run(c.env, `INSERT INTO orders
-    (id, seq, client_id, customer_name, customer_phone, mode, status, items, subtotal, fee, service_fee, discount, promo, total, payment, zone_id, zone_name, address, address_label, note, delivery_code, eta_min, prep_minutes, promised_at, dispatch_state, history, created_at, updated_at)
-    VALUES (?,?,?,?,? ,?,'pending',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'none',?,?,?)`,
+    (id, seq, client_id, customer_name, customer_phone, mode, status, items, subtotal, fee, service_fee, discount, promo, total, payment, zone_id, zone_name, address, address_label, note, delivery_code, eta_min, prep_minutes, promised_at, dispatch_state, history, created_at, updated_at, dest_lat, dest_lng)
+    VALUES (?,?,?,?,? ,?,'pending',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'none',?,?,?,?,?)`,
     id, seq, c.user.id, name, phone, body.mode, JSON.stringify(normalized), subtotal, fee, 0, discount, promo, total,
     str(body.payment || "cash", { max: 40 }), zoneId, zoneName, address, addressLabel, note, String(seq),
     body.mode === "delivery" ? etaMin : prep,
-    prep, t + prep * 60000, history, t, t);
+    prep, t + prep * 60000, history, t, t, destLat, destLng);
   const row = await getOrder(c.env, id);
   await Promise.all([
     notify(c.env, { audience: "staff", title: `Nouvelle commande #${seq}`, text: `${name} · ${total} MAD`, orderId: id }),

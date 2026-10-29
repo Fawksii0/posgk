@@ -11,9 +11,11 @@
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <meta name="description" content="Order your G&K Food favorites for pickup or delivery." />
     <title>G&K Food — Good food. Great moments.</title>
-    <link rel="stylesheet" href="./styles.css?v=43" />
+    <link rel="stylesheet" href="./styles.css?v=44" />
     <link rel="stylesheet" href="../shared/gk-chat.css?v=1" />
     <link rel="stylesheet" href="../shared/gk-live-scene.css?v=1" />
+    <link rel="stylesheet" href="../shared/vendor/leaflet/leaflet.css" />
+    <link rel="stylesheet" href="../shared/gk-map.css?v=3" />
   </head>
   <body>
     <div class="splash is-playing" id="splash" aria-hidden="false">
@@ -61,13 +63,15 @@
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="../shared/gk-api.js?v=api3" defer></script>
+    <script src="../shared/vendor/leaflet/leaflet.js" defer></script>
+    <script src="../shared/gk-delivery-rings.js?v=1" defer></script>
+    <script src="../shared/gk-api.js?v=api4" defer></script>
     <script src="../shared/gk-sound.js" defer></script>
     <script src="../shared/gk-chat.js?v=1" defer></script>
     <script src="./data.js" defer></script>
-    <script src="./store.js?v=42" defer></script>
+    <script src="./store.js?v=44" defer></script>
     <script type="module" src="./motion-ui.js?v=40"></script>
     <script type="module" src="../shared/gk-motion-live.js?v=1"></script>
-    <script src="./app.js?v=43" defer></script>
+    <script src="./app.js?v=44" defer></script>
   </body>
 </html>
