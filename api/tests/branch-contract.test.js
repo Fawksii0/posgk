@@ -271,6 +271,99 @@ test("waiters act on dine-in tickets; chefs stay on kitchen orders", () => {
   assert.equal(can({ role: "cashier" }, "orders.dinein"), true);
 });
 
+test("waiter POS publishes and settles a dine-in table", async () => {
+  const waiter = {
+    id: "waiter-pos", role: "waiter", token_version: 0, active: 1, blocked: 0,
+    branch_id: "gk-food", name: "Waiter POS"
+  };
+  let storedOrder = null;
+  let settled = false;
+  const db = {
+    context: {},
+    async setContext(next) { this.context = { ...this.context, ...next }; },
+    prepare(sql) {
+      let values = [];
+      const query = {
+        bind(...args) { values = args; return query; },
+        async first() {
+          if (sql.includes("FROM users WHERE id = ?")) return values[0] === waiter.id ? waiter : null;
+          if (sql.includes("FROM branches WHERE id = ?")) return branches.find((branch) => branch.id === values[0]) || null;
+          if (sql.includes("INSERT INTO order_counters")) return { value: 1051 };
+          if (sql.includes("FROM orders WHERE id = ?")) return storedOrder?.id === values[0] ? storedOrder : null;
+          if (sql.startsWith("UPDATE orders SET status = ?")) {
+            storedOrder = {
+              ...storedOrder, status: values[0], updated_at: values[1], history: values[2],
+              accepted_at: values[3], prep_minutes: values[4], promised_at: values[5], eta_min: values[6],
+              dispatch_state: values[7]
+            };
+            return storedOrder;
+          }
+          if (sql.includes("status IN ('pending','preparing','ready')")) {
+            return ["pending", "preparing", "ready"].includes(storedOrder?.status) ? { id: storedOrder.id } : null;
+          }
+          if (sql.includes("COUNT(*) AS n") && sql.includes("cash_settled = 0")) {
+            return storedOrder?.status === "delivered" && !storedOrder.cash_settled
+              ? { n: 1, total: storedOrder.total } : { n: 0, total: 0 };
+          }
+          return null;
+        },
+        async all() {
+          if (sql.includes("FROM settings WHERE key IN")) return { results: [
+            { key: "paused", value: "false" }, { key: "defaultPrep", value: "20" }, { key: "tableCount", value: "24" }
+          ] };
+          if (sql.includes("FROM menu_items")) return { results: [{
+            id: "construction", name: "Construction", price: 45, dine_price: 45,
+            sizes: "[]", extras: "[]", image_url: "", visible: 1, available: 1
+          }] };
+          return { results: [] };
+        },
+        async run() {
+          if (sql.includes("INSERT INTO orders")) {
+            storedOrder = {
+              id: values[0], seq: values[1], client_id: null, customer_name: values[2], customer_phone: values[3],
+              mode: "dinein", status: "pending", items: values[4], subtotal: values[5], fee: 0,
+              service_fee: 0, discount: 0, promo: null, total: values[6], payment: "cash",
+              zone_id: null, zone_name: "", address: values[7], address_label: values[8], table_no: values[9],
+              note: values[10], delivery_code: values[11], eta_min: values[12], prep_minutes: values[13],
+              promised_at: values[14], dispatch_state: "none", history: values[15], created_at: values[16],
+              updated_at: values[17], cash_settled: 0, branch_id: "gk-food"
+            };
+          }
+          if (sql.startsWith("UPDATE orders SET cash_settled = 1")) {
+            storedOrder.cash_settled = 1;
+            settled = true;
+          }
+          return { success: true };
+        }
+      };
+      return query;
+    },
+    async batch() { return []; }
+  };
+  const env = { SESSION_SECRET: "test-session-secret", ALLOWED_ORIGINS: "", DB: db };
+  const iat = Math.floor(Date.now() / 1000);
+  const token = await signToken(env, { sub: waiter.id, role: waiter.role, tv: 0, iat, exp: iat + 3600 });
+  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "X-GK-Branch": "gk-food" };
+
+  const publish = await app.fetch(new Request("https://api.test/api/pos/orders", {
+    method: "POST", headers,
+    body: JSON.stringify({ mode: "dinein", table: 4, items: [{ id: "construction", qty: 1 }], note: "", accept: true })
+  }), env);
+  assert.equal(publish.status, 200);
+  const published = (await publish.json()).order;
+  assert.equal(published.status, "preparing");
+  assert.equal(published.table_no, 4);
+  assert.equal(published.total, 45);
+
+  storedOrder.status = "delivered";
+  const settle = await app.fetch(new Request("https://api.test/api/dinein/tables/4/settle", {
+    method: "POST", headers, body: "{}"
+  }), env);
+  assert.equal(settle.status, 200);
+  assert.deepEqual(await settle.json(), { ok: true, table: 4, total: 45, orders: 1 });
+  assert.equal(settled, true);
+});
+
 test("public dine-in order lookup requires the table number and stays on that branch", async () => {
   const order = {
     id: "112345678", seq: 1042, mode: "dinein", status: "preparing", table_no: 4,

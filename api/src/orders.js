@@ -480,6 +480,44 @@ export async function dineinOrderCreate(c) {
   return { order: orderOut(row, { revealCode: true }) };
 }
 
+export async function posOrderCreate(c) {
+  need(c.user, "orders.dinein");
+  if (c.body.mode !== "dinein") fail(400, "invalid", "Le POS ne peut publier que des commandes sur place.");
+
+  const created = await dineinOrderCreate(c);
+  await c.env.DB.setContext({ actorId: c.user.id, actorRole: c.user.role, branchId: c.branchId });
+  if (!c.body.accept) return created;
+
+  const row = await getOrder(c.env, created.order.id);
+  const prep = Number(row.prep_minutes || 20);
+  const t = now();
+  const updated = await updateStatus(c.env, row, "preparing", c.user.id, {
+    accepted_at: t,
+    prep_minutes: prep,
+    promised_at: t + prep * 60000,
+    eta_min: prep,
+    dispatch_state: "none"
+  }, { prepMinutes: prep, action: "pos_publish" });
+  await audit(c.env, c.user, "Commande POS publiee", `#${row.seq} - table ${row.table_no}`, row);
+  return { order: orderOut(updated, { revealCode: true }) };
+}
+
+export async function dineinTableSettle(c) {
+  need(c.user, "orders.handover");
+  const table = tableNo({ table: c.params.table });
+  const active = await first(c.env, "SELECT id FROM orders WHERE mode = 'dinein' AND table_no = ? AND status IN ('pending','preparing','ready') LIMIT 1", table);
+  if (active) fail(409, "table_active", "Toutes les commandes de la table doivent etre servies avant l'encaissement.");
+
+  const due = await first(c.env, "SELECT COUNT(*) AS n, COALESCE(SUM(total),0) AS total FROM orders WHERE mode = 'dinein' AND table_no = ? AND status = 'delivered' AND payment = 'cash' AND cash_settled = 0", table);
+  const count = Number(due?.n || 0);
+  const total = Number(due?.total || 0);
+  if (!count) fail(409, "nothing_to_settle", "Cette table n'a aucun montant a encaisser.");
+
+  await run(c.env, "UPDATE orders SET cash_settled = 1, updated_at = ? WHERE mode = 'dinein' AND table_no = ? AND status = 'delivered' AND payment = 'cash' AND cash_settled = 0", now(), table);
+  await audit(c.env, c.user, "Table encaissee", `Table ${table} - ${total} MAD - ${count} commande(s)`);
+  return { ok: true, table, total, orders: count };
+}
+
 export async function orderRevise(c) {
   const row = await getOrder(c.env, c.params.id);
   needModeAction(c, row);
