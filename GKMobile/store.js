@@ -54,6 +54,7 @@ const state = {
   category: "All",
   query: "",
   trackingId: null,
+  orderCelebration: null,
   detail: null,
   panel: null,
   authMode: "login",

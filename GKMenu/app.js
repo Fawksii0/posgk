@@ -33,6 +33,7 @@ const state = {
   error: "",
   loading: false,
   submitting: false,
+  celebrating: false,
   order: null,
   now: Date.now()
 };
@@ -53,6 +54,15 @@ const countdown = ms => {
   const left = Math.max(0, Math.ceil((Number(ms) - state.now) / 60000));
   return left ? `${left} min` : "imminente";
 };
+
+function lottieState(name, { loop = true, className = "" } = {}) {
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  return `<dotlottie-wc class="gk-lottie ${className}" src="../shared/animations/${name}.json" ${reduceMotion ? "" : "autoplay"} ${loop ? "loop" : ""} aria-hidden="true"></dotlottie-wc>`;
+}
+
+function lottieLoading(label) {
+  return `<div class="lottie-state" role="status">${lottieState("gk-loader", { className: "gk-lottie-loader" })}<p>${escapeHtml(label)}</p></div>`;
+}
 
 function tableFromScan() {
   const query = Number(params.get("table") || params.get("t") || params.get("tableNo"));
@@ -245,7 +255,7 @@ function renderTrack() {
         <button class="outline-button track-call" type="button" data-action="call-waiter">${icon("bell")}Appeler le serveur</button>
       </div>`
     : "";
-  return `<article class="track-card" aria-live="polite">
+  return `${state.celebrating ? `<div class="order-success" role="status">${lottieState("gk-order-success", { loop: false, className: "gk-lottie-success" })}<strong>Commande envoyée !</strong><span>La cuisine vient de la recevoir.</span></div>` : ""}<article class="track-card" aria-live="polite">
     <div class="track-card-top"><small>Commande #${escapeHtml(order.seq || order.id)}</small><strong>Table ${escapeHtml(order.table_no || state.table)}</strong></div>
     <p class="track-status">${escapeHtml(copy.title)}</p>
     <p class="track-lede">${escapeHtml(copy.lede)}</p>
@@ -291,7 +301,7 @@ function render() {
     const incidentBanner = state.opsMode === "incident"
       ? `<div class="pause-banner" role="alert">${escapeHtml(state.opsMessage || "Incident en cours — le service peut être ralenti.")}</div>`
       : "";
-    if (state.loading) main.innerHTML = `${incidentBanner}<p class="empty-state">Chargement…</p>`;
+    if (state.loading) main.innerHTML = `${incidentBanner}${lottieLoading("Chargement…")}`;
     else if (state.error && state.view === "boot") main.innerHTML = `${incidentBanner}<p class="empty-state">${escapeHtml(state.error)}</p>`;
     else if (state.view === "branches") main.innerHTML = incidentBanner + renderBranches();
     else if (state.view === "table") main.innerHTML = incidentBanner + renderTables();
@@ -387,8 +397,15 @@ async function placeOrder() {
     state.cart = [];
     state.note = "";
     state.submitting = false;
+    state.celebrating = true;
     closeOverlay();
     render();
+    setTimeout(() => {
+      if (state.celebrating) {
+        state.celebrating = false;
+        render();
+      }
+    }, 2400);
     startOrderWatch();
     showToast("Commande envoyée à la cuisine.");
   } catch (error) {

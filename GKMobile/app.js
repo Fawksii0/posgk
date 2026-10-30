@@ -46,6 +46,15 @@ function cutoutClass(src) {
   return src && src.includes("/assets/menu/") ? " cutout" : "";
 }
 
+function lottieState(name, { loop = true, className = "" } = {}) {
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  return `<dotlottie-wc class="gk-lottie ${className}" src="../shared/animations/${name}.json" ${reduceMotion ? "" : "autoplay"} ${loop ? "loop" : ""} aria-hidden="true"></dotlottie-wc>`;
+}
+
+function lottieLoading(label) {
+  return `<div class="lottie-state" role="status">${lottieState("gk-loader", { className: "gk-lottie-loader" })}<p>${escapeHtml(label)}</p></div>`;
+}
+
 function normalizeProduct(item, categoryMap) {
   const category = categoryMap.get(item.categoryId);
   const categoryName = category?.name || "";
@@ -529,7 +538,7 @@ function renderBranches() {
     <span class="eyebrow">G&amp;K · Choisissez votre restaurant</span>
     <h1 class="screen-title" id="branch-heading">Où souhaitez-vous commander ?</h1>
     <p class="auth-lead">Chaque restaurant possède son propre menu et sa zone de livraison.</p>
-    ${state.branchLoading ? `<p class="empty-state">Chargement des restaurants…</p>` : ""}
+    ${state.branchLoading ? lottieLoading("Chargement des restaurants…") : ""}
     ${state.branchError ? `<p class="cart-notice" role="alert">${escapeHtml(state.branchError)}</p><button class="outline-button" type="button" data-action="reload-branches">Réessayer</button>` : ""}
     ${!state.branchLoading && !state.branchError && !branchCards ? `<p class="empty-state">Aucun restaurant n'est disponible pour le moment.</p>` : ""}
     <div class="branch-list">${branchCards}</div>
@@ -544,7 +553,7 @@ function renderHome() {
     if (state.user) return renderBranches();
     return renderBranches();
   }
-  if (state.menuStatus === "loading") return `<section><h1 class="screen-title">Accueil</h1><p class="empty-state">Chargement du menu…</p></section>`;
+  if (state.menuStatus === "loading") return `<section><h1 class="screen-title">Accueil</h1>${lottieLoading("Chargement du menu…")}</section>`;
   if (state.menuStatus === "error") return `<section><h1 class="screen-title">Accueil</h1><p class="cart-notice" role="alert">${escapeHtml(state.menuError)}</p><button class="gold-button" type="button" data-action="reload-menu">Réessayer</button></section>`;
   const branch = selectedBranch();
   const homeItems = filteredProducts();
@@ -570,7 +579,7 @@ function renderHome() {
 }
 
 function renderMenu() {
-  if (state.menuStatus === "loading") return `<section><h1 class="screen-title">Explorer</h1><p class="empty-state">Chargement du menu…</p></section>`;
+  if (state.menuStatus === "loading") return `<section><h1 class="screen-title">Explorer</h1>${lottieLoading("Chargement du menu…")}</section>`;
   if (state.menuStatus === "error") return `<section><h1 class="screen-title">Explorer</h1><p class="cart-notice" role="alert">${escapeHtml(state.menuError)}</p><button class="gold-button" type="button" data-action="reload-menu">Réessayer</button></section>`;
   return `<section aria-labelledby="menu-heading">
     <h1 class="screen-title" id="menu-heading">Explorer</h1>
@@ -631,10 +640,10 @@ function renderCartPhone() {
 }
 
 function renderCart() {
-  if (state.menuStatus === "loading") return `<section><h1 class="screen-title">Mon panier</h1><p class="empty-state">Chargement du menu…</p></section>`;
+  if (state.menuStatus === "loading") return `<section><h1 class="screen-title">Mon panier</h1>${lottieLoading("Chargement du menu…")}</section>`;
   if (state.menuStatus === "error") return `<section><h1 class="screen-title">Mon panier</h1><p class="cart-notice" role="alert">${escapeHtml(state.menuError)}</p><button class="gold-button" type="button" data-action="reload-menu">Réessayer</button></section>`;
   if (!state.cart.length) {
-    return `<section class="cart-empty"><div class="empty-basket-icon" aria-hidden="true">${icon("bag")}</div><h1>Votre panier est vide</h1><p>Ajoutez quelques bons plats et votre prochaine pause G&K commence ici.</p><button class="gold-button" type="button" data-view="menu">Explorer le menu</button></section>`;
+    return `<section class="cart-empty">${lottieState("gk-empty-bag", { className: "gk-lottie-empty" })}<h1>Votre panier est vide</h1><p>Ajoutez quelques bons plats et votre prochaine pause G&K commence ici.</p><button class="gold-button" type="button" data-view="menu">Explorer le menu</button></section>`;
   }
   if (state.settings.deliveryOn === false) return "La livraison est indisponible pour le moment.";
   const address = currentAddress();
@@ -729,6 +738,7 @@ function renderTracking(order) {
   const etaText = trackingEta(order);
   return `<section aria-labelledby="tracking-heading">
     <div class="back-row"><button class="icon-button" type="button" data-back-orders aria-label="Retour aux commandes">${icon("chevronLeft")}</button><h1 class="screen-title" id="tracking-heading">Suivi de commande</h1></div>
+    ${state.orderCelebration === order.id ? `<div class="order-success" role="status">${lottieState("gk-order-success", { loop: false, className: "gk-lottie-success" })}<strong>Commande envoyée !</strong><span>La cuisine vient de la recevoir.</span></div>` : ""}
     ${state.ordersError ? `<p class="cart-notice" role="alert">${escapeHtml(state.ordersError)}</p>` : ""}
     <article class="tracking-card">
       <div class="eta-row"><div><small>${done || ended ? "Statut" : "Estimation du restaurant"}</small><strong>${etaText}</strong></div><span class="status-pill ${order.status}">Commande #${escapeHtml(order.seq || order.id)}</span></div>
@@ -759,7 +769,7 @@ function renderOrders() {
   return `<section aria-labelledby="orders-heading"><h1 class="screen-title" id="orders-heading">Mes commandes</h1>
     ${state.ordersError ? `<p class="cart-notice" role="alert">${escapeHtml(state.ordersError)}</p><button class="outline-button" type="button" data-action="reload-orders">Réessayer</button>` : ""}
     <div class="tabs" role="tablist">${tabs.map(([id, label]) => `<button class="tab ${state.ordersTab === id ? "active" : ""}" type="button" role="tab" aria-selected="${state.ordersTab === id}" data-orders-tab="${id}">${label}</button>`).join("")}</div>
-    ${state.ordersLoading ? `<p class="empty-state">Chargement de vos commandes…</p>` : list.length ? list.map(renderOrderCard).join("") : `<div class="cart-empty"><div class="empty-basket-icon" aria-hidden="true">${icon("receipt")}</div><h2>${empty}</h2><button class="gold-button" type="button" data-view="menu">Explorer le menu</button></div>`}
+    ${state.ordersLoading ? lottieLoading("Chargement de vos commandes…") : list.length ? list.map(renderOrderCard).join("") : `<div class="cart-empty">${lottieState("gk-empty-bag", { className: "gk-lottie-empty" })}<h2>${empty}</h2><button class="gold-button" type="button" data-view="menu">Explorer le menu</button></div>`}
   </section>`;
 }
 
@@ -1112,7 +1122,14 @@ function placeOrder() {
     state.promoMessage = "";
     state.ordersTab = "active";
     state.trackingId = order.id;
+    state.orderCelebration = order.id;
     goTo("orders");
+    setTimeout(() => {
+      if (state.orderCelebration === order.id) {
+        state.orderCelebration = null;
+        render();
+      }
+    }, 2400);
     showToast(`Commande #${order.id} envoyée au restaurant.`);
     void refreshTrackedOrder();
   }).catch(error => {

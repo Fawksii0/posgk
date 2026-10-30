@@ -1,4 +1,4 @@
-const VERSION = "gk-mobile-v53";
+const VERSION = "gk-mobile-v54";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./data.js", "./store.js", "./app.js", "./motion-ui.js", "./manifest.webmanifest",
   "./assets/emblem-reference.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png"
@@ -21,7 +21,8 @@ self.addEventListener("fetch", event => {
   const { request } = event;
   if (request.method !== "GET" || !request.url.startsWith("http")) return;
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin || url.pathname.includes("/api/") || url.pathname.includes("/shared/")) return;
+  const lottieAsset = url.pathname.includes("/shared/animations/") || url.pathname.includes("/shared/vendor/dotlottie/");
+  if (url.origin !== self.location.origin || url.pathname.includes("/api/") || (url.pathname.includes("/shared/") && !lottieAsset)) return;
   event.respondWith((async () => {
     const cache = await caches.open(VERSION);
     try {

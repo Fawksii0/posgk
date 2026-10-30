@@ -14,6 +14,7 @@ if (!apps.includes(app)) {
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const out = resolve(root, "gk-dist");
+const wasmPolicy = ["GKMobile", "GKMenu"].includes(app) ? " 'wasm-unsafe-eval'" : "";
 if (!existsSync(resolve(root, app))) throw new Error(`${app} folder not found.`);
 
 rmSync(out, { recursive: true, force: true });
@@ -32,7 +33,7 @@ cpSync(resolve(root, "shared"), resolve(out, "shared"), { recursive: true });
 writeFileSync(resolve(out, "ok.txt"), "ok\n");
 writeFileSync(resolve(out, "_headers"), `/*
   Strict-Transport-Security: max-age=31536000; includeSubDomains
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://gk-api-paris.fly.dev https://api.gkfood.store https://*.supabase.co; frame-src https://maps.google.com; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'${wasmPolicy} https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://gk-api-paris.fly.dev https://api.gkfood.store https://*.supabase.co; frame-src https://maps.google.com; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Cross-Origin-Opener-Policy: same-origin
@@ -49,7 +50,7 @@ RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
 <IfModule mod_headers.c>
   Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
-  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://gk-api-paris.fly.dev https://api.gkfood.store https://*.supabase.co; frame-src https://maps.google.com; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'"
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self'${wasmPolicy} https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://gk-api-paris.fly.dev https://api.gkfood.store https://*.supabase.co; frame-src https://maps.google.com; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'"
   Header always set X-Content-Type-Options "nosniff"
   Header always set X-Frame-Options "DENY"
   Header always set Cross-Origin-Opener-Policy "same-origin"
