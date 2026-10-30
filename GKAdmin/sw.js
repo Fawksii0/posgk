@@ -1,4 +1,4 @@
-const VERSION = "gk-admin-push-v2";
+const VERSION = "gk-admin-push-v3";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", event => event.waitUntil(self.clients.claim()));

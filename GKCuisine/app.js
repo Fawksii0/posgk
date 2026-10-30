@@ -378,7 +378,7 @@
       const cards = groups[c.key].length ? groups[c.key].map(order => orderCard(order, couriers)).join("") : "";
       return `<section class="col col-${c.key} ${ui.col === c.key ? "is-current" : ""}" aria-label="${c.label}">
       <h2>${icon(c.icon)}${c.label}<b>${groups[c.key].length}</b></h2>
-      <div class="col-body">${cards || `<div class="empty-state"><span class="empty-ico">${icon(c.icon)}</span><strong>Aucune commande</strong><small>${EMPTY_HINTS[c.key] || ""}</small></div>`}</div></section>`;
+      <div class="col-body">${cards || (window.GKLottie ? GKLottie.empty("Aucune commande", EMPTY_HINTS[c.key] || "", "compact") : `<div class="empty-state"><span class="empty-ico">${icon(c.icon)}</span><strong>Aucune commande</strong><small>${EMPTY_HINTS[c.key] || ""}</small></div>`)}</div></section>`;
     }).join("");
     return `${strip}${tabs}<div class="board">${cols}</div>`;
   }
@@ -488,7 +488,7 @@
       if (!isCashier() && ui.view === "stock") ui.view = "board";
       const previousScroll = [...app.querySelectorAll(".col-body")].map(element => element.scrollTop);
       let body;
-      if (!data.loaded && data.loading) body = `<section class="panel"><p class="empty">Chargement des commandes et des réglages…</p></section>`;
+      if (!data.loaded && data.loading) body = `<section class="panel">${window.GKLottie ? GKLottie.loading("Chargement des commandes et des réglages…") : `<p class="empty">Chargement des commandes et des réglages…</p>`}</section>`;
       else if (!data.loaded && data.error) body = `<section class="panel"><h2>Connexion au serveur impossible</h2><p class="form-error">${esc(data.error)}</p><button class="btn primary" data-action="refresh">Réessayer</button></section>`;
       else body = { board: renderBoard, history: renderHistory, stock: renderStock, settings: renderSettings }[ui.view]();
       const banners = `${data.error && data.loaded ? `<p class="banner" role="alert">Erreur de synchronisation : ${esc(data.error)}. Les dernières données chargées sont affichées. <button class="btn small-btn" data-action="refresh">Réessayer</button></p>` : ""}${data.actionError ? `<p class="banner" role="alert">Action impossible : ${esc(data.actionError)}</p>` : ""}`;

@@ -1,0 +1,12 @@
+.gk-lottie { display: block; width: 100%; height: 100%; }
+.gk-lottie-state { display: grid; justify-items: center; gap: 5px; padding: 28px 14px; color: var(--muted, #8a857a); text-align: center; }
+.gk-lottie-state strong { color: var(--ink, #1b1a17); font-size: 14px; }
+.gk-lottie-state span { max-width: 260px; font-size: 12px; line-height: 1.45; }
+.gk-lottie-loader { width: 72px; height: 72px; }
+.gk-lottie-empty { width: 112px; height: 112px; margin: -12px auto -10px; }
+.gk-lottie-state.compact { gap: 2px; padding: 16px 8px; }
+.gk-lottie-state.compact .gk-lottie-loader { width: 54px; height: 54px; }
+.gk-lottie-state.compact .gk-lottie-empty { width: 82px; height: 82px; margin: -10px auto -8px; }
+.gk-lottie-state.compact strong { font-size: 12px; }
+.gk-lottie-state.compact span { font-size: 11px; }
+@media (prefers-reduced-motion: reduce) { .gk-lottie { opacity: .92; } }

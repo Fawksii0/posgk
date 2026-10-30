@@ -1,4 +1,4 @@
-const VERSION = "gk-courier-v35";
+const VERSION = "gk-courier-v36";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./data.js", "./store.js", "./app.js", "./manifest.webmanifest",
   "./assets/emblem-reference.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png",
@@ -22,8 +22,9 @@ self.addEventListener("fetch", event => {
   const { request } = event;
   if (request.method !== "GET" || !request.url.startsWith("http")) return;
   const url = new URL(request.url);
+  const lottieAsset = url.pathname.includes("/shared/animations/") || url.pathname.includes("/shared/vendor/dotlottie/");
   const live = request.mode === "navigate" || /(?:\/|index\.html|sw\.js)$/.test(url.pathname);
-  if (live || url.pathname.includes("/shared/")) {
+  if (live || (url.pathname.includes("/shared/") && !lottieAsset)) {
     event.respondWith(fetch(request).then(response => {
       if (response.ok && request.mode === "navigate") {
         caches.open(VERSION).then(cache => cache.put(request, response.clone())).catch(() => {});

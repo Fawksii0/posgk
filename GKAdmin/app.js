@@ -64,7 +64,9 @@
   let pages = {};
 
   /* ---------- Generic helpers ---------- */
-  const emptyState = (iconName, title, text = "") => `<div class="empty">${icon(iconName)}<b>${esc(title)}</b>${text ? `<span>${esc(text)}</span>` : ""}</div>`;
+  const emptyState = (iconName, title, text = "") => window.GKLottie
+    ? GKLottie.empty(title, text)
+    : `<div class="empty">${icon(iconName)}<b>${esc(title)}</b>${text ? `<span>${esc(text)}</span>` : ""}</div>`;
   const switchHTML = (checked, attrs, label) => `<label class="switch"><input type="checkbox" ${checked ? "checked" : ""} ${attrs} aria-label="${esc(label)}"><span></span></label>`;
   const field = (name, label, control, hint = "") => `<div class="field" data-field="${name}"><label for="f-${name}">${esc(label)}</label>${control}${hint ? `<span class="hint">${hint}</span>` : ""}</div>`;
   const input = (name, value, type = "text", extra = "") => `<input id="f-${name}" name="${name}" type="${type}" value="${esc(value)}" ${extra}>`;

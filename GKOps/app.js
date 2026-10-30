@@ -94,7 +94,7 @@
       <section class="grid two">
         <div class="panel">
           <h2>Surfaces</h2>
-          ${(o?.surfaces || []).map(surfaceRow).join("") || "<p class='clock'>Loading probes…</p>"}
+          ${(o?.surfaces || []).map(surfaceRow).join("") || (window.GKLottie ? GKLottie.loading("Loading probes…", "compact") : "<p class='clock'>Loading probes…</p>")}
           <div class="row"><button class="btn ghost" type="button" data-act="probe">Re-probe frontends</button></div>
         </div>
         <div class="panel">

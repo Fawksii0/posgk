@@ -492,7 +492,7 @@
     const groups = groupOrders(data.orders);
     const tabs = `<div class="col-tabs">${COLUMNS.map(c => `<button class="col-tab ${ui.col === c.key ? "active" : ""}" data-action="col" data-col="${c.key}">${c.label}<b>${groups[c.key].length}</b></button>`).join("")}</div>`;
     const cols = COLUMNS.map(c => `<section class="col col-${c.key} ${ui.col === c.key ? "is-current" : ""}"><h2>${c.label}<b>${groups[c.key].length}</b></h2>
-      <div class="col-body">${groups[c.key].length ? groups[c.key].map(orderCard).join("") : `<p class="empty">Aucune commande</p>`}</div></section>`).join("");
+      <div class="col-body">${groups[c.key].length ? groups[c.key].map(orderCard).join("") : (window.GKLottie ? GKLottie.empty("Aucune commande", "", "compact") : `<p class="empty">Aucune commande</p>`)}</div></section>`).join("");
     return `${tabs}<div class="board">${cols}</div>`;
   }
 
@@ -555,7 +555,7 @@
     if (!state.session) { app.innerHTML = renderLogin(); document.title = baseTitle; return; }
     if (state.session.mustChange) { app.innerHTML = renderChangeSecret(); return; }
     let body;
-    if (!data.loaded && data.loading) body = `<section class="panel"><p class="empty">Chargement…</p></section>`;
+    if (!data.loaded && data.loading) body = `<section class="panel">${window.GKLottie ? GKLottie.loading("Chargement…") : `<p class="empty">Chargement…</p>`}</section>`;
     else if (!data.loaded && data.error) body = `<section class="panel"><p class="form-error">${esc(data.error)}</p><button class="btn primary" data-action="refresh">Réessayer</button></section>`;
     else body = { salle: renderFloor, till: renderTill, board: renderBoard, history: renderHistory, settings: renderSettings }[ui.view]();
     const banners = `${data.error && data.loaded ? `<p class="banner">Sync : ${esc(data.error)} <button class="btn small-btn" data-action="refresh">Réessayer</button></p>` : ""}`;

@@ -14,7 +14,7 @@ if (!apps.includes(app)) {
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const out = resolve(root, "gk-dist");
-const wasmPolicy = ["GKMobile", "GKMenu"].includes(app) ? " 'wasm-unsafe-eval'" : "";
+const wasmPolicy = " 'wasm-unsafe-eval'";
 if (!existsSync(resolve(root, app))) throw new Error(`${app} folder not found.`);
 
 rmSync(out, { recursive: true, force: true });

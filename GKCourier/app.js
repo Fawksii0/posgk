@@ -167,17 +167,18 @@ function todayTiles() {
 
 function missionsView() {
   if (state.active) return activeView();
-  const body = !state.online ? `
-      <div class="empty">${icon("bike")}<strong>Vous êtes hors ligne</strong>
-        <p>Passez en ligne pour recevoir des missions de livraison.</p></div>`
-    : state.offersLoading && !state.missions.length ? `
-      <div class="empty">${icon("clock")}<strong>Chargement des missions…</strong></div>`
+  const body = !state.online ? (window.GKLottie
+      ? GKLottie.empty("Vous êtes hors ligne", "Passez en ligne pour recevoir des missions de livraison.")
+      : `<div class="empty">${icon("bike")}<strong>Vous êtes hors ligne</strong><p>Passez en ligne pour recevoir des missions de livraison.</p></div>`)
+    : state.offersLoading && !state.missions.length ? (window.GKLottie
+      ? GKLottie.loading("Chargement des missions…")
+      : `<div class="empty">${icon("clock")}<strong>Chargement des missions…</strong></div>`)
     : state.offersError && !state.missions.length ? `
       <div class="empty">${icon("alert")}<strong>Impossible de charger les missions</strong>
         <p>${esc(state.offersError)}</p><button class="outline-button" type="button" data-act="refresh">Réessayer</button></div>`
-    : !state.missions.length ? `
-      <div class="empty">${icon("clock")}<strong>En attente de missions…</strong>
-        <p>Les nouvelles missions apparaîtront ici automatiquement.</p></div>`
+    : !state.missions.length ? (window.GKLottie
+      ? GKLottie.empty("En attente de missions…", "Les nouvelles missions apparaîtront ici automatiquement.")
+      : `<div class="empty">${icon("clock")}<strong>En attente de missions…</strong><p>Les nouvelles missions apparaîtront ici automatiquement.</p></div>`)
     : state.missions.map(missionCard).join("");
   return `
     <div class="online-card${state.online ? " on" : ""}">
@@ -284,10 +285,10 @@ function historyView() {
     </div>
     ${state.historyError && list.length ? `<p class="form-error" role="alert">${esc(state.historyError)} <button class="outline-button" type="button" data-act="refresh-history">Réessayer</button></p>` : ""}
     ${state.historyLoading && !list.length
-      ? `<div class="empty">${icon("clock")}<strong>Chargement de l’historique…</strong></div>`
+      ? (window.GKLottie ? GKLottie.loading("Chargement de l’historique…") : `<div class="empty">${icon("clock")}<strong>Chargement de l’historique…</strong></div>`)
       : state.historyError && !list.length
         ? `<div class="empty">${icon("alert")}<strong>Impossible de charger l’historique</strong><p>${esc(state.historyError)}</p><button class="outline-button" type="button" data-act="refresh-history">Réessayer</button></div>`
-        : rows || `<div class="empty">${icon("receipt")}<strong>Aucune mission</strong><p>Rien à afficher pour cette période.</p></div>`}`;
+        : rows || (window.GKLottie ? GKLottie.empty("Aucune mission", "Rien à afficher pour cette période.") : `<div class="empty">${icon("receipt")}<strong>Aucune mission</strong><p>Rien à afficher pour cette période.</p></div>`)}`;
 }
 
 function chartSvg() {
@@ -307,7 +308,7 @@ function chartSvg() {
 
 function earningsView() {
   if (!state.historyLoaded && state.historyLoading) {
-    return `<h1 class="screen-title">Gains</h1><div class="empty">${icon("clock")}<strong>Chargement des gains…</strong></div>`;
+    return `<h1 class="screen-title">Gains</h1>${window.GKLottie ? GKLottie.loading("Chargement des gains…") : `<div class="empty">${icon("clock")}<strong>Chargement des gains…</strong></div>`}`;
   }
   if (!state.historyLoaded && state.historyError) {
     return `<h1 class="screen-title">Gains</h1><div class="empty">${icon("alert")}<strong>Impossible de charger les gains</strong><p>${esc(state.historyError)}</p><button class="outline-button" type="button" data-act="refresh-history">Réessayer</button></div>`;
@@ -333,7 +334,7 @@ function earningsView() {
 function profileView() {
   const s = state.session;
   if (!state.profileLoaded && state.profileLoading) {
-    return `<h1 class="screen-title">Profil</h1><div class="empty">${icon("clock")}<strong>Chargement du profil…</strong></div>`;
+    return `<h1 class="screen-title">Profil</h1>${window.GKLottie ? GKLottie.loading("Chargement du profil…") : `<div class="empty">${icon("clock")}<strong>Chargement du profil…</strong></div>`}`;
   }
   if (!state.profileLoaded && state.profileError) {
     return `<h1 class="screen-title">Profil</h1><div class="empty">${icon("alert")}<strong>Impossible de charger le profil</strong><p>${esc(state.profileError)}</p><button class="outline-button" type="button" data-act="refresh-profile">Réessayer</button></div>`;

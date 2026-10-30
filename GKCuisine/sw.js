@@ -1,4 +1,4 @@
-const VERSION = "gk-cuisine-v62";
+const VERSION = "gk-cuisine-v63";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./data.js", "./store.js", "./escpos.js", "./app.js", "./manifest.webmanifest", "./assets/emblem-reference.png"
 ];
@@ -23,7 +23,8 @@ self.addEventListener("fetch", event => {
   const { request } = event;
   if (request.method !== "GET" || !request.url.startsWith("http")) return;
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin || url.pathname.includes("/api/") || url.pathname.includes("/shared/")) return;
+  const lottieAsset = url.pathname.includes("/shared/animations/") || url.pathname.includes("/shared/vendor/dotlottie/");
+  if (url.origin !== self.location.origin || url.pathname.includes("/api/") || (url.pathname.includes("/shared/") && !lottieAsset)) return;
   if (request.mode === "navigate") {
     event.respondWith(fetch(request).catch(() => caches.match("./index.html")));
     return;

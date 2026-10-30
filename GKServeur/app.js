@@ -361,10 +361,10 @@
         <p class="note">${icon("bell")} Un client demande un serveur.</p>
         <div class="btn-row one"><button class="gold-button" data-action="ack" data-id="${esc(call.id)}">${icon("check")}J'y vais</button></div>
       </article>`).join("");
-      return `${tabs}${cards || `<p class="empty-state">Aucun appel en attente.</p>`}`;
+      return `${tabs}${cards || (window.GKLottie ? GKLottie.empty("Aucun appel en attente.", "", "compact") : `<p class="empty-state">Aucun appel en attente.</p>`)}`;
     }
     const list = groups[ui.tab] || [];
-    return `${data.error ? `<p class="form-error">${esc(data.error)}</p>` : ""}${tabs}${list.length ? list.map(ticketCard).join("") : `<p class="empty-state">Rien dans cette liste.</p>`}`;
+    return `${data.error ? `<p class="form-error">${esc(data.error)}</p>` : ""}${tabs}${list.length ? list.map(ticketCard).join("") : (window.GKLottie ? GKLottie.empty("Rien dans cette liste.", "", "compact") : `<p class="empty-state">Rien dans cette liste.</p>`)}`;
   }
 
   function renderRefuseSheet(order) {
@@ -469,6 +469,7 @@
     renderHeader();
     if (!state.session) main.innerHTML = renderLogin();
     else if (state.session.mustChange) main.innerHTML = renderSecret();
+    else if (!data.loaded) main.innerHTML = window.GKLottie ? GKLottie.loading("Chargement des tables et des commandes…") : `<p class="empty-state">Chargement…</p>`;
     else main.innerHTML = renderBoard();
     if (ui.sheet === "edit" && ui.draft) renderEditSheet();
     if (ui.sheet === "table" && ui.table) renderTableSheet(ui.table);
