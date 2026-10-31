@@ -322,6 +322,8 @@
   }
 
   const ageClass = ms => (ms < 10 * 60000 ? "age-ok" : ms <= 15 * 60000 ? "age-warn" : "age-late");
+  // Age strip reaches full at 20 minutes, then holds. Caps so a forgotten ticket never overflows.
+  const ageRatio = ts => Math.min(1, Math.max(0, (Date.now() - ts) / (20 * 60000))).toFixed(3);
   function elapsedText(ts) {
     const secs = Math.max(0, Math.floor((Date.now() - ts) / 1000));
     if (secs < 3600) return `${String(Math.floor(secs / 60)).padStart(2, "0")}:${String(secs % 60).padStart(2, "0")}`;
@@ -358,7 +360,7 @@
     const timer = timed
       ? `<span class="kds-timer" data-timer="${order.createdAt}" aria-label="Temps écoulé">${icon("clock")}${elapsedText(order.createdAt)}</span>`
       : `<span class="kds-timer" data-since="${order.createdAt}">${icon("clock")}${minutesSince(order.createdAt)} min</span>`;
-    return `<article class="card ${isNew ? "is-new" : ""} mode-${order.mode} ${timed ? `timed ${ageClass(Date.now() - order.createdAt)}` : ""}" data-order="${esc(order.id)}" ${timed ? `data-age-since="${order.createdAt}"` : ""}>
+    return `<article class="card ${isNew ? "is-new" : ""} mode-${order.mode} ${timed ? `timed ${ageClass(Date.now() - order.createdAt)}` : ""}" data-order="${esc(order.id)}" ${timed ? `data-age-since="${order.createdAt}" style="--age:${ageRatio(order.createdAt)}"` : ""}>
       <header class="card-head"><span class="order-no">${esc(order.id)}</span><span class="kds-place">${esc(place)}</span>${timer}</header>
       <ul class="lines">${lines}</ul>
       ${order.note ? `<p class="note">${icon("alert")}<span>${esc(order.note)}</span></p>` : ""}
@@ -945,11 +947,13 @@
       if (element.textContent !== text) element.textContent = text;
     });
     app.querySelectorAll("[data-age-since]").forEach(card => {
-      const cls = ageClass(Date.now() - Number(card.dataset.ageSince));
+      const age = Date.now() - Number(card.dataset.ageSince);
+      const cls = ageClass(age);
       if (!card.classList.contains(cls)) {
         card.classList.remove("age-ok", "age-warn", "age-late");
         card.classList.add(cls);
       }
+      card.style.setProperty("--age", Math.min(1, Math.max(0, age / (20 * 60000))).toFixed(3));
     });
   }
 
