@@ -7,13 +7,15 @@ const NAV = [
   { id: "earnings", label: "Gains", icon: "wallet" },
   { id: "profile", label: "Profil", icon: "user" }
 ];
-const STEPS = ["Accepté", "Arrivé", "Récupéré", "En route", "Livré"];
-const STEP_BUTTONS = { 1: "Arrivé au restaurant", 2: "Commande récupérée" };
-const STEP_HINTS = {
-  1: "Rendez-vous au restaurant G&K Food.",
-  2: "Récupérez la commande au comptoir.",
-  4: "Remettez la commande et saisissez le code du ticket."
+// Four stages the driver actually experiences. Server steps 3 and 4 both mean "en route".
+const STEPS = ["Accepté", "Au restaurant", "En route", "Livré"];
+const stageOf = m => (m.step >= 4 ? 2 : m.step >= 2 ? 1 : 0);
+const STEP_BUTTONS = {
+  1: "Je suis au restaurant",
+  2: "Commande récupérée",
+  4: "Confirmer la livraison"
 };
+const scene = (name, className = "") => (window.GKLottie ? GKLottie.animation(name, { className }) : "");
 
 const dayFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 const timeFmt = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
@@ -55,12 +57,8 @@ async function runAction(task) {
   }
 }
 
-const waLink = phone => `https://wa.me/212${phone.replace(/^0/, "")}`;
 const telLink = phone => `tel:${phone.replace(/^0/, "+212")}`;
 const unreadCount = () => state.notifications.filter(n => !n.read).length;
-const paymentBadge = m => m.payment === "cash"
-  ? `<span class="badge">${icon("cash")} Espèces ${money(m.total)}</span>`
-  : `<span class="badge ok">${icon("card")} Payé en ligne</span>`;
 
 /* ---------- Views ---------- */
 
@@ -130,150 +128,188 @@ function changeSecretView() {
     </section>`;
 }
 
-function missionCard(m) {
+const offerLeft = m => Math.max(0, Math.ceil((m.expiresAt - Date.now()) / 1000));
+
+function offerClock(m) {
+  return `<span class="offer-clock" data-expires="${m.expiresAt}" style="--p:1">
+    <svg viewBox="0 0 36 36" aria-hidden="true">
+      <circle class="track" cx="18" cy="18" r="15" pathLength="100"></circle>
+      <circle class="prog" cx="18" cy="18" r="15" pathLength="100"></circle>
+    </svg><b>${offerLeft(m)}</b></span>`;
+}
+
+function offerCard(m) {
   return `
-    <article class="mission">
-      <button class="mission-main" type="button" data-act="detail" data-id="${esc(m.id)}" aria-label="Détails de la mission ${esc(m.id)}">
-        <div class="mission-top"><span class="mission-id">${esc(m.id)}</span>${m.earning !== null ? `<span class="earning">+${money(m.earning)}</span>` : ""}</div>
-        <div class="mission-route">
-          <div>${icon("store")}<span>G&amp;K Food</span></div>
-          <div>${icon("pin")}<span>${esc(m.customer)}${m.customer && m.address ? " · " : ""}${esc(m.address)}${m.zone ? ` <span class="muted">(${esc(m.zone)})</span>` : ""}</span></div>
+    <article class="offer">
+      <button class="offer-body" type="button" data-act="detail" data-id="${esc(m.id)}" aria-label="Détails de la course ${esc(m.id)}">
+        <div class="offer-head">
+          <span class="offer-id">#${esc(m.id)}</span>
+          ${m.offer ? offerClock(m) : ""}
+          ${m.earning !== null ? `<span class="offer-earn">+${money(m.earning)}</span>` : ""}
         </div>
-        <div class="mission-meta">
-          ${m.km !== null ? `<span class="badge dark">${icon("navigate")} ${m.km} km</span>` : ""}
-          ${paymentBadge(m)}
+        <div class="offer-route">
+          <span class="route-stop"><i class="route-dot pickup"></i><span>G&amp;K Food</span></span>
+          <span class="route-stop"><i class="route-dot drop"></i><span>${esc(m.customer)}${m.customer && m.address ? " · " : ""}${esc(m.address)}${m.zone ? ` <em>(${esc(m.zone)})</em>` : ""}</span></span>
         </div>
-        <p class="muted" style="font-size:12px">${esc(m.items)}${m.items ? " · " : ""}Total ${money(m.total)}</p>
+        <div class="offer-meta">
+          ${m.km !== null ? `<span class="tag">${icon("navigate")} ${m.km} km</span>` : ""}
+          <span class="tag${m.payment === "cash" ? " cash" : " paid"}">${m.payment === "cash" ? `${icon("cash")} ${money(m.total)} à encaisser` : `${icon("card")} Payé en ligne`}</span>
+        </div>
+        <p class="offer-items">${esc(m.items)}</p>
       </button>
-      <div class="mission-foot">${m.offer
-        ? `<span class="badge offer-timer" data-expires="${m.expiresAt}" aria-live="off">${offerLeft(m)} s</span>
-           <button class="outline-button" type="button" data-act="refuse" data-id="${esc(m.id)}"${state.actionBusy ? " disabled" : ""}>Refuser</button>
-           <button class="gold-button" type="button" data-act="accept" data-id="${esc(m.id)}"${state.actionBusy ? " disabled" : ""}>Accepter</button>`
-        : `<button class="gold-button" type="button" data-act="accept" data-id="${esc(m.id)}"${state.actionBusy ? " disabled" : ""}>Accepter</button>`}</div>
+      <div class="offer-actions">
+        <button class="ghost-button" type="button" data-act="refuse" data-id="${esc(m.id)}"${state.actionBusy ? " disabled" : ""}>Refuser</button>
+        <button class="primary-button" type="button" data-act="accept" data-id="${esc(m.id)}"${state.actionBusy ? " disabled" : ""}>Accepter</button>
+      </div>
     </article>`;
 }
 
-const offerLeft = m => Math.max(0, Math.ceil((m.expiresAt - Date.now()) / 1000));
-
-function todayTiles() {
+function statStrip() {
   const done = filterHistory("today").filter(h => h.status === "delivered");
-  const gains = done.reduce((t, h) => t + (Number(h.earning) || 0), 0);
+  const cash = Number(state.profile?.cashToRemit) || 0;
   return `
-    <div class="today-tiles" aria-label="Résumé du jour">
-      <div><b>${done.length}</b><small>Courses livrées</small></div>
-      <div><b>${money(gains)}</b><small>Gains du jour</small></div>
+    <div class="stat-strip" aria-label="Résumé du jour">
+      <div><b>${done.length}</b><small>Courses</small></div>
+      <div><b>${sumEarnings(done)}<i> MAD</i></b><small>Gains du jour</small></div>
+      <div><b>${cash}<i> MAD</i></b><small>Espèces</small></div>
     </div>`;
+}
+
+function statusHero() {
+  const waiting = state.online && !state.missions.length;
+  const art = !state.online ? scene("gk-courier-offline", "hero-art")
+    : waiting ? scene("gk-courier-radar", "hero-art") : "";
+  const title = !state.online ? "Repos" : waiting ? "Recherche de courses…" : "Vous recevez les offres";
+  const detail = !state.online ? "Passez en ligne pour recevoir des courses."
+    : waiting ? "Les offres arrivent ici automatiquement." : "Acceptez une offre pour démarrer.";
+  return `
+    <section class="hero${state.online ? " on" : ""}">
+      ${art ? `<div class="hero-art-wrap">${art}</div>` : ""}
+      <div class="hero-copy">
+        <span class="hero-eyebrow">${state.online ? "En ligne" : "Hors ligne"}</span>
+        <strong>${title}</strong>
+        <small>${detail}</small>
+      </div>
+      <button class="switch" type="button" role="switch" aria-checked="${state.online}" aria-label="Statut en ligne" data-act="toggle-online"${state.actionBusy ? " disabled" : ""}></button>
+    </section>`;
 }
 
 function missionsView() {
   if (state.active) return activeView();
-  const body = !state.online ? (window.GKLottie
-      ? GKLottie.empty("Vous êtes hors ligne", "Passez en ligne pour recevoir des missions de livraison.")
-      : `<div class="empty">${icon("bike")}<strong>Vous êtes hors ligne</strong><p>Passez en ligne pour recevoir des missions de livraison.</p></div>`)
+  const body = !state.online ? ""
     : state.offersLoading && !state.missions.length ? (window.GKLottie
-      ? GKLottie.loading("Chargement des missions…")
-      : `<div class="empty">${icon("clock")}<strong>Chargement des missions…</strong></div>`)
+      ? GKLottie.loading("Chargement des courses…")
+      : `<div class="empty">${icon("clock")}<strong>Chargement des courses…</strong></div>`)
     : state.offersError && !state.missions.length ? `
-      <div class="empty">${icon("alert")}<strong>Impossible de charger les missions</strong>
-        <p>${esc(state.offersError)}</p><button class="outline-button" type="button" data-act="refresh">Réessayer</button></div>`
-    : !state.missions.length ? (window.GKLottie
-      ? GKLottie.empty("En attente de missions…", "Les nouvelles missions apparaîtront ici automatiquement.")
-      : `<div class="empty">${icon("clock")}<strong>En attente de missions…</strong><p>Les nouvelles missions apparaîtront ici automatiquement.</p></div>`)
-    : state.missions.map(missionCard).join("");
+      <div class="empty">${icon("alert")}<strong>Impossible de charger les courses</strong>
+        <p>${esc(state.offersError)}</p><button class="ghost-button" type="button" data-act="refresh">Réessayer</button></div>`
+    : !state.missions.length ? ""
+    : state.missions.map(offerCard).join("");
   return `
-    <div class="online-card${state.online ? " on" : ""}">
-      <div><strong>${state.online ? "En ligne" : "Hors ligne"}</strong>
-        <small>${state.online ? "Vous recevez des missions" : "Vous ne recevez aucune mission"}</small></div>
-      <button class="switch" type="button" role="switch" aria-checked="${state.online}" aria-label="Statut en ligne" data-act="toggle-online"${state.actionBusy ? " disabled" : ""}></button>
-    </div>
-    ${todayTiles()}
-    ${state.online ? `<div class="section-heading"><h2>Missions disponibles</h2><small>${state.missions.length}</small></div>` : ""}
-    ${state.offersError && state.missions.length ? `<p class="form-error" role="alert">${esc(state.offersError)} <button class="outline-button" type="button" data-act="refresh">Réessayer</button></p>` : ""}
+    ${statusHero()}
+    ${statStrip()}
+    ${state.online && state.missions.length ? `<div class="section-heading"><h2>Offres</h2><small>${state.missions.length}</small></div>` : ""}
+    ${state.offersError && state.missions.length ? `<p class="form-error" role="alert">${esc(state.offersError)} <button class="ghost-button" type="button" data-act="refresh">Réessayer</button></p>` : ""}
     ${body}`;
 }
 
-function mapCard(m) {
-  const status = m.step === 1 ? "En attente de votre arrivée au restaurant"
-    : m.step === 2 ? "Arrivée au restaurant confirmée"
-      : "Commande récupérée · en route vers le client";
-  const scene = window.gkMotionLive?.liveSceneHtml;
-  const waitingKitchen = m.step === 2 && m.orderStatus !== "ready";
-  const motion = scene
-    ? (waitingKitchen ? scene("cook", "La cuisine termine la commande") : scene("ride", m.step >= 3 ? "En route vers le client" : "En route vers le restaurant"))
-    : "";
+function stageCard(m) {
+  const waiting = m.step === 2 && m.orderStatus !== "ready";
+  const art = waiting ? scene("gk-empty-bag", "stage-art") : scene("gk-courier-ride", "stage-art");
+  const title = waiting ? "La cuisine prépare la commande" : m.step >= 4 ? "En route vers le client" : "Direction le restaurant";
+  const detail = waiting ? "Attendez le signal avant de partir."
+    : m.step >= 4 ? `${m.km !== null ? `${m.km} km · ` : ""}Demandez le code au client`
+      : "Commande à récupérer au comptoir";
   return `
-    ${motion}
-    <div class="tracking-map" role="status" aria-label="État de la mission">
-      <span class="map-label">${icon("bike")} ${esc(status)}${m.km !== null ? ` · ${m.km} km` : ""}</span>
+    <div class="stage${waiting ? " waiting" : ""}" role="status">
+      <div class="stage-art-wrap">${art}</div>
+      <div class="stage-copy"><strong>${esc(title)}</strong><small>${esc(detail)}</small></div>
     </div>`;
 }
 
 function activeView() {
   const m = state.active;
-  const stepper = STEPS.map((label, i) => `
-    <li class="step${i < m.step ? " done" : i === m.step ? " current" : ""}"${i === m.step ? ' aria-current="step"' : ""}>
-      <span class="step-dot">${i < m.step ? icon("check") : i + 1}</span>${label}</li>`).join("");
-  const cash = m.payment === "cash"
-    ? `<div class="cash-alert"><span>${icon("cash")} Espèces à encaisser</span><strong>${money(m.total)}</strong></div>` : "";
+  const stage = stageOf(m);
   const waiting = m.step === 2 && m.orderStatus !== "ready";
-  const action = m.step < 4
-    ? `<button class="gold-button" type="button" data-act="advance"${waiting || state.actionBusy ? " disabled" : ""}>${waiting ? "En attente de la cuisine…" : `${STEP_BUTTONS[m.step]} ${icon("arrowRight")}`}</button>`
-    : `<button class="gold-button" type="submit" form="deliver-form">${icon("check")} Confirmer la livraison</button>`;
+  const stepper = STEPS.map((label, i) => `
+    <li class="step${i < stage ? " done" : i === stage ? " current" : ""}"${i === stage ? ' aria-current="step"' : ""}>
+      <span class="step-bar"></span><span class="step-label">${label}</span></li>`).join("");
+  const cash = m.payment === "cash"
+    ? `<div class="cash-banner"><span>${icon("cash")} À encaisser</span><strong>${money(m.total)}</strong></div>` : "";
+  const action = m.step === 4
+    ? `<button class="primary-button big" type="submit" form="deliver-form">${icon("check")} Confirmer la livraison</button>`
+    : `<button class="primary-button big" type="button" data-act="advance"${waiting || state.actionBusy ? " disabled" : ""}>${waiting ? "En attente de la cuisine…" : esc(STEP_BUTTONS[m.step] || "Actualiser")} ${icon("arrowRight")}</button>`;
   const deliverForm = m.step === 4 ? `
-      <form id="deliver-form" class="card delivery-code" novalidate>
-        <h3>Livraison</h3>
-        <p class="code-hint">Demandez le code imprimé sur le ticket (pas le n° de commande).</p>
-        <div class="field">
-          <label for="code">Code de livraison</label>
-          <input id="code" class="pin-input code-input" name="code" type="text" inputmode="numeric" maxlength="8" autocomplete="one-time-code" placeholder="Code du ticket" />
-        </div>
+      <form id="deliver-form" class="card delivery" novalidate>
+        <h3>Code de livraison</h3>
+        <p class="hint">Demandez le code imprimé sur le ticket (pas le n° de commande).</p>
+        <input id="code" class="code-input" name="code" type="text" inputmode="numeric" maxlength="8" autocomplete="one-time-code" placeholder="00000" aria-label="Code de livraison" />
         ${m.payment === "cash" ? `<label class="check-row"><input id="cash-ok" type="checkbox" /> Espèces encaissées (${money(m.total)})</label>` : ""}
         <p id="deliver-error" class="form-error" role="alert"></p>
       </form>` : "";
   const toPickup = m.step < 4;
   const dest = toPickup ? (m.pickupCoords || m.pickupAddress) : (m.coords || m.rawAddress);
-  const mapsBtn = dest
-    ? `<a class="outline-button maps-button" href="${mapsNavUrl(dest)}" target="_blank" rel="noopener">${icon("navigate")} Ouvrir Maps</a>` : "";
+  const targetLabel = toPickup ? "Restaurant" : "Client";
+  const targetName = toPickup ? "G&K Food" : m.customer;
+  const targetDetail = toPickup
+    ? "Récupérez la commande au comptoir"
+    : `${m.address}${m.km !== null ? ` · ${m.km} km` : ""}`;
   return `
-    <h1 class="screen-title">Mission ${esc(m.id)}</h1>
-    <ol class="stepper" aria-label="Progression">${stepper}</ol>
-    ${mapCard(m)}
-    <div class="card">
-      <div class="mission-top"><span class="badge">${esc(STEP_HINTS[m.step])}</span>${m.earning !== null ? `<span class="earning">+${money(m.earning)}</span>` : ""}</div>
+    <div class="mission-head">
+      <div><span class="mission-kicker">Course en cours</span><h1 class="screen-title">#${esc(m.id)}</h1></div>
+      ${m.earning !== null ? `<span class="offer-earn lg">+${money(m.earning)}</span>` : ""}
+    </div>
+    <ol class="progress" aria-label="Progression">${stepper}</ol>
+    ${stageCard(m)}
+    <div class="card target-card">
+      <span class="target-label">${targetLabel}</span>
+      <strong>${esc(targetName || "Client")}</strong>
+      <small>${esc(targetDetail)}</small>
+      <div class="quick-actions">
+        ${dest ? `<a class="quick primary" href="${mapsNavUrl(dest)}" target="_blank" rel="noopener">${icon("navigate")}<span>Maps</span></a>` : ""}
+        ${m.phone ? `<a class="quick" href="${telLink(m.phone)}">${icon("phone")}<span>Appeler</span></a>` : ""}
+        <button class="quick" type="button" data-act="open-chat" data-id="${esc(m.id)}" data-name="${esc(m.customer)}">${icon("chat")}<span>Message</span>${chatUnread[m.id] ? `<span class="gkc-badge">${chatUnread[m.id]}</span>` : ""}</button>
+      </div>
+    </div>
+    ${cash}
+    <details class="card more">
+      <summary>Détails de la course</summary>
       <div class="kv">
         <div><span>Restaurant</span><span>G&amp;K Food</span></div>
         <div><span>Client</span><span>${esc(m.customer)}</span></div>
         <div><span>Adresse</span><span>${esc(m.address)}${m.zone ? `<br>${esc(m.zone)}` : ""}${m.km !== null ? ` · ${m.km} km` : ""}</span></div>
         <div><span>Articles</span><span>${esc(m.items)}</span></div>
-        <div><span>Paiement</span><span>${m.payment === "cash" ? "Espèces" : "Payé en ligne"}</span></div>
+        <div><span>Paiement</span><span>${m.payment === "cash" ? `Espèces · ${money(m.total)}` : "Payé en ligne"}</span></div>
+        <div><span>Total</span><span>${money(m.total)}</span></div>
       </div>
-      <div class="contact-row">
-        ${mapsBtn}
-        <button class="outline-button" type="button" data-act="open-chat" data-id="${esc(m.id)}" data-name="${esc(m.customer)}">${icon("chat")} Message${chatUnread[m.id] ? `<span class="gkc-badge">${chatUnread[m.id]}</span>` : ""}</button>
-        ${m.phone ? `<a class="outline-button" href="${telLink(m.phone)}" aria-label="Appeler ${esc(m.customer)}">${icon("phone")} Appeler</a>
-        <a class="outline-button" href="${waLink(m.phone)}" target="_blank" rel="noopener" aria-label="WhatsApp ${esc(m.customer)}">${icon("chat")} WhatsApp</a>` : ""}
-      </div>
-      ${cash}
-    </div>
+    </details>
     ${deliverForm}
-    <div class="sticky-actions">
-      ${action}
-    </div>`;
+    <div class="sticky-actions">${action}</div>`;
 }
 
 function historyView() {
   const list = filterHistory(ui.filter);
   const filters = [["today", "Aujourd'hui"], ["week", "Semaine"], ["all", "Tout"]];
+  const totals = new Map();
+  list.forEach(h => {
+    const day = startOfDay(h.at);
+    const t = totals.get(day) || { count: 0, sum: 0 };
+    t.count += 1;
+    if (h.status === "delivered") t.sum += Number(h.earning) || 0;
+    totals.set(day, t);
+  });
   let lastDay = null;
   const rows = list.map(h => {
     const day = startOfDay(h.at);
-    const head = day !== lastDay ? `<h2 class="day-label">${esc(dayLabel(h.at))}</h2>` : "";
+    const head = day !== lastDay
+      ? `<h2 class="day-label"><span>${esc(dayLabel(h.at))}</span><small>${totals.get(day).count} course${totals.get(day).count > 1 ? "s" : ""} · ${money(totals.get(day).sum)}</small></h2>`
+      : "";
     lastDay = day;
     const ok = h.status === "delivered";
     return `${head}
       <div class="row">
         <span class="row-icon${ok ? "" : " bad"}">${icon(ok ? "check" : "alert")}</span>
-        <span class="row-copy"><strong>${esc(h.id)} · ${esc(h.customer)}</strong>
+        <span class="row-copy"><strong>#${esc(h.id)} · ${esc(h.customer)}</strong>
           <small>${timeFmt.format(h.at)}${h.zone ? ` · ${esc(h.zone)}` : ""}</small></span>
         <span class="row-amount${ok ? "" : " zero"}">${ok ? `+${money(h.earning)}` : "Annulée"}</span>
       </div>`;
@@ -283,12 +319,12 @@ function historyView() {
     <div class="chips" role="group" aria-label="Période">
       ${filters.map(([id, label]) => `<button class="chip" type="button" data-act="filter" data-filter="${id}" aria-pressed="${ui.filter === id}">${label}</button>`).join("")}
     </div>
-    ${state.historyError && list.length ? `<p class="form-error" role="alert">${esc(state.historyError)} <button class="outline-button" type="button" data-act="refresh-history">Réessayer</button></p>` : ""}
+    ${state.historyError && list.length ? `<p class="form-error" role="alert">${esc(state.historyError)} <button class="ghost-button" type="button" data-act="refresh-history">Réessayer</button></p>` : ""}
     ${state.historyLoading && !list.length
       ? (window.GKLottie ? GKLottie.loading("Chargement de l’historique…") : `<div class="empty">${icon("clock")}<strong>Chargement de l’historique…</strong></div>`)
       : state.historyError && !list.length
-        ? `<div class="empty">${icon("alert")}<strong>Impossible de charger l’historique</strong><p>${esc(state.historyError)}</p><button class="outline-button" type="button" data-act="refresh-history">Réessayer</button></div>`
-        : rows || (window.GKLottie ? GKLottie.empty("Aucune mission", "Rien à afficher pour cette période.") : `<div class="empty">${icon("receipt")}<strong>Aucune mission</strong><p>Rien à afficher pour cette période.</p></div>`)}`;
+        ? `<div class="empty">${icon("alert")}<strong>Impossible de charger l’historique</strong><p>${esc(state.historyError)}</p><button class="ghost-button" type="button" data-act="refresh-history">Réessayer</button></div>`
+        : rows || (window.GKLottie ? GKLottie.empty("Aucune course", "Rien à afficher pour cette période.") : `<div class="empty">${icon("receipt")}<strong>Aucune course</strong><p>Rien à afficher pour cette période.</p></div>`)}`;
 }
 
 function chartSvg() {
@@ -311,22 +347,26 @@ function earningsView() {
     return `<h1 class="screen-title">Gains</h1>${window.GKLottie ? GKLottie.loading("Chargement des gains…") : `<div class="empty">${icon("clock")}<strong>Chargement des gains…</strong></div>`}`;
   }
   if (!state.historyLoaded && state.historyError) {
-    return `<h1 class="screen-title">Gains</h1><div class="empty">${icon("alert")}<strong>Impossible de charger les gains</strong><p>${esc(state.historyError)}</p><button class="outline-button" type="button" data-act="refresh-history">Réessayer</button></div>`;
+    return `<h1 class="screen-title">Gains</h1><div class="empty">${icon("alert")}<strong>Impossible de charger les gains</strong><p>${esc(state.historyError)}</p><button class="ghost-button" type="button" data-act="refresh-history">Réessayer</button></div>`;
   }
   const today = filterHistory("today").filter(h => h.status === "delivered");
   const week = filterHistory("week").filter(h => h.status === "delivered");
   const cash = Number(state.profile?.cashToRemit) || 0;
   return `
     <h1 class="screen-title">Gains</h1>
-    <div class="stat-grid">
-      <div class="stat hero"><small>Aujourd'hui</small><strong>${money(sumEarnings(today))}</strong></div>
-      <div class="stat"><small>Cette semaine</small><strong>${money(sumEarnings(week))}</strong></div>
-      <div class="stat"><small>Livraisons (semaine)</small><strong>${week.length}</strong></div>
-      <div class="stat"><small>Espèces à reverser</small><strong>${money(cash)}</strong></div>
+    <div class="money-hero">
+      <small>Aujourd'hui</small>
+      <strong>${money(sumEarnings(today))}</strong>
+      <span>${today.length} course${today.length > 1 ? "s" : ""} · cette semaine ${money(sumEarnings(week))}</span>
+    </div>
+    <div class="stat-strip">
+      <div><b>${week.length}</b><small>Courses 7j</small></div>
+      <div><b>${sumEarnings(week)}<i> MAD</i></b><small>7 derniers jours</small></div>
+      <div><b>${cash}<i> MAD</i></b><small>À reverser</small></div>
     </div>
     <div class="section-heading"><h2>7 derniers jours</h2><small>MAD</small></div>
-    <div class="card">${chartSvg()}</div>
-    ${state.historyLoading ? `<p class="muted">Actualisation des gains…</p>` : ""}
+    <div class="card chart-card">${chartSvg()}</div>
+    ${state.historyLoading ? `<p class="muted refresh-note">Actualisation des gains…</p>` : ""}
     ${state.historyError ? `<p class="form-error">${esc(state.historyError)}</p>` : ""}
     <p class="fineprint">Calculé à partir des livraisons terminées enregistrées sur le serveur.</p>`;
 }
@@ -347,17 +387,18 @@ function profileView() {
       <div><h2>${esc(s.name || "")}</h2><p>${esc(s.phone || "")}</p>
         ${state.profile?.vehicle ? `<p>${icon("bike")} Véhicule : ${esc(state.profile.vehicle)}</p>` : ""}</div>
     </div>
-    <div class="stat-grid" style="margin-top:12px">
-      <div class="stat"><small>Statut</small><strong>${state.online ? "En ligne" : "Hors ligne"}</strong></div>
-      <div class="stat"><small>Espèces à reverser</small><strong>${money(Number(state.profile?.cashToRemit) || 0)}</strong></div>
+    <div class="stat-strip" style="margin-top:12px">
+      <div><b>${state.online ? "En ligne" : "Hors ligne"}</b><small>Statut</small></div>
+      <div><b>${Number(state.profile?.cashToRemit) || 0}<i> MAD</i></b><small>À reverser</small></div>
+      <div><b>${esc(state.profile?.vehicle || "—")}</b><small>Véhicule</small></div>
     </div>
     <div class="menu-list">
-      ${ui.installPrompt ? `<button class="menu-item" type="button" data-act="install"><span class="row-icon">${icon("download")}</span><span class="grow">Installer l'application</span></button>` : ""}
+      ${ui.installPrompt ? `<button class="menu-item" type="button" data-act="install"><span class="row-icon">${icon("download")}</span><span class="grow">Installer l'application</span>${icon("chevronRight")}</button>` : ""}
       <button class="menu-item danger" type="button" data-act="logout"><span class="row-icon">${icon("logout")}</span><span class="grow">Se déconnecter</span></button>
     </div>
-    ${state.profileLoading ? `<p class="muted">Actualisation du profil…</p>` : ""}
-    ${state.profileError ? `<p class="form-error">${esc(state.profileError)} <button class="outline-button" type="button" data-act="refresh-profile">Réessayer</button></p>` : ""}
-    <p class="fineprint">G&amp;K Livreur</p>`;
+    ${state.profileLoading ? `<p class="muted refresh-note">Actualisation du profil…</p>` : ""}
+    ${state.profileError ? `<p class="form-error">${esc(state.profileError)} <button class="ghost-button" type="button" data-act="refresh-profile">Réessayer</button></p>` : ""}
+    <p class="fineprint">G&amp;K Livreur · v1</p>`;
 }
 
 function render() {
@@ -400,8 +441,12 @@ function closeSheet() {
 function detailSheet(id) {
   const m = state.missions.find(x => x.id === id);
   if (!m) return;
-  openSheet(`Mission ${m.id}`, `
-    <div class="mission-top"><span class="badge">${esc(m.zone)}${m.km !== null ? ` · ${m.km} km` : ""}</span>${m.earning !== null ? `<span class="earning">+${money(m.earning)}</span>` : ""}</div>
+  openSheet(`Course #${m.id}`, `
+    <div class="offer-meta" style="margin-bottom:4px">
+      ${m.zone ? `<span class="tag">${esc(m.zone)}</span>` : ""}
+      ${m.km !== null ? `<span class="tag">${icon("navigate")} ${m.km} km</span>` : ""}
+      ${m.earning !== null ? `<span class="tag paid">+${money(m.earning)}</span>` : ""}
+    </div>
     <div class="kv">
       <div><span>Retrait</span><span>G&amp;K Food</span></div>
       <div><span>Client</span><span>${esc(m.customer)}</span></div>
@@ -410,7 +455,17 @@ function detailSheet(id) {
       <div><span>Total commande</span><span>${money(m.total)}</span></div>
       <div><span>Paiement</span><span>${m.payment === "cash" ? `Espèces à encaisser : ${money(m.total)}` : "Payé en ligne"}</span></div>
     </div>
-    <button class="gold-button" type="button" data-act="accept" data-id="${esc(m.id)}"${state.actionBusy ? " disabled" : ""}>Accepter la mission</button>`);
+    <button class="primary-button" type="button" data-act="accept" data-id="${esc(m.id)}"${state.actionBusy ? " disabled" : ""}>Accepter la course</button>`);
+}
+
+function celebrate(earning, id) {
+  openSheet("Course terminée", `
+    <div class="celebration">
+      ${scene("gk-order-success", "celebration-art")}
+      <strong>+${money(earning || 0)}</strong>
+      <span>Course #${esc(id || "")} livrée</span>
+    </div>
+    <button class="primary-button" type="button" data-act="go-earnings">Voir mes gains ${icon("arrowRight")}</button>`);
 }
 
 function notifSheet() {
@@ -450,13 +505,14 @@ const actions = {
     closeSheet();
     ui.tab = "missions";
     render();
-    toast("Mission acceptée. Direction le restaurant !");
+    toast("Course acceptée. Direction le restaurant !");
   },
   async advance() {
     await advanceMission();
     render();
   },
   async refuse(el) { await refuseMission(el.dataset.id); render(); toast("Offre refusée."); },
+  "go-earnings"() { closeSheet(); ui.tab = "earnings"; render(); window.scrollTo(0, 0); },
   bell() { notifSheet(); },
   close() { closeSheet(); },
   async logout() { stopLocationTracking(); await logout(); ui.tab = "missions"; render(); toast("Vous êtes déconnecté."); },
@@ -520,12 +576,13 @@ document.addEventListener("submit", async event => {
     }
   } else if (form.id === "deliver-form") {
     const earning = state.active.earning;
+    const missionId = state.active.id;
     const submit = document.querySelector('[type=submit][form="deliver-form"]');
     submit.disabled = true;
     try {
       await completeMission(($("code")?.value || form.code?.value || "").trim(), form["cash-ok"]?.checked ?? true);
       render();
-      toast(`Livraison terminée · +${money(earning)}`);
+      celebrate(earning, missionId);
     } catch (error) {
       $("deliver-error").textContent = error.message || "Impossible de confirmer la livraison.";
     } finally {
@@ -648,10 +705,14 @@ setInterval(() => {
 }, 5000);
 
 setInterval(() => {
-  document.querySelectorAll(".offer-timer").forEach(el => {
-    el.textContent = `${Math.max(0, Math.ceil((Number(el.dataset.expires) - Date.now()) / 1000))} s`;
+  document.querySelectorAll(".offer-clock").forEach(el => {
+    const left = Math.max(0, Number(el.dataset.expires) - Date.now());
+    const label = el.querySelector("b");
+    if (label) label.textContent = String(Math.ceil(left / 1000));
+    el.style.setProperty("--p", Math.min(1, left / 40000).toFixed(3));
+    el.classList.toggle("urgent", left <= 10000);
   });
-}, 1000);
+}, 500);
 
 if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
   navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" })
