@@ -1,4 +1,4 @@
-const VERSION = "gk-cuisine-v64";
+const VERSION = "gk-cuisine-v65";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./data.js", "./store.js", "./escpos.js", "./app.js", "./manifest.webmanifest", "./assets/emblem-reference.png"
 ];
